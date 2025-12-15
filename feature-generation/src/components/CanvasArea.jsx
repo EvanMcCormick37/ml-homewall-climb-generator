@@ -389,6 +389,14 @@ const CanvasArea = forwardRef(function CanvasArea({
         return;
       }
       switch (e.key) {
+        case 'x':
+        case 'X':
+          e.preventDefault();
+          setPosition((prev)=>{
+            const newHoldsByLimb = [...prev.holdsByLimb];
+            newHoldsByLimb[prev.activeLimb] = -1;
+            return {...prev, holdsByLimb: newHoldsByLimb}
+          });
         case 'c':
         case 'C':
           e.preventDefault();

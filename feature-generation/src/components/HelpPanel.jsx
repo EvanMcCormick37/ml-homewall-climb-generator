@@ -21,6 +21,7 @@ function HelpPanel() {
       <ul>
         <li><strong>Click</strong> on a hold to add that hold to the current position</li>
         <li><kbd>V</kbd> to switch the active limb</li>
+        <li><kbd>X</kbd> to detach the active limb from the wall</li>
         <li><kbd>C</kbd> to clear the position</li>
         <li><kbd>Spacebar</kbd> to add the position to the climbing sequence</li>
         <li><kbd>Enter</kbd> to save the climb and add it to the set climbs list</li>

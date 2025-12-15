@@ -76,7 +76,11 @@ export default function ClimbsPanel({
                 key={limb.label} 
                 className={`limb-card ${isActive ? 'active' : ''}`}
                 style={{ borderColor: isActive ? limb.color : '#444' }}
-                onClick={() => setPosition(prev => ({ ...prev, activeLimb: index }))}
+                onClick={() => setPosition(prev => {
+                  const newHoldsByLimb = [...prev.holdsByLimb];
+                  newHoldsByLimb[index] = -1;
+                  return { holdsByLimb: newHoldsByLimb, activeLimb: index }
+                })}
               >
                 <span style={{ color: limb.color, fontWeight: 'bold' }}>{limb.label}</span>
                 <div className="hold-info">
