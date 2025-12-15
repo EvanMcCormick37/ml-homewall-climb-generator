@@ -12,7 +12,8 @@ function Toolbar({
   onFit,
   onImageLoad,
   onJsonLoad,
-  onExport,
+  onExportHolds,
+  onExportClimbs,
   onClear,
   status,
 }) {
@@ -21,8 +22,9 @@ function Toolbar({
     { id: 'view', label: '👁️ View', key: '1' },
     { id: 'hold', label: '➕ Hold', key: '2' },
     { id: 'foot', label: '➕ Foot', key: '3' },
-    { id: 'remove', label: '➖ Remove', key: '4' },
-    { id: 'pan', label: '✋ Pan', key: '5' }
+    { id: 'climb', label: '➕ Climb', key: '4' },
+    { id: 'remove', label: '➖ Remove', key: '5' },
+    { id: 'pan', label: '✋ Pan', key: '6' }
   ];
   
   const handleImageChange = (e) => {
@@ -102,8 +104,11 @@ function Toolbar({
         
         {/* Export controls */}
         <div className="toolbar-group">
-          <button className="action-btn" onClick={onExport}>
-            💾 Export
+          <button className="action-btn" onClick={onExportHolds}>
+            💾 Export Holds
+          </button>
+          <button className="action-btn" onClick={onExportClimbs}>
+            💾 Export Climbs
           </button>
           <button className="action-btn danger" onClick={onClear}>
             🗑️ Clear

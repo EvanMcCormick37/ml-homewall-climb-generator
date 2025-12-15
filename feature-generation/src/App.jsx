@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Toolbar, CanvasArea, AlignmentPanel, HelpPanel } from './components';
-import { useHolds, useViewTransform } from './hooks/useHoldAnnotator';
+import { Toolbar, CanvasArea, AlignmentPanel, HelpPanel, ClimbsPanel } from './components';
+import { useClimbs, useHolds, useViewTransform } from './hooks/useHoldAnnotator';
 import './App.css';
 
 function App() {
@@ -37,6 +37,18 @@ function App() {
     setZoom,
     fitToContainer
   } = useViewTransform();
+
+  const {
+    climbs,
+    currentClimb,
+    setCurrentClimb,
+    position,
+    setPosition,
+    resetPosition,
+    addPositionToCurrentClimb,
+    addCurrentClimbToClimbs,
+    exportClimbs
+  } = useClimbs();
   
   // Refs
   const wrapperRef = useRef(null);
@@ -88,8 +100,7 @@ function App() {
   }, [zoom]);
   
   // Export JSON and download
-  const handleExport = useCallback(() => {
-    const data = exportHolds();
+  const handleExport = useCallback((data) => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -97,7 +108,7 @@ function App() {
     a.download = 'holds_annotated.json';
     a.click();
     URL.revokeObjectURL(url);
-  }, [exportHolds]);
+  }, [exportHolds, exportClimbs]);
   
   // Clear with confirmation
   const handleClear = useCallback(() => {
@@ -154,7 +165,8 @@ function App() {
         onFit={fitToWindow}
         onImageLoad={handleImageLoad}
         onJsonLoad={handleJsonLoad}
-        onExport={handleExport}
+        onExportHolds={()=>handleExport(exportHolds())}
+        onExportClimbs={()=>handleExport(exportClimbs())}
         onClear={handleClear}
         status={statusText}
       />
@@ -168,6 +180,14 @@ function App() {
         viewTransform={viewTransform}
         setViewTransform={setViewTransform}
         alignment={alignment}
+        useClimbParams={{
+          currentClimb,
+          position, 
+          setPosition,
+          resetPosition,
+          addPositionToCurrentClimb, 
+          addCurrentClimbToClimbs
+        }}
         onAddHold={addHold}
         onRemoveHold={removeHold}
         onFindHold={findHoldAt}
@@ -182,7 +202,19 @@ function App() {
           onApply={handleApplyAlignment}
         />
       )}
-      
+      {mode==='climb' && (
+        <ClimbsPanel 
+          useClimbParams={{
+            climbs,
+            currentClimb,
+            setCurrentClimb,
+            position,
+            setPosition,
+            resetPosition,
+            addPositionToCurrentClimb,
+            addCurrentClimbToClimbs
+          }}
+        />)}
       <HelpPanel />
     </div>
   );

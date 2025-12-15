@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 
 /**
- * Custom hook for managing hold annotation state and operations.
- * Encapsulates all hold-related state and CRUD operations.
+ * Custom hook for managing hold annotation  and operations.
+ * Encapsulates all hold-related  and CRUD operations.
  */
 export function useHolds(imageDimensions) {
   const [holds, setHolds] = useState([]);
@@ -124,12 +124,12 @@ export function useHolds(imageDimensions) {
       .sort((a, b) => b.norm_y - a.norm_y || a.norm_x - b.norm_x)
       .map((hold, idx) => ({ ...hold, hold_id: idx }));
     
-    // Update state with new IDs
+    // Update  with new IDs
     setHolds(sortedHolds);
     
     return {
       metadata: {
-        wall_name: "Home Spray Wall",
+        wall_name: "Sideways Wall",
         num_holds: sortedHolds.length,
         image_dimensions: [imageDimensions.width, imageDimensions.height],
         exported: new Date().toISOString()
@@ -215,4 +215,48 @@ export function useViewTransform() {
     pan,
     fitToContainer
   };
+}
+
+export function useClimbs() {
+  const [climbs, setClimbs] = useState([]);
+  const [currentClimb, setCurrentClimb] = useState([]);
+  const [position, setPosition] = useState({
+    holdsByLimb: [-1,-1,-1,-1], // [LeftHand, RightHand, LeftFoot, RightFoot]. -1 or null means not using a hold.
+    activeLimb: 0 
+  });
+  const resetPosition = useCallback(()=>(setPosition({
+    holdsByLimb: [-1,-1,-1,-1],
+    activeLimb: 0
+  })), []);
+  const addPositionToCurrentClimb = useCallback(()=>{
+    setCurrentClimb((prev)=>([...prev, { ...position }]));
+    resetPosition();
+  },[position]);
+  const addCurrentClimbToClimbs = useCallback(()=>{
+    setClimbs((prev)=>([...prev,currentClimb]));
+    setCurrentClimb([]);
+    resetPosition();
+  }, []);
+  const exportClimbs = useCallback(()=>{
+    return {
+      metadata: {
+        wall: "Sideways Wall",
+        num_climbs: climbs.length,
+        exported: new Date.toISOString()
+      },
+      climbs: climbs
+    };
+  },[climbs])
+
+  return {
+    climbs,
+    currentClimb,
+    setCurrentClimb,
+    position,
+    setPosition,
+    resetPosition,
+    addPositionToCurrentClimb,
+    addCurrentClimbToClimbs,
+    exportClimbs
+  }
 }
