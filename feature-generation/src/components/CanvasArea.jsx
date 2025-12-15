@@ -41,11 +41,12 @@ const CanvasArea = forwardRef(function CanvasArea({
 
   // Climb State
   const {
-    currentClimb,
     position, 
+    currentClimb,
     setPosition,
     resetPosition,
     addPositionToCurrentClimb, 
+    removeLastPositionFromCurrentClimb,
     addCurrentClimbToClimbs
   } = useClimbParams;
   
@@ -369,11 +370,7 @@ const CanvasArea = forwardRef(function CanvasArea({
         setPosition((prev) => {
           const newHolds = [...prev.holdsByLimb];
           newHolds[prev.activeLimb] = foundHold;
-          return {
-            ...prev,
-            holdsByLimb: newHolds,
-            activeLimb: (prev.activeLimb + 1) % 4
-          }
+          return { holdsByLimb: newHolds, activeLimb: (prev.activeLimb + 1) % 4 }
         });
       }
     }
@@ -381,37 +378,69 @@ const CanvasArea = forwardRef(function CanvasArea({
 
   const handleKeyDown = useCallback((e) => {
     if (mode === 'climb') {
-      if(e.key==='Enter'){
-          e.preventDefault();
-          addCurrentClimbToClimbs();
-        }
+      // if(e.key==='Enter'){ This hotkey is being fucky, going to not use it for now.
+      //     e.preventDefault();
+      //     addCurrentClimbToClimbs();
+      //   }
       if (e.target.tagName === 'INPUT'){
         return;
       }
+      e.preventDefault();
       switch (e.key) {
-        case 'x':
-        case 'X':
-          e.preventDefault();
+        case 'a':
+        case 'A':
           setPosition((prev)=>{
             const newHoldsByLimb = [...prev.holdsByLimb];
-            newHoldsByLimb[prev.activeLimb] = -1;
-            return {...prev, holdsByLimb: newHoldsByLimb}
+            newHoldsByLimb[0] = -1;
+            return {holdsByLimb: newHoldsByLimb, activeLimb: 0 }});
+          break;
+        case 's':
+        case 'S':
+          setPosition((prev)=>{
+            const newHoldsByLimb = [...prev.holdsByLimb];
+            newHoldsByLimb[1] = -1;
+            return {holdsByLimb: newHoldsByLimb, activeLimb: 1 }});
+          break;
+        case 'd':
+        case 'D':
+          setPosition((prev)=>{
+            const newHoldsByLimb = [...prev.holdsByLimb];
+            newHoldsByLimb[2] = -1;
+            return {holdsByLimb: newHoldsByLimb, activeLimb: 2 }});
+          break;
+        case 'f':
+        case 'F':
+          setPosition((prev)=>{
+            const newHoldsByLimb = [...prev.holdsByLimb];
+            newHoldsByLimb[3] = -1;
+            return {holdsByLimb: newHoldsByLimb, activeLimb: 3 }});
+          break;
+        case 'x':
+        case 'X':
+          setPosition((prev)=>{
+            const newHoldsByLimb = [...prev.holdsByLimb];
+            const previouslyActiveLimb = (prev.activeLimb + 3) % 4;
+            newHoldsByLimb[previouslyActiveLimb] = -1;
+            return { holdsByLimb: newHoldsByLimb, activeLimb: previouslyActiveLimb }
           });
+          break;
         case 'c':
         case 'C':
-          e.preventDefault();
           resetPosition();
           break;
         case 'v':
         case 'V': 
-          e.preventDefault();
           setPosition((prev) => ({
             ...prev,
             activeLimb: (prev.activeLimb + 1) % 4
           }));
           break;
+        case 'r':
+        case 'R':
+          setPosition(currentClimb[currentClimb.length - 1] ?? {holdsByLimb:[-1,-1,-1,-1], activeLimb: 0});
+          removeLastPositionFromCurrentClimb();
+          break;
         case ' ':
-          e.preventDefault();
           addPositionToCurrentClimb()
           break;
       }

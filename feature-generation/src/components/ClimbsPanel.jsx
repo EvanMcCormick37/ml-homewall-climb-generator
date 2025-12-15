@@ -5,20 +5,21 @@ import { useState } from 'react';
 export default function ClimbsPanel({
   useClimbParams
 }) {
-  const {  
-    climbs,             // From useClimbs
-    setClimbs,
-    currentClimb,       // From useClimbs
-    setCurrentClimb,    // From useClimbs
-    position,           // From useClimbs
-    setPosition,        // From useClimbs
-    resetPosition,
+  const {
+    position,
+    currentClimb,
     climbName,
     climbGrade,
+    climbs,
+    setPosition,
+    resetPosition,
+    setCurrentClimb,
+    setClimbs,
     setClimbName,
     setClimbGrade,
-    addPositionToCurrentClimb, // From useClimbs
-    addCurrentClimbToClimbs    // From useClimbs
+    addPositionToCurrentClimb,
+    removeLastPositionFromCurrentClimb,
+    addCurrentClimbToClimbs
   } = useClimbParams;
   const { holdsByLimb, activeLimb } = position;
 
@@ -48,6 +49,11 @@ export default function ClimbsPanel({
         resetPosition();
       }
     }
+  }
+
+  const handleRemoveLastPositionFromClimb = () => {
+    setPosition(currentClimb[currentClimb.length-1] ?? {holdsByLimb: [-1,-1,-1,-1], activeLimb: 0 });
+    removeLastPositionFromCurrentClimb();
   }
 
   const handleResetPosition = () => {
@@ -103,6 +109,9 @@ export default function ClimbsPanel({
         <button className="btn btn-primary full-width" onClick={addPositionToCurrentClimb}>
           Add Position (Space)
         </button>
+        <button className="btn btn-primary full-width" onClick={handleRemoveLastPositionFromClimb}>
+          Remove Last Position (R)
+        </button>
       </div>
 
       <hr className="climbs-divider" />
@@ -138,7 +147,7 @@ export default function ClimbsPanel({
             onClick={handleSaveClimb}
             disabled={currentClimb.length === 0}
           >
-            Save (Enter)
+            Save Climb
           </button>
           <button 
             className="btn btn-danger" 
@@ -151,9 +160,9 @@ export default function ClimbsPanel({
         <button 
             className="btn btn-danger" 
             onClick={handleDeleteAllClimbs}
-            disabled={currentClimb.length === 0}
+            disabled={climbs.length === 0}
           >
-            Discard
+            Delete All Climbs
           </button>
       </div>
 

@@ -233,8 +233,10 @@ export function useClimbs() {
   })), []);
   const addPositionToCurrentClimb = useCallback(()=>{
     setCurrentClimb((prev)=>([...prev, { ...position }]));
-    resetPosition();
   },[position]);
+  const removeLastPositionFromCurrentClimb = useCallback(()=>{
+    setCurrentClimb((prev)=>(prev.slice(0,-1) ?? []));
+  },[]);
   const addCurrentClimbToClimbs = useCallback(()=>{
     setClimbs((prev)=>([...prev,{
       name: climbName,
@@ -254,23 +256,29 @@ export function useClimbs() {
         num_climbs: climbs.length,
         exported: new Date().toISOString()
       },
-      climbs: climbs
+      climbs: climbs.map((climb)=>({
+          name: climb.name,
+          grade: climb.grade,
+          sequence: climb.sequence,
+          num_moves: (climb.sequence.length - 1)
+        }))
     };
   },[climbs])
 
   return {
-    climbs,
-    setClimbs,
-    currentClimb,
-    setCurrentClimb,
     position,
-    setPosition,
-    resetPosition,
+    currentClimb,
+    climbs,
     climbName,
     climbGrade,
+    setPosition,
+    resetPosition,
+    setCurrentClimb,
     setClimbName,
     setClimbGrade,
+    setClimbs,
     addPositionToCurrentClimb,
+    removeLastPositionFromCurrentClimb,
     addCurrentClimbToClimbs,
     exportClimbs
   }

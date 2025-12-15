@@ -39,18 +39,19 @@ function App() {
   } = useViewTransform();
 
   const {
-    climbs,
-    setClimbs,
-    currentClimb,
-    setCurrentClimb,
     position,
-    setPosition,
-    resetPosition,
+    currentClimb,
+    climbs,
     climbName,
     climbGrade,
+    setPosition,
+    resetPosition,
+    setCurrentClimb,
     setClimbName,
     setClimbGrade,
+    setClimbs,
     addPositionToCurrentClimb,
+    removeLastPositionFromCurrentClimb,
     addCurrentClimbToClimbs,
     exportClimbs
   } = useClimbs();
@@ -113,7 +114,7 @@ function App() {
     a.download = `${data.metadata?.wall_name??'wall'}-${data.metadata?.data_type??'stuff'}-${data.metadata?.exported??'time'}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [exportHolds, exportClimbs]);
+  }, []);
   
   // Clear with confirmation
   const handleClear = useCallback(() => {
@@ -143,8 +144,8 @@ function App() {
         case '4': setMode('climb'); break;
         case '5': setMode('remove'); break;
         case '6': setMode('pan'); break;
-        case 'f':
-        case 'F': fitToWindow(); break;
+        case 'w':
+        case 'W': fitToWindow(); break;
         default: break;
       }
     };
@@ -186,11 +187,12 @@ function App() {
         setViewTransform={setViewTransform}
         alignment={alignment}
         useClimbParams={{
+          position,
           currentClimb,
-          position, 
           setPosition,
           resetPosition,
           addPositionToCurrentClimb, 
+          removeLastPositionFromCurrentClimb,
           addCurrentClimbToClimbs
         }}
         onAddHold={addHold}
@@ -210,22 +212,23 @@ function App() {
       {mode==='climb' && (
         <ClimbsPanel 
           useClimbParams={{
-            climbs,
-            setClimbs,
-            currentClimb,
-            setCurrentClimb,
             position,
-            setPosition,
-            resetPosition,
+            currentClimb,
             climbName,
             climbGrade,
+            climbs,
+            setPosition,
+            resetPosition,
+            setCurrentClimb,
+            setClimbs,
             setClimbName,
             setClimbGrade,
             addPositionToCurrentClimb,
+            removeLastPositionFromCurrentClimb,
             addCurrentClimbToClimbs
           }}
         />)}
-      <HelpPanel />
+      <HelpPanel mode={mode}/>
     </div>
   );
 }
