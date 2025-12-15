@@ -20,8 +20,8 @@ export function useHolds(imageDimensions) {
     setNextId(Math.max(...loadedHolds.map(h => h.hold_id), -1) + 1);
   }, []);
   
-  // Add a new hold at position
-  const addHold = useCallback((x, y, color = [128, 128, 128]) => {
+  // Add a new hold at position with pull direction and useability
+  const addHold = useCallback((x, y, pull_x, pull_y, useability) => {
     const { width, height } = imageDimensions;
     if (!width || !height) return;
     
@@ -31,8 +31,9 @@ export function useHolds(imageDimensions) {
       pixel_y: y,
       norm_x: x / width,
       norm_y: 1 - (y / height),
-      area: 500,
-      color_rgb: color,
+      pull_x: pull_x,
+      pull_y: pull_y,
+      useability: useability,
       confidence: 1.0,
       manual: true
     };

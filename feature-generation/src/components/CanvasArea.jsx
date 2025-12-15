@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, forwardRef } from 'react';
+import { useRef, useEffect, useCallback, forwardRef, useState } from 'react';
 import PropTypes from 'prop-types';
 
 const CanvasArea = forwardRef(function CanvasArea({
@@ -15,7 +15,9 @@ const CanvasArea = forwardRef(function CanvasArea({
   onZoom
 }, wrapperRef) {
   const canvasRef = useRef(null);
-  const dragStateRef = useRef({
+  
+  // Pan drag state
+  const panDragRef = useRef({
     isDragging: false,
     startX: 0,
     startY: 0,
@@ -23,6 +25,67 @@ const CanvasArea = forwardRef(function CanvasArea({
     startViewY: 0
   });
   
+  // Add hold drag state
+  const [addHoldState, setAddHoldState] = useState({
+    isDragging: false,
+    holdX: 0,      // Where the hold will be placed (initial click)
+    holdY: 0,
+    dragX: 0,      // Current drag position
+    dragY: 0
+  });
+  
+  // Get image coordinates from mouse event
+  const getImageCoords = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = imageDimensions.width / rect.width;
+    const scaleY = imageDimensions.height / rect.height;
+    
+    return {
+      x: Math.round((e.clientX - rect.left) * scaleX),
+      y: Math.round((e.clientY - rect.top) * scaleY)
+    };
+  }, [imageDimensions]);
+  
+  // Calculate pull direction and useability from drag vector
+  const calculateHoldParams = useCallback((holdX, holdY, dragX, dragY) => {
+    // Vector from drag position TO hold position (pull direction)
+    const dx = holdX - dragX;
+    const dy = holdY - dragY;
+    const magnitude = Math.sqrt(dx * dx + dy * dy);
+    
+    // Normalize to unit circle
+    const pull_x = dx / magnitude;
+    const pull_y = dy / magnitude;
+    
+    // Scale magnitude to useability (0-10)
+    // Assuming ~200px drag = max useability of 10
+    const useability = Math.min(10, Math.round(magnitude / 20));
+    
+    return { pull_x, pull_y, useability };
+  }, []);
+  
+  // Determine DragArrow color based on hold useability
+  const getUseabilityColor = (useability) => {
+    const t = (useability)/10; //normalize to range [0,1]
+    let r,g,b;
+    // Red<->Yellow color transition
+    if (t < 0.5) { 
+      const t2 = t * 2;
+      r = 255;
+      g = Math.round(60 + 160*t2);
+      b = 60;
+    } else {
+      const t2 = (1-t)*2;
+      r = Math.round(60 + 195*t2);
+      g = 220;
+      b = 60;
+    }
+
+    return `rgb(${r}, ${g}, ${b})`;
+  }
   // Draw canvas
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -58,14 +121,45 @@ const CanvasArea = forwardRef(function CanvasArea({
     holds.forEach(hold => {
       const x = hold.pixel_x * scale + offsetX;
       const y = hold.pixel_y * scale + offsetY;
-      const radius = Math.max(12, Math.sqrt((hold.area || 500) / Math.PI) * scale);
+      const radius = 15 * scale; // Fixed radius since we removed area
       
-      // Circle
+      // Draw hold circle
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
       ctx.strokeStyle = hold.manual ? '#00aaff' : '#00ff88';
       ctx.lineWidth = 3;
       ctx.stroke();
+      
+      // Draw pull direction arrow if available
+      if (hold.pull_x !== undefined && hold.pull_y !== undefined) {
+        const arrowLength = 25 * scale * (hold.useability / 10 + 0.5); // Scale by useability
+        const endX = x + hold.pull_x * arrowLength;
+        const endY = y + hold.pull_y * arrowLength;
+        
+        // Arrow line
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = getUseabilityColor(hold.useability);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Arrow head
+        const headLength = 8;
+        const angle = Math.atan2(hold.pull_y, hold.pull_x);
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(
+          endX - headLength * Math.cos(angle - Math.PI / 6),
+          endY - headLength * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(
+          endX - headLength * Math.cos(angle + Math.PI / 6),
+          endY - headLength * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.stroke();
+      }
       
       // Label background
       ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
@@ -79,106 +173,185 @@ const CanvasArea = forwardRef(function CanvasArea({
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, x, y);
+      
+      // Useability indicator (small text below)
+      if (hold.useability !== undefined) {
+        ctx.font = '10px sans-serif';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(`U:${hold.useability}`, x, y + radius + 12);
+      }
     });
-  }, [image, imageDimensions, holds, alignment]);
-  
-  // Get image coordinates from mouse event
-  const getImageCoords = useCallback((e) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
     
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = imageDimensions.width / rect.width;
-    const scaleY = imageDimensions.height / rect.height;
-    
-    return {
-      x: Math.round((e.clientX - rect.left) * scaleX),
-      y: Math.round((e.clientY - rect.top) * scaleY)
-    };
-  }, [imageDimensions]);
-  
-  // Get pixel color from canvas
-  const getPixelColor = useCallback((x, y) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return [128, 128, 128];
-    
-    try {
-      const ctx = canvas.getContext('2d');
-      const data = ctx.getImageData(x, y, 1, 1).data;
-      return [data[0], data[1], data[2]];
-    } catch {
-      return [128, 128, 128];
+    // Draw add-hold preview if dragging
+    if (addHoldState.isDragging) {
+      const { holdX, holdY, dragX, dragY } = addHoldState;
+      const { pull_x, pull_y, useability } = calculateHoldParams(holdX, holdY, dragX, dragY);
+      
+      // Preview circle at hold position
+      ctx.beginPath();
+      ctx.arc(holdX, holdY, 15, 0, 2 * Math.PI);
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // Vector from drag to hold
+      ctx.beginPath();
+      ctx.moveTo(dragX, dragY);
+      ctx.lineTo(holdX, holdY);
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // Arrow head at hold position
+      const angle = Math.atan2(holdY - dragY, holdX - dragX);
+      const headLength = 12;
+      ctx.beginPath();
+      ctx.moveTo(holdX, holdY);
+      ctx.lineTo(
+        holdX - headLength * Math.cos(angle - Math.PI / 6),
+        holdY - headLength * Math.sin(angle - Math.PI / 6)
+      );
+      ctx.moveTo(holdX, holdY);
+      ctx.lineTo(
+        holdX - headLength * Math.cos(angle + Math.PI / 6),
+        holdY - headLength * Math.sin(angle + Math.PI / 6)
+      );
+      ctx.stroke();
+      
+      // Show useability value
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillStyle = '#ffff00';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Useability: ${useability}`, dragX + 10, dragY - 10);
+      
+      // Show pull direction
+      const pullAngle = Math.atan2(-pull_y, pull_x) * 180 / Math.PI; // Negate y for display
+      ctx.font = '12px sans-serif';
+      ctx.fillText(`Pull: ${pullAngle.toFixed(0)}°`, dragX + 10, dragY + 10);
     }
-  }, []);
+    
+  }, [image, imageDimensions, holds, alignment, addHoldState, calculateHoldParams]);
   
-  // Handle canvas click
-  const handleClick = useCallback((e) => {
-    if (!image || mode === 'pan' || dragStateRef.current.isDragging) return;
+  // Handle mouse down
+  const handleMouseDown = useCallback((e) => {
+    if (!image) return;
     
     const { x, y } = getImageCoords(e);
     
-    switch (mode) {
-      case 'add':
-        onAddHold(x, y, getPixelColor(x, y));
-        break;
-      case 'remove':
-        onRemoveHold(x, y);
-        break;
-      case 'view': {
-        const hold = onFindHold(x, y);
-        if (hold) {
-          alert(
-            `Hold #${hold.hold_id}\n` +
-            `Pixel: (${hold.pixel_x}, ${hold.pixel_y})\n` +
-            `Normalized: (${hold.norm_x.toFixed(3)}, ${hold.norm_y.toFixed(3)})\n` +
-            `Area: ${hold.area} px²`
-          );
-        }
-        break;
-      }
-      default:
-        break;
+    if (mode === 'pan') {
+      panDragRef.current = {
+        isDragging: true,
+        startX: e.clientX,
+        startY: e.clientY,
+        startViewX: viewTransform.x,
+        startViewY: viewTransform.y
+      };
+    } else if (mode === 'add') {
+      // Start add-hold drag
+      setAddHoldState({
+        isDragging: true,
+        holdX: x,
+        holdY: y,
+        dragX: x,
+        dragY: y
+      });
     }
-  }, [image, mode, getImageCoords, getPixelColor, onAddHold, onRemoveHold, onFindHold]);
+  }, [image, mode, getImageCoords, viewTransform]);
   
-  // Handle mouse down (for pan)
-  const handleMouseDown = useCallback((e) => {
-    if (mode !== 'pan') return;
-    
-    dragStateRef.current = {
-      isDragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      startViewX: viewTransform.x,
-      startViewY: viewTransform.y
-    };
-  }, [mode, viewTransform]);
-  
-  // Handle mouse move (for pan)
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      const drag = dragStateRef.current;
-      if (!drag.isDragging) return;
-      
+  // Handle mouse move
+  const handleMouseMove = useCallback((e) => {
+    // Pan mode dragging
+    if (panDragRef.current.isDragging) {
+      const drag = panDragRef.current;
       setViewTransform(prev => ({
         ...prev,
         x: drag.startViewX + (e.clientX - drag.startX),
         y: drag.startViewY + (e.clientY - drag.startY)
       }));
+      return;
+    }
+    
+    // Add mode dragging
+    if (addHoldState.isDragging) {
+      const { x, y } = getImageCoords(e);
+      setAddHoldState(prev => ({
+        ...prev,
+        dragX: x,
+        dragY: y
+      }));
+    }
+  }, [addHoldState.isDragging, getImageCoords, setViewTransform]);
+  
+  // Handle mouse up
+  const handleMouseUp = useCallback((e) => {
+    // End pan drag
+    if (panDragRef.current.isDragging) {
+      panDragRef.current.isDragging = false;
+      return;
+    }
+    
+    // End add-hold drag and create hold
+    if (addHoldState.isDragging) {
+      const { holdX, holdY, dragX, dragY } = addHoldState;
+      const { pull_x, pull_y, useability } = calculateHoldParams(holdX, holdY, dragX, dragY);
+      
+      onAddHold(holdX, holdY, pull_x, pull_y, useability);
+      
+      setAddHoldState({
+        isDragging: false,
+        holdX: 0,
+        holdY: 0,
+        dragX: 0,
+        dragY: 0
+      });
+    }
+  }, [addHoldState, calculateHoldParams, onAddHold]);
+  
+  // Handle click (for view and remove modes)
+  const handleClick = useCallback((e) => {
+    if (!image || mode === 'pan' || mode === 'add') return;
+    
+    const { x, y } = getImageCoords(e);
+    
+    if (mode === 'remove') {
+      onRemoveHold(x, y);
+    } else if (mode === 'view') {
+      const hold = onFindHold(x, y);
+      if (hold) {
+        const pullAngle = hold.pull_x !== undefined 
+          ? `${(Math.atan2(-hold.pull_y, hold.pull_x) * 180 / Math.PI).toFixed(1)}°`
+          : 'N/A';
+        alert(
+          `Hold #${hold.hold_id}\n` +
+          `Pixel: (${hold.pixel_x}, ${hold.pixel_y})\n` +
+          `Normalized: (${hold.norm_x.toFixed(3)}, ${hold.norm_y.toFixed(3)})\n` +
+          `Pull Direction: ${pullAngle}\n` +
+          `Useability: ${hold.useability ?? 'N/A'}`
+        );
+      }
+    }
+  }, [image, mode, getImageCoords, onRemoveHold, onFindHold]);
+  
+  // Global mouse events for drag operations
+  useEffect(() => {
+    const handleGlobalMouseMove = (e) => {
+      handleMouseMove(e);
     };
     
-    const handleMouseUp = () => {
-      dragStateRef.current.isDragging = false;
+    const handleGlobalMouseUp = (e) => {
+      handleMouseUp(e);
     };
     
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
     
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [setViewTransform]);
+  }, [handleMouseMove, handleMouseUp]);
   
   // Handle wheel zoom
   const handleWheel = useCallback((e) => {
@@ -206,8 +379,11 @@ const CanvasArea = forwardRef(function CanvasArea({
   
   // Cursor style based on mode
   const getCursor = () => {
+    if (addHoldState.isDragging) return 'crosshair';
+    if (panDragRef.current.isDragging) return 'grabbing';
+    
     switch (mode) {
-      case 'pan': return dragStateRef.current.isDragging ? 'grabbing' : 'grab';
+      case 'pan': return 'grab';
       case 'add': return 'crosshair';
       case 'remove': return 'pointer';
       default: return 'default';

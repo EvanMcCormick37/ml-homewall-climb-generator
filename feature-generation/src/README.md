@@ -46,7 +46,9 @@ This project assumes a Vite + React setup. To use:
 - **Load Images**: Support for any image format (PNG, JPG, etc.)
 - **Load/Export JSON**: Compatible with the hold detection pipeline output
 - **Pan & Zoom**: Mouse wheel zoom, drag-to-pan
-- **Add/Remove Holds**: Click to add new holds or remove existing ones
+- **Click-Drag Hold Creation**: Set position, pull direction, and useability in one gesture
+- **Remove Holds**: Click to remove existing holds
+- **Pull Direction Arrows**: Visual indicators show pull direction and useability
 - **Alignment Controls**: Scale and offset holds to match different image sizes
 - **Keyboard Shortcuts**: 1-4 for modes, F to fit, scroll to zoom
 
@@ -102,13 +104,49 @@ Returns:
       "pixel_y": 200,
       "norm_x": 0.25,
       "norm_y": 0.87,
-      "area": 1500,
-      "color_rgb": [120, 180, 90],
-      "confidence": 0.8,
-      "manual": false
+      "pull_x": 0.707,
+      "pull_y": -0.707,
+      "useability": 7,
+      "confidence": 1.0,
+      "manual": true
     }
   ]
 }
+```
+
+### Hold Properties
+
+| Property | Description |
+|----------|-------------|
+| `hold_id` | Unique identifier (auto-assigned on export) |
+| `pixel_x`, `pixel_y` | Position in image pixels |
+| `norm_x`, `norm_y` | Normalized position (0-1, y=0 at bottom) |
+| `pull_x`, `pull_y` | Pull direction on unit circle |
+| `useability` | Hold quality/size rating (1-10) |
+| `confidence` | Detection confidence (1.0 for manual) |
+| `manual` | Whether hold was manually added |
+
+### Pull Direction Convention
+
+The pull direction vector `(pull_x, pull_y)` represents the optimal pulling direction in image coordinates:
+- Positive `pull_x` = pull rightward
+- Positive `pull_y` = pull downward (image coords)
+- The vector is normalized to the unit circle
+
+## Adding Holds Workflow
+
+In **Add Mode**, holds are created using a click-drag gesture:
+
+1. **Click and hold** at the desired hold position
+2. **Drag away** from the hold to set pull direction
+   - The vector points FROM your drag position TO the hold
+   - This represents "where you pull from"
+3. **Drag distance** determines useability (1-10)
+   - Short drag (~20px) = low useability (1)
+   - Long drag (~200px) = high useability (10)
+4. **Release** to create the hold
+
+A yellow preview shows the hold position, pull vector, and useability while dragging.
 ```
 
 ## Extending
