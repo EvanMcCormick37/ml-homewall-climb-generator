@@ -1,0 +1,302 @@
+/* ============ Base Styles ============ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a2e;
+  color: white;
+}
+
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============ Toolbar ============ */
+.toolbar-header {
+  padding: 10px 20px;
+  background: #16213e;
+  border-bottom: 1px solid #333;
+}
+
+.toolbar-header h1 {
+  font-size: 1.3em;
+  color: #00ff88;
+  margin-bottom: 8px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 0 10px;
+  border-right: 1px solid #444;
+}
+
+.toolbar-group:last-child {
+  border-right: none;
+}
+
+.toolbar-label {
+  font-size: 12px;
+  color: #888;
+}
+
+/* ============ Buttons ============ */
+button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.mode-btn {
+  background: #333;
+  color: white;
+}
+
+.mode-btn.active {
+  background: #00ff88;
+  color: black;
+}
+
+.action-btn {
+  background: #4a90d9;
+  color: white;
+}
+
+.action-btn:hover {
+  background: #3a7bc8;
+}
+
+.action-btn.small {
+  padding: 4px 8px;
+  min-width: 28px;
+}
+
+.action-btn.danger {
+  background: #d94a4a;
+}
+
+.action-btn.danger:hover {
+  background: #c43c3c;
+}
+
+.action-btn.apply {
+  background: #00aa66;
+}
+
+.action-btn.apply:hover {
+  background: #009955;
+}
+
+/* ============ Status ============ */
+.status {
+  background: #333;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+/* ============ Inputs ============ */
+.zoom-slider {
+  width: 80px;
+  cursor: pointer;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: #444;
+  border-radius: 3px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #00ff88;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #00ff88;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+input[type="number"] {
+  width: 55px;
+  padding: 3px 5px;
+  border: 1px solid #444;
+  border-radius: 3px;
+  background: #222;
+  color: white;
+  font-size: 11px;
+}
+
+input[type="number"]:focus {
+  outline: none;
+  border-color: #00ff88;
+}
+
+/* ============ Canvas Area ============ */
+.canvas-wrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background: #0a0a15;
+}
+
+.canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+canvas {
+  display: block;
+}
+
+/* ============ Alignment Panel ============ */
+.alignment-panel {
+  position: fixed;
+  top: 80px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.9);
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  min-width: 220px;
+  z-index: 100;
+}
+
+.alignment-panel h4 {
+  color: #00ff88;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.alignment-hint {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.alignment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.alignment-row label {
+  font-size: 12px;
+  color: #aaa;
+  min-width: 55px;
+}
+
+.alignment-row input[type="range"] {
+  flex: 1;
+  width: auto;
+}
+
+.alignment-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alignment-buttons button {
+  flex: 1;
+}
+
+/* ============ Help Panel ============ */
+.help-panel {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  max-width: 240px;
+  border: 1px solid #333;
+  z-index: 100;
+}
+
+.help-panel h4 {
+  color: #00ff88;
+  margin-bottom: 8px;
+}
+
+.help-panel ul {
+  padding-left: 15px;
+  line-height: 1.6;
+}
+
+.help-panel kbd {
+  background: #333;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 10px;
+}
+
+/* ============ Responsive ============ */
+@media (max-width: 900px) {
+  .toolbar {
+    gap: 5px;
+  }
+  
+  .toolbar-group {
+    padding: 0 5px;
+  }
+  
+  .zoom-slider {
+    width: 60px;
+  }
+  
+  .alignment-panel {
+    right: 5px;
+    min-width: 180px;
+    padding: 10px;
+  }
+  
+  .help-panel {
+    display: none;
+  }
+}
