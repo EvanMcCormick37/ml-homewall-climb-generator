@@ -275,28 +275,3 @@ canvas {
   font-family: monospace;
   font-size: 10px;
 }
-
-/* ============ Responsive ============ */
-@media (max-width: 900px) {
-  .toolbar {
-    gap: 5px;
-  }
-  
-  .toolbar-group {
-    padding: 0 5px;
-  }
-  
-  .zoom-slider {
-    width: 60px;
-  }
-  
-  .alignment-panel {
-    right: 5px;
-    min-width: 180px;
-    padding: 10px;
-  }
-  
-  .help-panel {
-    display: none;
-  }
-}

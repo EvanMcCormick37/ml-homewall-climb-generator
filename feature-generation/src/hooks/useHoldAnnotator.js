@@ -21,7 +21,7 @@ export function useHolds(imageDimensions) {
   }, []);
   
   // Add a new hold at position with pull direction and useability
-  const addHold = useCallback((x, y, pull_x, pull_y, useability) => {
+  const addHold = useCallback((x, y, pull_x, pull_y, useability, footOnly) => {
     const { width, height } = imageDimensions;
     if (!width || !height) return;
     
@@ -34,7 +34,7 @@ export function useHolds(imageDimensions) {
       pull_x: pull_x,
       pull_y: pull_y,
       useability: useability,
-      confidence: 1.0,
+      type: footOnly ? 'foot' : 'hold', // Track whether this is a hand-hold or foot-only hold.
       manual: true
     };
     

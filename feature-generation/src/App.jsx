@@ -7,9 +7,13 @@ function App() {
   // Image state
   const [image, setImage] = useState(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+
+  // Input refs for JSON and Image Upload.
+  const imageInputRef = useRef(null);
+  const jsonInputRef = useRef(null);
   
   // UI mode
-  const [mode, setMode] = useState('view'); // 'view', 'add', 'remove', 'pan'
+  const [mode, setMode] = useState('view'); // 'view', 'hold', 'foot', 'climb', 'remove', 'pan'
   
   // Custom hooks for holds and view transform
   const {
@@ -100,6 +104,9 @@ function App() {
     if (window.confirm('Remove all holds?')) {
       clearHolds();
     }
+    if (jsonInputRef.current.value){
+      jsonInputRef.current.value = null;
+    }
   }, [clearHolds]);
   
   // Apply alignment with notification
@@ -115,9 +122,11 @@ function App() {
       
       switch (e.key) {
         case '1': setMode('view'); break;
-        case '2': setMode('add'); break;
-        case '3': setMode('remove'); break;
-        case '4': setMode('pan'); break;
+        case '2': setMode('hold'); break;
+        case '3': setMode('foot'); break;
+        case '4': setMode('climb'); break;
+        case '5': setMode('remove'); break;
+        case '6': setMode('pan'); break;
         case 'f':
         case 'F': fitToWindow(); break;
         default: break;
@@ -137,6 +146,8 @@ function App() {
         mode={mode}
         setMode={setMode}
         zoom={viewTransform.zoom}
+        imageInputRef={imageInputRef}
+        jsonInputRef={jsonInputRef}
         onZoomIn={() => handleZoom(1.2)}
         onZoomOut={() => handleZoom(0.9)}
         onZoomChange={setZoom}

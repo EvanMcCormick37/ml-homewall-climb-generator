@@ -61,8 +61,8 @@ const CanvasArea = forwardRef(function CanvasArea({
     const pull_y = dy / magnitude;
     
     // Scale magnitude to useability (0-10)
-    // Assuming ~200px drag = max useability of 10
-    const useability = Math.min(10, Math.round(magnitude / 20));
+    // Assuming ~250px drag = max useability of 10
+    const useability = Math.min(10, Math.round(magnitude / 25));
     
     return { pull_x, pull_y, useability };
   }, []);
@@ -126,13 +126,13 @@ const CanvasArea = forwardRef(function CanvasArea({
       // Draw hold circle
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
-      ctx.strokeStyle = hold.manual ? '#00aaff' : '#00ff88';
+      ctx.strokeStyle = hold.type === 'hold' ? '#009165ff' : '#63008aff';
       ctx.lineWidth = 3;
       ctx.stroke();
       
       // Draw pull direction arrow if available
       if (hold.pull_x !== undefined && hold.pull_y !== undefined) {
-        const arrowLength = 25 * scale * (hold.useability / 10 + 0.5); // Scale by useability
+        const arrowLength = 50 * scale * (hold.useability / 10); // Scale by useability
         const endX = x + hold.pull_x * arrowLength;
         const endY = y + hold.pull_y * arrowLength;
         
@@ -186,11 +186,12 @@ const CanvasArea = forwardRef(function CanvasArea({
     if (addHoldState.isDragging) {
       const { holdX, holdY, dragX, dragY } = addHoldState;
       const { pull_x, pull_y, useability } = calculateHoldParams(holdX, holdY, dragX, dragY);
+      const dragColor = getUseabilityColor(useability);
       
       // Preview circle at hold position
       ctx.beginPath();
       ctx.arc(holdX, holdY, 15, 0, 2 * Math.PI);
-      ctx.strokeStyle = '#ffff00';
+      ctx.strokeStyle = dragColor;
       ctx.lineWidth = 3;
       ctx.setLineDash([5, 5]);
       ctx.stroke();
@@ -200,7 +201,7 @@ const CanvasArea = forwardRef(function CanvasArea({
       ctx.beginPath();
       ctx.moveTo(dragX, dragY);
       ctx.lineTo(holdX, holdY);
-      ctx.strokeStyle = '#ffff00';
+      ctx.strokeStyle = dragColor;
       ctx.lineWidth = 2;
       ctx.stroke();
       
@@ -222,7 +223,7 @@ const CanvasArea = forwardRef(function CanvasArea({
       
       // Show useability value
       ctx.font = 'bold 16px sans-serif';
-      ctx.fillStyle = '#ffff00';
+      ctx.fillStyle = dragColor;
       ctx.textAlign = 'left';
       ctx.fillText(`Useability: ${useability}`, dragX + 10, dragY - 10);
       
@@ -248,14 +249,14 @@ const CanvasArea = forwardRef(function CanvasArea({
         startViewX: viewTransform.x,
         startViewY: viewTransform.y
       };
-    } else if (mode === 'add') {
+    } else if (mode === 'hold' || mode === 'foot') {
       // Start add-hold drag
       setAddHoldState({
         isDragging: true,
         holdX: x,
         holdY: y,
         dragX: x,
-        dragY: y
+        dragY: y,
       });
     }
   }, [image, mode, getImageCoords, viewTransform]);
@@ -297,7 +298,7 @@ const CanvasArea = forwardRef(function CanvasArea({
       const { holdX, holdY, dragX, dragY } = addHoldState;
       const { pull_x, pull_y, useability } = calculateHoldParams(holdX, holdY, dragX, dragY);
       
-      onAddHold(holdX, holdY, pull_x, pull_y, useability);
+      onAddHold(holdX, holdY, pull_x, pull_y, useability, mode);
       
       setAddHoldState({
         isDragging: false,
@@ -311,7 +312,7 @@ const CanvasArea = forwardRef(function CanvasArea({
   
   // Handle click (for view and remove modes)
   const handleClick = useCallback((e) => {
-    if (!image || mode === 'pan' || mode === 'add') return;
+    if (!image || mode === 'pan' || mode === 'hold' || mode === 'foot') return;
     
     const { x, y } = getImageCoords(e);
     
@@ -384,7 +385,8 @@ const CanvasArea = forwardRef(function CanvasArea({
     
     switch (mode) {
       case 'pan': return 'grab';
-      case 'add': return 'crosshair';
+      case 'hold': return 'crosshair';
+      case 'foot': return 'crosshair';
       case 'remove': return 'pointer';
       default: return 'default';
     }

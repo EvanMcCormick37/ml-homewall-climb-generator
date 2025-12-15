@@ -1,10 +1,11 @@
-import { useRef } from 'react';
 import PropTypes from 'prop-types';
 
 function Toolbar({
   mode,
   setMode,
-  zoom,
+  zoom, 
+  imageInputRef,
+  jsonInputRef,
   onZoomIn,
   onZoomOut,
   onZoomChange,
@@ -13,16 +14,15 @@ function Toolbar({
   onJsonLoad,
   onExport,
   onClear,
-  status
+  status,
 }) {
-  const imageInputRef = useRef(null);
-  const jsonInputRef = useRef(null);
   
   const modes = [
     { id: 'view', label: '👁️ View', key: '1' },
-    { id: 'add', label: '➕ Add', key: '2' },
-    { id: 'remove', label: '➖ Remove', key: '3' },
-    { id: 'pan', label: '✋ Pan', key: '4' }
+    { id: 'hold', label: '➕ Hold', key: '2' },
+    { id: 'foot', label: '➕ Foot', key: '3' },
+    { id: 'remove', label: '➖ Remove', key: '4' },
+    { id: 'pan', label: '✋ Pan', key: '5' }
   ];
   
   const handleImageChange = (e) => {
