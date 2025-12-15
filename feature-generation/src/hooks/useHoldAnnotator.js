@@ -219,6 +219,8 @@ export function useViewTransform() {
 
 export function useClimbs() {
   const [climbs, setClimbs] = useState([]);
+  const [climbName, setClimbName] = useState('');
+  const [climbGrade, setClimbGrade] = useState('');
   const [currentClimb, setCurrentClimb] = useState([]);
   const [position, setPosition] = useState({
     holdsByLimb: [-1,-1,-1,-1], // [LeftHand, RightHand, LeftFoot, RightFoot]. -1 or null means not using a hold.
@@ -232,9 +234,15 @@ export function useClimbs() {
     setCurrentClimb((prev)=>([...prev, { ...position }]));
     resetPosition();
   },[position]);
-  const addCurrentClimbToClimbs = useCallback(()=>{
-    setClimbs((prev)=>([...prev,currentClimb]));
+  const addCurrentClimbToClimbs = useCallback((name, grade)=>{
+    setClimbs((prev)=>([...prev,{
+      name,
+      grade,
+      sequence: currentClimb
+    }]));
     setCurrentClimb([]);
+    setClimbName('');
+    setClimbGrade('');
     resetPosition();
   }, []);
   const exportClimbs = useCallback(()=>{
@@ -255,6 +263,10 @@ export function useClimbs() {
     position,
     setPosition,
     resetPosition,
+    climbName,
+    climbGrade,
+    setClimbName,
+    setClimbGrade,
     addPositionToCurrentClimb,
     addCurrentClimbToClimbs,
     exportClimbs

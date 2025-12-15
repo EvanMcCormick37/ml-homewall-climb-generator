@@ -123,7 +123,7 @@ const CanvasArea = forwardRef(function CanvasArea({
     // Draw holds with alignment transform
     const { scale, offsetX, offsetY } = alignment;
     
-    holds.forEach(hold => {
+    holds.forEach((hold) => {
       const x = hold.pixel_x * scale + offsetX;
       const y = hold.pixel_y * scale + offsetY;
       const radius = 15 * scale; 
@@ -168,10 +168,9 @@ const CanvasArea = forwardRef(function CanvasArea({
       // --- NEW FEATURE 1: Highlight holds selected in current Position State ---
       if (mode === 'climb') {
         // Check if this hold is in position.holdsByLimb
-        const limbIndex = position.holdsByLimb.findIndex(h => h && h.hold_id === hold.hold_id);
-        
-        if (limbIndex !== -1) {
-          const limbInfo = LIMB_CONFIG[limbIndex];
+        position.holdsByLimb.forEach((limbHold, idx)=>{
+          if (limbHold && limbHold.hold_id === hold.hold_id) {
+          const limbInfo = LIMB_CONFIG[idx];
           const [x_adj, y_adj] = [x+limbInfo.adjust[0],y+limbInfo.adjust[1]]
           
           // Draw selection ring
@@ -189,6 +188,7 @@ const CanvasArea = forwardRef(function CanvasArea({
           ctx.fillText(limbInfo.label, x_adj, y_adj);
           ctx.moveTo(x,y)
         }
+        })
       }
       
       // Standard Hold ID Label
@@ -209,32 +209,6 @@ const CanvasArea = forwardRef(function CanvasArea({
         ctx.fillText(`U:${hold.useability}`, x, y + radius + 12);
       }
     });
-
-    // --- NEW FEATURE 2: Cursor Indicator for Active Limb ---
-    if (mode === 'climb' && !panDragRef.current.isDragging) {
-       const mx = mouseRef.current.x;
-       const my = mouseRef.current.y;
-       const activeInfo = LIMB_CONFIG[position.activeLimb];
-
-       // Draw text background
-       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-       ctx.fillRect(mx + 15, my - 25, 40, 24);
-
-       // Draw text
-       ctx.fillStyle = activeInfo.color;
-       ctx.font = 'bold 16px sans-serif';
-       ctx.textAlign = 'left';
-       ctx.textBaseline = 'middle';
-       ctx.fillText(activeInfo.label, mx + 20, my - 13);
-       
-       // Draw small connecting line to cursor
-       ctx.beginPath();
-       ctx.moveTo(mx, my);
-       ctx.lineTo(mx + 15, my - 13);
-       ctx.strokeStyle = activeInfo.color;
-       ctx.lineWidth = 1;
-       ctx.stroke();
-    }
     
     // Draw add-hold preview if dragging
     if (addHoldState.isDragging) {
@@ -282,7 +256,17 @@ const CanvasArea = forwardRef(function CanvasArea({
       ctx.fillText(`Pull: ${pullAngle.toFixed(0)}°`, dragX + 10, dragY + 10);
     }
     
-  }, [image, imageDimensions, holds, alignment, addHoldState, calculateHoldParams, mode, position, currentClimb]); // Added dependencies
+  }, [
+    image,
+    imageDimensions,
+    holds,
+    alignment,
+    addHoldState,
+    calculateHoldParams,
+    mode,
+    position,
+    currentClimb
+  ]); // Added dependencies
   
   // Handle mouse down
   const handleMouseDown = useCallback((e) => {
@@ -307,7 +291,7 @@ const CanvasArea = forwardRef(function CanvasArea({
         dragY: y,
       });
     }
-  }, [image, mode, getImageCoords, viewTransform]);
+  }, [image, mode, getImageCoords, viewTransform, position]);
   
   // Handle mouse move
   const handleMouseMove = useCallback((e) => {
@@ -397,10 +381,16 @@ const CanvasArea = forwardRef(function CanvasArea({
 
   const handleKeyDown = useCallback((e) => {
     if (mode === 'climb') {
-      const key = e.key;
-      switch (key) {
+      if(e.key==='Enter'){
+          e.preventDefault();
+          addCurrentClimbToClimbs();
+        }
+      if (e.target.tagName === 'INPUT'){
+        return;
+      }
+      switch (e.key) {
         case 'c':
-        case 'C': 
+        case 'C':
           e.preventDefault();
           resetPosition();
           break;
@@ -415,10 +405,6 @@ const CanvasArea = forwardRef(function CanvasArea({
         case ' ':
           e.preventDefault();
           addPositionToCurrentClimb()
-          break;
-        case 'Enter':
-          e.preventDefault();
-          addCurrentClimbToClimbs();
           break;
       }
     }

@@ -45,6 +45,10 @@ function App() {
     position,
     setPosition,
     resetPosition,
+    climbName,
+    climbGrade,
+    setClimbName,
+    setClimbGrade,
     addPositionToCurrentClimb,
     addCurrentClimbToClimbs,
     exportClimbs
@@ -211,6 +215,10 @@ function App() {
             position,
             setPosition,
             resetPosition,
+            climbName,
+            climbGrade,
+            setClimbName,
+            setClimbGrade,
             addPositionToCurrentClimb,
             addCurrentClimbToClimbs
           }}
