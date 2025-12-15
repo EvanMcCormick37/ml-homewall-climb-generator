@@ -130,6 +130,7 @@ export function useHolds(imageDimensions) {
     return {
       metadata: {
         wall_name: "Sideways Wall",
+        data_type: "Holds",
         num_holds: sortedHolds.length,
         image_dimensions: [imageDimensions.width, imageDimensions.height],
         exported: new Date().toISOString()
@@ -234,23 +235,24 @@ export function useClimbs() {
     setCurrentClimb((prev)=>([...prev, { ...position }]));
     resetPosition();
   },[position]);
-  const addCurrentClimbToClimbs = useCallback((name, grade)=>{
+  const addCurrentClimbToClimbs = useCallback(()=>{
     setClimbs((prev)=>([...prev,{
-      name,
-      grade,
+      name: climbName,
+      grade: climbGrade,
       sequence: currentClimb
     }]));
     setCurrentClimb([]);
     setClimbName('');
     setClimbGrade('');
     resetPosition();
-  }, []);
+  }, [climbName, climbGrade, currentClimb]);
   const exportClimbs = useCallback(()=>{
     return {
       metadata: {
-        wall: "Sideways Wall",
+        wall_name: "Sideways Wall",
+        data_type: "Climb",
         num_climbs: climbs.length,
-        exported: new Date.toISOString()
+        exported: new Date().toISOString()
       },
       climbs: climbs
     };
@@ -258,6 +260,7 @@ export function useClimbs() {
 
   return {
     climbs,
+    setClimbs,
     currentClimb,
     setCurrentClimb,
     position,

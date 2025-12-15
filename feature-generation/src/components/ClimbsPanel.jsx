@@ -7,6 +7,7 @@ export default function ClimbsPanel({
 }) {
   const {  
     climbs,             // From useClimbs
+    setClimbs,
     currentClimb,       // From useClimbs
     setCurrentClimb,    // From useClimbs
     position,           // From useClimbs
@@ -36,6 +37,18 @@ export default function ClimbsPanel({
       resetPosition();
     }
   };
+
+  const handleDeleteAllClimbs = () => {
+    if (window.confirm("WARNING. This will delete all climbs you have created. MAKE SURE YOU EXPORT BEFORE DELETION")) {
+      if (window.confirm("SERIOUSLY. ARE YOU SURE YOU WANT TO DO THIS?")) {
+        setClimbs([]);
+        setCurrentClimb([]);
+        setClimbName('');
+        setClimbGrade('');
+        resetPosition();
+      }
+    }
+  }
 
   const handleResetPosition = () => {
     resetPosition();
@@ -131,6 +144,13 @@ export default function ClimbsPanel({
             Discard
           </button>
         </div>
+        <button 
+            className="btn btn-danger" 
+            onClick={handleDeleteAllClimbs}
+            disabled={currentClimb.length === 0}
+          >
+            Discard
+          </button>
       </div>
 
       <hr className="climbs-divider" />

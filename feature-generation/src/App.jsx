@@ -40,6 +40,7 @@ function App() {
 
   const {
     climbs,
+    setClimbs,
     currentClimb,
     setCurrentClimb,
     position,
@@ -109,7 +110,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'holds_annotated.json';
+    a.download = `${data.metadata?.wall_name??'wall'}-${data.metadata?.data_type??'stuff'}-${data.metadata?.exported??'time'}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [exportHolds, exportClimbs]);
@@ -210,6 +211,7 @@ function App() {
         <ClimbsPanel 
           useClimbParams={{
             climbs,
+            setClimbs,
             currentClimb,
             setCurrentClimb,
             position,
