@@ -106,12 +106,14 @@ export default function ClimbsPanel({
           </button>
         </div>
         
-        <button className="btn btn-primary full-width" onClick={addPositionToCurrentClimb}>
-          Add Position (Space)
-        </button>
-        <button className="btn btn-primary full-width" onClick={handleRemoveLastPositionFromClimb}>
-          Rollback Last Position (R)
-        </button>
+        <div className='button-stack'>
+          <button className="btn btn-primary full-width" onClick={addPositionToCurrentClimb}>
+            Add Position (Space)
+          </button>
+          <button className="btn btn-primary full-width" onClick={handleRemoveLastPositionFromClimb}>
+            Rollback Last Position (R)
+          </button>
+        </div>
       </div>
 
       <hr className="climbs-divider" />
