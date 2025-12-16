@@ -1,2 +1,3 @@
 feature-embedding/best_climb_mlp.pth
 feature-embedding/__pycache__/generate_climbs.cpython-312.pyc
+feature-generation/public/data/homewall.jpg
