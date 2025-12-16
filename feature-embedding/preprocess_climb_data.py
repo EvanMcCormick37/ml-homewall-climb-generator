@@ -189,9 +189,12 @@ def augment_dataset(sequences: List[np.ndarray], names: List[str], grades: List[
     for seq, name, grade in zip(sequences, names, grades):
         print(name)
         mirrored = mirror_climb(seq)
-        trans_left, trans_right = translate_climb(seq)
-        aug_sequences.extend([mirrored, trans_left, trans_right])
-        aug_names.extend([f"{name} (mirrored)",f"{name} (left)",f"{name} (right)"])
-        aug_grades.extend([[grade]*3])
+        left, right = translate_climb(seq)
+        m_right, m_left = translate_climb(mirrored)
+        # I just want to check that I've created a valid symmetric group and nothing fishy is going on.
+        assert mirror_climb(left) == m_left
+        aug_sequences.extend([seq, left, right, mirrored, m_right, m_left])
+        aug_names.extend([f"{name}",f"{name} (left)",f"{name} (right)", f"{name} (mirrored)", f"{name} (right=>mirrored)", f"{name} (left=>mirrored)"])
+        aug_grades.extend([[grade]*6])
     
     return aug_sequences, aug_names, aug_grades
