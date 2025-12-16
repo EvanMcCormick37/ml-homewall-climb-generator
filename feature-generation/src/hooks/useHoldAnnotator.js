@@ -249,19 +249,21 @@ export function useClimbs() {
     resetPosition();
   }, [climbName, climbGrade, currentClimb]);
   const exportClimbs = useCallback(()=>{
+    const formattedClimbs = climbs.map((climb)=>({
+          name: climb.name,
+          grade: climb.grade,
+          sequence: climb.sequence,
+          num_moves: (climb.sequence.length - 1)
+        }));
     return {
       metadata: {
         wall_name: "Sideways Wall",
         data_type: "Climb",
         num_climbs: climbs.length,
+        num_moves: formattedClimbs.reduce((sum, climb)=>(sum+climb.num_moves),0),
         exported: new Date().toISOString()
       },
-      climbs: climbs.map((climb)=>({
-          name: climb.name,
-          grade: climb.grade,
-          sequence: climb.sequence,
-          num_moves: (climb.sequence.length - 1)
-        }))
+      climbs: formattedClimbs
     };
   },[climbs])
 

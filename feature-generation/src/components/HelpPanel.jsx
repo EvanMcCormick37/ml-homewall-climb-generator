@@ -26,7 +26,7 @@ function HelpPanel({mode}) {
           <li><kbd>V</kbd> to cycle the active limb</li>
           <li><kbd>X</kbd> to detach the previous limb from the wall</li>
           <li><kbd>C</kbd> to clear the position</li>
-          <li><kbd>R</kbd> to remove the last position from climb sequence</li>
+          <li><kbd>R</kbd> to roll-back the last position from climb sequence</li>
           <li><kbd>Spacebar</kbd> to add the position to the climbing sequence</li>
           {/* <li><kbd>Enter</kbd> to save the climb and add it to the set climbs list</li> */}
           <li>Drag distance = useability (1-10)</li>

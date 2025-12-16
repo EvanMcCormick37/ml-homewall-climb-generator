@@ -110,7 +110,7 @@ export default function ClimbsPanel({
           Add Position (Space)
         </button>
         <button className="btn btn-primary full-width" onClick={handleRemoveLastPositionFromClimb}>
-          Remove Last Position (R)
+          Rollback Last Position (R)
         </button>
       </div>
 
