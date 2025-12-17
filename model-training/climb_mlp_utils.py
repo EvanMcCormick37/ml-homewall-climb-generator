@@ -44,7 +44,6 @@ def mirror_climb(sequence: np.ndarray) -> np.ndarray:
         
     return mirrored
 
-
 def translate_climb(sequence: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Generate shifted max-left and shifted max-right variants.
@@ -77,7 +76,6 @@ def translate_climb(sequence: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
     return left_variant, right_variant
 
-
 def augment_sequence_list(sequences: List[np.ndarray]) -> List[np.ndarray]:
     """
     Expands a list of sequences by 6x using mirroring and translation.
@@ -96,7 +94,6 @@ def augment_sequence_list(sequences: List[np.ndarray]) -> List[np.ndarray]:
         
     return augmented
 
-
 def extract_hold_features(hold_data: dict) -> List[float]:
     """Extract normalized 5D feature vector from hold data dict."""
     if hold_data == -1:
@@ -109,7 +106,6 @@ def extract_hold_features(hold_data: dict) -> List[float]:
         float(hold_data['pull_y']),
         float(hold_data['useability']) / 10.0
     ]
-
 
 def parse_climb_to_numpy(climb_data: dict, hold_map: dict[int, List[float]]) -> np.ndarray:
     """
@@ -127,7 +123,8 @@ def parse_climb_to_numpy(climb_data: dict, hold_map: dict[int, List[float]]) -> 
         
         # Combine features (Left + Right)
         sequence_features.append(feature_list[0] + feature_list[1])
-        
+    # Append NULL, NULL as a <STOP> token to alert the nn that the sequence is done.
+    sequence_features.append(NULL_FEATURES+NULL_FEATURES)
     return np.array(sequence_features, dtype=np.float32)
 
 def parse_moveset_to_numpy(moveset: dict, hold_map: dict[int, List[float]]) -> List[np.ndarray]:
@@ -146,6 +143,8 @@ def parse_moveset_to_numpy(moveset: dict, hold_map: dict[int, List[float]]) -> L
         moves.append(np.array([lh_start+rh_start,lh_start+rh_end],dtype=np.float32))
 
     return moves
+
+
 # --- Dataset ---
 class ClimbDataset(Dataset):
     """
@@ -173,9 +172,29 @@ class ClimbDataset(Dataset):
     def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.examples[idx]
 
+class ClimbSequenceDataset(Dataset):
+    """
+    Dataset that returns full sequences for RNN training.
+    Each item is (input_sequence, target_sequence) where target is shifted by 1.
+    """
+    def __init__(self, sequences: List[np.ndarray]):
+        # Filter out sequences that are too short
+        self.sequences = [seq for seq in sequences if len(seq) >= 2]
+    
+    def __len__(self) -> int:
+        return len(self.sequences)
+    
+    def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
+        seq = self.sequences[idx]
+        # Input: all positions except last
+        # Target: all positions except first (shifted by 1)
+        inputs = torch.tensor(seq[:-1], dtype=torch.float32)
+        targets = torch.tensor(seq[1:], dtype=torch.float32)
+        return inputs, targets
+
 
 # --- Data Pipeline ---
-def load_and_preprocess_data(path: str, val_split: float = 0.2) -> Tuple[ClimbDataset, ClimbDataset, dict[int, List[float]]]:
+def load_and_preprocess_data(path: str, val_split: float = 0.2, sequential: bool = False) -> Tuple[ClimbDataset, ClimbDataset, dict[int, List[float]]]:
     """
     Loads JSON, converts to numpy, splits data, augments TRAINING set only,
     and returns ClimbDatasets.
@@ -189,7 +208,8 @@ def load_and_preprocess_data(path: str, val_split: float = 0.2) -> Tuple[ClimbDa
     print(f"Extracted {len(hold_map)} holds...")
 
     all_sequences.extend(augment_sequence_list([parse_climb_to_numpy(s,hold_map) for s in data['sequences']]))
-    all_sequences.extend([seq for moveset in data['movesets'] for seq in parse_moveset_to_numpy(moveset,hold_map)])
+    if not sequential:
+        all_sequences.extend([seq for moveset in data['movesets'] for seq in parse_moveset_to_numpy(moveset,hold_map)])
     num_sequences = len(all_sequences)
     print(f"Extracted {num_sequences} sequences...")
     print(f"{int(data['metadata']['num_moves']) * 6} training moves estimated with dataset augmentation...")
@@ -208,13 +228,17 @@ def load_and_preprocess_data(path: str, val_split: float = 0.2) -> Tuple[ClimbDa
     print(f"Split: {len(train_seqs)} Train / {len(val_seqs)} Val")
     
     # 4. Create Datasets
-    train_dataset = ClimbDataset(train_seqs)
-    val_dataset = ClimbDataset(val_seqs)
+    if sequential:
+        train_dataset = ClimbSequenceDataset(train_seqs)
+        val_dataset = ClimbSequenceDataset(val_seqs)
+    else:     
+        train_dataset = ClimbDataset(train_seqs)
+        val_dataset = ClimbDataset(val_seqs)
     
     return train_dataset, val_dataset, hold_map
 
 
-# --- Model ---
+# --- Models ---
 class ClimbMLP(nn.Module):
     def __init__(self, input_dim: int = INPUT_DIM,
                  hidden_dim: int = HIDDEN_DIM,
@@ -233,42 +257,252 @@ class ClimbMLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
-
-# --- Training ---
-def run_epoch(
-    model: nn.Module,
-    loader: DataLoader, criterion: nn.Module, 
-    optimizer: optim.Optimizer | None,
-    device: str
-) -> Tuple[float, float]:
-    is_train = optimizer is not None
-    model.train() if is_train else model.eval()
+class ClimbRNN(nn.Module):
+    """
+    Vanilla RNN for climb sequence prediction.
     
-    total_loss, total_dist, n_samples = 0.0, 0.0, 0
+    Compatible with existing ClimbGenerator and training loop via forward().
+    Use forward_sequence() for full sequence processing with hidden states.
+    """
     
-    with torch.set_grad_enabled(is_train):
-        for inputs, targets in loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            
-            if is_train:
-                optimizer.zero_grad()
-            
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            
-            if is_train:
-                loss.backward()
-                optimizer.step()
-            
-            total_loss += loss.item() * len(inputs)
-            # Euclidean distance for monitoring
-            total_dist += torch.norm(outputs - targets, dim=1).sum().item()
-            n_samples += len(inputs)
+    def __init__(self, 
+                 input_dim: int = INPUT_DIM,
+                 hidden_dim: int = HIDDEN_DIM,
+                 output_dim: int = OUTPUT_DIM,
+                 num_layers: int = 2,
+                 dropout: float = 0.1):
+        super().__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.num_layers = num_layers
+        
+        self.rnn = nn.RNN(
+            input_size=input_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0,
+            nonlinearity='tanh'
+        )
+        
+        # Output projection layer
+        self.fc = nn.Linear(hidden_dim, output_dim)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Single-step forward pass (MLP-compatible interface).
+        
+        Args:
+            x: Input tensor of shape (batch, input_dim)
+        
+        Returns:
+            output: Predictions of shape (batch, output_dim)
+        """
+        # Add sequence dimension: (batch, input_dim) -> (batch, 1, input_dim)
+        x = x.unsqueeze(1)
+        batch_size = x.size(0)
+        
+        # Initialize fresh hidden state for each forward pass
+        hidden = self.init_hidden(batch_size, x.device)
+        
+        # RNN forward
+        rnn_out, _ = self.rnn(x, hidden)  # (batch, 1, hidden_dim)
+        
+        # Project to output space
+        output = self.fc(rnn_out.squeeze(1))  # (batch, output_dim)
+        
+        return output
+    
+    def forward_sequence(self, 
+                         x: torch.Tensor, 
+                         hidden: torch.Tensor | None = None
+                         ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Full sequence forward pass with hidden state management.
+        
+        Args:
+            x: Input tensor of shape (batch, seq_len, input_dim)
+            hidden: Optional hidden state of shape (num_layers, batch, hidden_dim)
+        
+        Returns:
+            output: Predictions of shape (batch, seq_len, output_dim)
+            hidden: Final hidden state of shape (num_layers, batch, hidden_dim)
+        """
+        batch_size = x.size(0)
+        
+        if hidden is None:
+            hidden = self.init_hidden(batch_size, x.device)
+        
+        # RNN processes entire sequence
+        rnn_out, hidden = self.rnn(x, hidden)  # (batch, seq_len, hidden_dim)
+        
+        # Project each timestep to output space
+        output = self.fc(rnn_out)  # (batch, seq_len, output_dim)
+        
+        return output, hidden
+    
+    def forward_step(self,
+                     x: torch.Tensor,
+                     hidden: torch.Tensor | None = None
+                     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Single step with explicit hidden state (for autoregressive generation).
+        
+        Args:
+            x: Input tensor of shape (batch, input_dim)
+            hidden: Hidden state of shape (num_layers, batch, hidden_dim)
+        
+        Returns:
+            output: Predictions of shape (batch, output_dim)
+            hidden: Updated hidden state
+        """
+        x = x.unsqueeze(1)  # (batch, 1, input_dim)
+        batch_size = x.size(0)
+        
+        if hidden is None:
+            hidden = self.init_hidden(batch_size, x.device)
+        
+        rnn_out, hidden = self.rnn(x, hidden)
+        output = self.fc(rnn_out.squeeze(1))
+        
+        return output, hidden
+    
+    def init_hidden(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        """Initialize hidden state with zeros."""
+        return torch.zeros(
+            self.num_layers, batch_size, self.hidden_dim, 
+            device=device
+        )
 
-    return total_loss / n_samples, total_dist / n_samples
+class ClimbLSTM(nn.Module):
+    """
+    LSTM for climb sequence prediction.
+    
+    Includes cell state for better long-term dependency modeling.
+    Compatible with existing ClimbGenerator and training loop via forward().
+    Use forward_sequence() for full sequence processing with hidden states.
+    """
+    
+    def __init__(self,
+                 input_dim: int = INPUT_DIM,
+                 hidden_dim: int = HIDDEN_DIM,
+                 output_dim: int = OUTPUT_DIM,
+                 num_layers: int = 2,
+                 dropout: float = 0.1):
+        super().__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.num_layers = num_layers
+        
+        self.lstm = nn.LSTM(
+            input_size=input_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0
+        )
+        
+        # Output projection layer
+        self.fc = nn.Linear(hidden_dim, output_dim)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Single-step forward pass (MLP-compatible interface).
+        
+        Args:
+            x: Input tensor of shape (batch, input_dim)
+        
+        Returns:
+            output: Predictions of shape (batch, output_dim)
+        """
+        x = x.unsqueeze(1)  # (batch, 1, input_dim)
+        batch_size = x.size(0)
+        
+        # Initialize fresh hidden and cell states
+        hidden = self.init_hidden(batch_size, x.device)
+        
+        # LSTM forward
+        lstm_out, _ = self.lstm(x, hidden)  # (batch, 1, hidden_dim)
+        
+        # Project to output space
+        output = self.fc(lstm_out.squeeze(1))  # (batch, output_dim)
+        
+        return output
+    
+    def forward_sequence(self,
+                         x: torch.Tensor,
+                         hidden: Tuple[torch.Tensor, torch.Tensor] | None = None
+                         ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Full sequence forward pass with hidden state management.
+        
+        Args:
+            x: Input tensor of shape (batch, seq_len, input_dim)
+            hidden: Optional tuple of (h_0, c_0), each of shape 
+                    (num_layers, batch, hidden_dim)
+        
+        Returns:
+            output: Predictions of shape (batch, seq_len, output_dim)
+            hidden: Tuple of final (h_n, c_n) states
+        """
+        batch_size = x.size(0)
+        
+        if hidden is None:
+            hidden = self.init_hidden(batch_size, x.device)
+        
+        # LSTM processes entire sequence
+        lstm_out, hidden = self.lstm(x, hidden)  # (batch, seq_len, hidden_dim)
+        
+        # Project each timestep to output space
+        output = self.fc(lstm_out)  # (batch, seq_len, output_dim)
+        
+        return output, hidden
+    
+    def forward_step(self,
+                     x: torch.Tensor,
+                     hidden: Tuple[torch.Tensor, torch.Tensor] | None = None
+                     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Single step with explicit hidden state (for autoregressive generation).
+        
+        Args:
+            x: Input tensor of shape (batch, input_dim)
+            hidden: Tuple of (h, c), each of shape (num_layers, batch, hidden_dim)
+        
+        Returns:
+            output: Predictions of shape (batch, output_dim)
+            hidden: Updated (h, c) tuple
+        """
+        x = x.unsqueeze(1)  # (batch, 1, input_dim)
+        batch_size = x.size(0)
+        
+        if hidden is None:
+            hidden = self.init_hidden(batch_size, x.device)
+        
+        lstm_out, hidden = self.lstm(x, hidden)
+        output = self.fc(lstm_out.squeeze(1))
+        
+        return output, hidden
+    
+    def init_hidden(self, 
+                    batch_size: int, 
+                    device: torch.device
+                    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Initialize hidden state (h_0) and cell state (c_0) with zeros."""
+        h_0 = torch.zeros(
+            self.num_layers, batch_size, self.hidden_dim,
+            device=device
+        )
+        c_0 = torch.zeros(
+            self.num_layers, batch_size, self.hidden_dim,
+            device=device
+        )
+        return (h_0, c_0)
 
 
-# --- Inference ---
+# --- Autoregressive Generation ---
 class ClimbGenerator:
     """Generate climb sequences by predicting holds in feature space."""
     
@@ -332,6 +566,187 @@ class ClimbGenerator:
                     
         return sequence
 
+class ClimbGeneratorRNN:
+    """Generate climb sequences using RNN with persistent hidden state."""
+    
+    def __init__(self, model: ClimbRNN, hold_map: dict[int, List[float]], device: str):
+        self.model = model.to(device).eval()
+        self.hold_map = hold_map
+        self.device = device
+
+    def _to_input(self, lh: List[float], rh: List[float]) -> torch.Tensor:
+        """Convert hand features to model input tensor."""
+        return torch.tensor(lh + rh, dtype=torch.float32).unsqueeze(0).to(self.device)
+
+    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float], float]:
+        """Find hold with minimum Euclidean distance to predicted features."""
+        best_id, best_dist = -1, float('inf')
+        
+        for hold_id, hold_features in self.hold_map.items():
+            dist = np.linalg.norm(features - np.array(hold_features))
+            if dist < best_dist:
+                best_id, best_dist = hold_id, dist
+                
+        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES)), best_dist
+
+    def generate(self, 
+                 start_lh: int, 
+                 start_rh: int, 
+                 max_moves: int = 10) -> List[Tuple[int, int]]:
+        """
+        Generate a climb sequence from starting hold indices.
+        
+        Returns list of (lh_id, rh_id) tuples.
+        """
+        lh_id = start_lh
+        rh_id = start_rh
+        lh = self.hold_map[start_lh]
+        rh = self.hold_map[start_rh]
+        sequence = []
+        
+        # Initialize hidden state once at the start
+        hidden = self.model.init_hidden(batch_size=1, device=self.device)
+        
+        with torch.no_grad():
+            for move in range(max_moves):
+                inputs = self._to_input(lh, rh)
+                
+                # Use forward_step to maintain hidden state across moves
+                predicted, hidden = self.model.forward_step(inputs, hidden)
+                predicted = predicted.cpu().numpy().flatten()
+                
+                lh_id_next, lh_next, lh_dist = self._nearest_hold(predicted[:5])
+                rh_id_next, rh_next, rh_dist = self._nearest_hold(predicted[5:])
+
+                if lh_id_next != lh_id and rh_id_next != rh_id:
+                    if lh_dist < rh_dist:
+                        lh_id = lh_id_next
+                        lh = lh_next
+                    else:
+                        rh_id = rh_id_next
+                        rh = rh_next
+                else:
+                    lh, rh = lh_next, rh_next
+                    lh_id, rh_id = lh_id_next, rh_id_next
+                
+                if (len(sequence) > 0 and (lh_id, rh_id) == sequence[-1]) or (lh == NULL_FEATURES and rh == NULL_FEATURES):
+                    break
+
+                sequence.append((lh_id, rh_id))
+                    
+        return sequence
+
+
+# --- Training ---
+def run_epoch(
+    model: nn.Module,
+    loader: DataLoader, criterion: nn.Module, 
+    optimizer: optim.Optimizer | None,
+    device: str
+) -> Tuple[float, float]:
+    is_train = optimizer is not None
+    model.train() if is_train else model.eval()
+    
+    total_loss, total_dist, n_samples = 0.0, 0.0, 0
+    
+    with torch.set_grad_enabled(is_train):
+        for inputs, targets in loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            
+            if is_train:
+                optimizer.zero_grad()
+            
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            
+            if is_train:
+                loss.backward()
+                optimizer.step()
+            
+            total_loss += loss.item() * len(inputs)
+            # Euclidean distance for monitoring
+            total_dist += torch.norm(outputs - targets, dim=1).sum().item()
+            n_samples += len(inputs)
+
+    return total_loss / n_samples, total_dist / n_samples
+
+def collate_sequences(batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Pad variable-length sequences to the same length within a batch."""
+    inputs, targets = zip(*batch)
+    inputs_padded = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=0.0)
+    targets_padded = nn.utils.rnn.pad_sequence(targets, batch_first=True, padding_value=0.0)
+    return inputs_padded, targets_padded
+
+def run_epoch_sequential(
+    model: nn.Module,
+    loader: DataLoader,
+    criterion: nn.Module,
+    optimizer: optim.Optimizer | None,
+    device: str
+) -> Tuple[float, float]:
+    """Training loop for sequence models (RNN/LSTM)."""
+    is_train = optimizer is not None
+    model.train() if is_train else model.eval()
+    
+    total_loss, total_dist, n_samples = 0.0, 0.0, 0
+    
+    with torch.set_grad_enabled(is_train):
+        for inputs, targets in loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            
+            if is_train:
+                optimizer.zero_grad()
+            
+            outputs, _ = model.forward_sequence(inputs)
+            
+            # Flatten for loss: (batch * seq_len, 10)
+            outputs_flat = outputs.reshape(-1, outputs.size(-1))
+            targets_flat = targets.reshape(-1, targets.size(-1))
+            
+            loss = criterion(outputs_flat, targets_flat)
+            
+            if is_train:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+            
+            n_timesteps = targets_flat.size(0)
+            total_loss += loss.item() * n_timesteps
+            total_dist += torch.norm(outputs_flat - targets_flat, dim=1).sum().item()
+            n_samples += n_timesteps
+
+    return total_loss / n_samples, total_dist / n_samples
+
+def train_climb_generator_rnn(
+    train_ds: ClimbSequenceDataset,
+    val_ds: ClimbSequenceDataset,
+    hold_map: dict[int, List[float]],
+    num_epochs: int = 200,
+    lr: float = 0.001,
+    batch_size: int = 32,
+    device: str = "cpu"
+) -> ClimbGeneratorRNN:
+    
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=collate_sequences)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_sequences)
+    
+    model = ClimbRNN().to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.MSELoss()
+    best_val_loss = float('inf')
+    
+    pbar = tqdm(range(num_epochs), desc="Training RNN")
+    for _ in pbar:
+        train_loss, train_dist = run_epoch_sequential(model, train_loader, criterion, optimizer, device)
+        val_loss, val_dist = run_epoch_sequential(model, val_loader, criterion, None, device)
+        
+        pbar.set_postfix({"T_MSE": f"{train_loss:.4f}", "V_MSE": f"{val_loss:.4f}"})
+        
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), 'best_climb_rnn.pth')
+            
+    return ClimbGeneratorRNN(model, hold_map, device)
 
 def train_climb_generator(
     train_ds: Dataset,
@@ -363,3 +778,4 @@ def train_climb_generator(
             torch.save(model.state_dict(), 'best_climb_mlp.pth')
             
     return ClimbGenerator(model, hold_map, device)
+
