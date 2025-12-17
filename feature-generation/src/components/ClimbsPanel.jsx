@@ -1,9 +1,13 @@
 import PropTypes from 'prop-types';
 import { LIMB_CONFIG } from '../config';
+import { useState } from 'react';
 
 export default function ClimbsPanel({
-  climbParams
+  climbParams,
+  num_holds,
 }) {
+  const [manualSequenceInput, setManualSequenceInput] = useState('');
+
   const {
     position,
     currentClimb,
@@ -21,6 +25,7 @@ export default function ClimbsPanel({
     removeLastPositionFromCurrentClimb,
     addCurrentClimbToClimbs
   } = climbParams;
+
   const { holdsByLimb, activeLimb } = position;
 
   // Helper to switch active limb manually
@@ -33,9 +38,45 @@ export default function ClimbsPanel({
 
   // Helper to clear the entire sequence
   const handleResetClimb = () => {
-    if (window.confirm("Are you sure you want to clear the current climb sequence?")) {
       setCurrentClimb([]);
       resetPosition();
+  };
+
+  const handleSubmitManualSequence = () => {
+    const input = manualSequenceInput;
+    
+    if (!input) {
+      alert('Please enter a sequence');
+      return;
+    }
+
+    try {
+      const numbers = input.match(/-?\d+/g)?.map(Number);
+      
+      if (!numbers || numbers.length === 0) {
+        alert('No valid numbers found in sequence');
+        return;
+      }
+      if (numbers.length % 2 !== 0) {
+        alert('Sequence must contain pairs of numbers (even count)');
+        return;
+      }
+      if(numbers.some((num)=>(num > num_holds || num < -1))){
+        alert('Invalid hold indices! Holds must be valid hold indices or -1 for no hold.')
+        return;
+      }
+
+      // Convert to array of pairs
+      const sequence = [];
+      for (let i = 0; i < numbers.length; i += 2) {
+        sequence.push([numbers[i], numbers[i + 1]]);
+      }
+
+      setCurrentClimb(sequence);
+      setManualSequenceInput('');
+      
+    } catch (error) {
+      alert('Error parsing sequence: ' + error.message);
     }
   };
 
@@ -117,6 +158,16 @@ export default function ClimbsPanel({
           <button className="btn btn-primary full-width" onClick={handleRemoveLastPositionFromClimb}>
             Rollback Last Position (R)
           </button>
+          <input
+            type='text'
+            className='climb-input'
+            placeholder="Paste climb sequence"
+            value={manualSequenceInput}
+            onChange={(e) => setManualSequenceInput(e.target.value)}
+            />
+          <button className="btn btn-primary full-width" onClick={handleSubmitManualSequence}>
+            Submit Manual Sequence
+          </button>
         </div>
       </div>
 
@@ -126,8 +177,8 @@ export default function ClimbsPanel({
       <div className="climbs-section">
         <h4>Current Sequence</h4>
         <div className="climbs-stats">
-          <div>Steps: <strong>{currentClimb.length}</strong></div>
-          {holdsUsedInCurrentClimb.map((h)=>(<strong>{`${h}, `}</strong>))}
+          {currentClimb.map((pos)=>(<div><strong>{`[${pos}]`}</strong></div>))}
+          <div>Holds used: <strong>{currentClimb.length}</strong></div>
         </div>
 
         {/* New Input Fields */}

@@ -195,7 +195,7 @@ function App() {
           holdParams={holdParams}
         />
       )}
-      {mode==='climb' && (<ClimbsPanel climbParams={climbParams}/>)}
+      {mode==='climb' && (<ClimbsPanel climbParams={climbParams} num_holds={holdParams.holds.length}/>)}
       {mode==='move' && (<MovesPanel
                           moveParams = {moveParams}
                           holds = {holdParams.holds}

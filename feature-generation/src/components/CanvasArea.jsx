@@ -146,18 +146,20 @@ const CanvasArea = forwardRef(function CanvasArea({
       
       const x = hold.pixel_x * scale + offsetX;
       const y = hold.pixel_y * scale + offsetY;
-      const radius = 15 * scale; 
+      const radius = holdInClimb? 45 * scale : 15 * scale; 
 
       // Useful when we add feet back in
       // Draw hold circle
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, 2 * Math.PI);
-      ctx.strokeStyle = hold.type === 'hold' ? (holdInClimb? '#ff0000ff' : '#009165ff') : '#63008aff';
-      ctx.lineWidth = holdInClimb? 6 : 3;
-      ctx.stroke();
+      if((mode !== 'climb') || holdInClimb){
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.strokeStyle = hold.type === 'hold' ? (holdInClimb? '#ff0000ff' : '#009165ff') : '#63008aff';
+        ctx.lineWidth = holdInClimb? 8 : 3;
+        ctx.stroke();
+      }
       
       // Draw pull direction arrow
-      if (!holdInClimb && hold.pull_x !== undefined && hold.pull_y !== undefined) {
+      if ((mode !== 'climb') || holdInClimb && hold.pull_x !== undefined && hold.pull_y !== undefined) {
         const arrowLength = 10 + 30 * arrowSize * scale * (hold.useability / 10); 
         const endX = x + hold.pull_x * arrowLength;
         const endY = y + hold.pull_y * arrowLength;
