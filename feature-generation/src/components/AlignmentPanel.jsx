@@ -1,6 +1,13 @@
 import PropTypes from 'prop-types';
 
-function AlignmentPanel({ alignment, setAlignment, onReset, onApply }) {
+function AlignmentPanel({ holdParams }) {
+  const {
+    alignment,
+    setAlignment,
+    onReset,
+    onApply 
+  } = holdParams;
+  
   const { scale, offsetX, offsetY } = alignment;
   
   const handleScaleChange = (value) => {

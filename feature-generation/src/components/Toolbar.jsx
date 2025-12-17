@@ -23,8 +23,9 @@ function Toolbar({
     { id: 'hold', label: '➕ Hold', key: '2' },
     { id: 'foot', label: '➕ Foot', key: '3' },
     { id: 'climb', label: '➕ Climb', key: '4' },
-    { id: 'remove', label: '➖ Remove', key: '5' },
-    { id: 'pan', label: '✋ Pan', key: '6' }
+    { id: 'move', label: '➕ Move', key: '5' },
+    { id: 'remove', label: '➖ Remove', key: '6' },
+    { id: 'pan', label: '✋ Pan', key: '7' }
   ];
   
   const handleImageChange = (e) => {

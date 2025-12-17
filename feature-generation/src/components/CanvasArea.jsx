@@ -1,25 +1,20 @@
 import { useRef, useEffect, useCallback, forwardRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { LIMB_CONFIG } from './config';
+import { MOVE_CURSOR_MODES, MOVE_CURSOR_CONFIG, LIMB_CONFIG } from '../config';
 
 const CanvasArea = forwardRef(function CanvasArea({
   image,
   imageDimensions,
-  holds,
   mode,
   viewTransform,
   setViewTransform,
-  alignment,
-  onAddHold,
-  onRemoveHold,
-  onFindHold,
   onZoom,
-  useClimbParams
+  climbParams,
+  moveParams,
+  holdParams,
 }, wrapperRef) {
+
   const canvasRef = useRef(null);
-  
-  // Track current mouse position for custom cursor rendering
-  const mouseRef = useRef({ x: 0, y: 0 });
 
   // Pan drag state
   const panDragRef = useRef({
@@ -39,16 +34,35 @@ const CanvasArea = forwardRef(function CanvasArea({
     dragY: 0
   });
 
+  const {
+    holds,
+    alignment,
+    addHold,
+    removeHold,
+    findHoldAt,
+  } = holdParams;
+
   // Climb State
   const {
     position, 
     currentClimb,
+    holdsUsedInCurrentClimb,
     setPosition,
     resetPosition,
     addPositionToCurrentClimb, 
     removeLastPositionFromCurrentClimb,
-    addCurrentClimbToClimbs
-  } = useClimbParams;
+    addCurrentClimbToClimbs,
+  } = climbParams;
+
+  // Move State (NEW)
+  const {
+    currentMove,
+    moveCursorMode,
+    setMoveCursorMode,
+    handleMoveHoldClick,
+    addCurrentMoveToMoves,
+    resetCurrentMove,
+  } = moveParams;
   
   // Get image coordinates from mouse event
   const getImageCoords = useCallback((e) => {
@@ -125,6 +139,8 @@ const CanvasArea = forwardRef(function CanvasArea({
     const { scale, offsetX, offsetY } = alignment;
     
     holds.forEach((hold) => {
+      const holdInClimb = (mode==='climb' && holdsUsedInCurrentClimb && holdsUsedInCurrentClimb.length > 0 && holdsUsedInCurrentClimb.includes(hold.hold_id))
+      
       const x = hold.pixel_x * scale + offsetX;
       const y = hold.pixel_y * scale + offsetY;
       const radius = 15 * scale; 
@@ -132,12 +148,12 @@ const CanvasArea = forwardRef(function CanvasArea({
       // Draw hold circle
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
-      ctx.strokeStyle = hold.type === 'hold' ? '#009165ff' : '#63008aff';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = hold.type === 'hold' ? (holdInClimb? '#ff0000ff' : '#009165ff') : '#63008aff';
+      ctx.lineWidth = holdInClimb? 6 : 3;
       ctx.stroke();
       
       // Draw pull direction arrow
-      if (hold.pull_x !== undefined && hold.pull_y !== undefined) {
+      if (!holdInClimb && hold.pull_x !== undefined && hold.pull_y !== undefined) {
         const arrowLength = 50 * scale * (hold.useability / 10); 
         const endX = x + hold.pull_x * arrowLength;
         const endY = y + hold.pull_y * arrowLength;
@@ -166,17 +182,16 @@ const CanvasArea = forwardRef(function CanvasArea({
         ctx.stroke();
       }
 
-      // --- NEW FEATURE 1: Highlight holds selected in current Position State ---
+      // --- Highlight holds selected in current Position State (CLIMB MODE) ---
       if (mode === 'climb') {
-        // Check if this hold is in position.holdsByLimb
         position.holdsByLimb.forEach((limbHold, idx)=>{
-          if (limbHold && limbHold.hold_id === hold.hold_id) {
+          if (limbHold && limbHold === hold.hold_id) {
           const limbInfo = LIMB_CONFIG[idx];
           const [x_adj, y_adj] = [x+limbInfo.adjust[0],y+limbInfo.adjust[1]]
           
           // Draw selection ring
           ctx.beginPath();
-          ctx.arc(x_adj, y_adj, radius + 8, 0, 2 * Math.PI); // Slightly larger ring
+          ctx.arc(x_adj, y_adj, radius + 8, 0, 2 * Math.PI);
           ctx.strokeStyle = limbInfo.color;
           ctx.lineWidth = 4;
           ctx.stroke();
@@ -185,11 +200,64 @@ const CanvasArea = forwardRef(function CanvasArea({
           ctx.fillStyle = limbInfo.color;
           ctx.font = 'bold 16px sans-serif';
           ctx.textAlign = 'right';
-          // Offset label slightly to top-left of hold
           ctx.fillText(limbInfo.label, x_adj, y_adj);
           ctx.moveTo(x,y)
         }
         })
+      }
+
+      // --- Highlight holds selected in current Move State (MOVE MODE) ---
+      if (mode === 'move' && currentMove) {
+        let isSelected = false;
+        let label = '';
+        let color = '';
+        let isFinish = false;
+
+        // Check LH Start
+        if (currentMove.lh_start === hold.hold_id) {
+          isSelected = true;
+          label = 'LHS';
+          color = MOVE_CURSOR_CONFIG[MOVE_CURSOR_MODES.LH_START].color;
+        }
+        // Check RH Start
+        if (currentMove.rh_start === hold.hold_id) {
+          isSelected = true;
+          label = label ? label + '/RHS' : 'RHS';
+          color = color || MOVE_CURSOR_CONFIG[MOVE_CURSOR_MODES.RH_START].color;
+        }
+        // Check LH Finish
+        if (currentMove.lh_finish.includes(hold.hold_id)) {
+          isSelected = true;
+          isFinish = true;
+          label = label ? label + '/LHF' : 'LHF';
+          color = color || MOVE_CURSOR_CONFIG[MOVE_CURSOR_MODES.LH_FINISH].color;
+        }
+        // Check RH Finish
+        if (currentMove.rh_finish.includes(hold.hold_id)) {
+          isSelected = true;
+          isFinish = true;
+          label = label ? label + '/RHF' : 'RHF';
+          color = color || MOVE_CURSOR_CONFIG[MOVE_CURSOR_MODES.RH_FINISH].color;
+        }
+
+        if (isSelected) {
+          // Draw selection ring (dashed for finish holds)
+          ctx.beginPath();
+          ctx.arc(x, y, radius + 10, 0, 2 * Math.PI);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 4;
+          if (isFinish) {
+            ctx.setLineDash([5, 3]);
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Draw label above hold
+          ctx.fillStyle = color;
+          ctx.font = 'bold 14px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(label, x, y - radius - 15);
+        }
       }
       
       // Standard Hold ID Label
@@ -256,6 +324,15 @@ const CanvasArea = forwardRef(function CanvasArea({
       ctx.font = '12px sans-serif';
       ctx.fillText(`Pull: ${pullAngle.toFixed(0)}°`, dragX + 10, dragY + 10);
     }
+
+    // Draw current cursor mode indicator for move mode
+    if (mode === 'move' && moveCursorMode) {
+      const config = MOVE_CURSOR_CONFIG[moveCursorMode];
+      ctx.fillStyle = config.color;
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Mode: ${config.label}`, 10, 25);
+    }
     
   }, [
     image,
@@ -266,8 +343,10 @@ const CanvasArea = forwardRef(function CanvasArea({
     calculateHoldParams,
     mode,
     position,
-    currentClimb
-  ]); // Added dependencies
+    currentClimb,
+    currentMove,
+    moveCursorMode
+  ]);
   
   // Handle mouse down
   const handleMouseDown = useCallback((e) => {
@@ -330,7 +409,7 @@ const CanvasArea = forwardRef(function CanvasArea({
       const { holdX, holdY, dragX, dragY } = addHoldState;
       const { pull_x, pull_y, useability } = calculateHoldParams(holdX, holdY, dragX, dragY);
       
-      onAddHold(holdX, holdY, pull_x, pull_y, useability, mode);
+      addHold(holdX, holdY, pull_x, pull_y, useability, mode);
       
       setAddHoldState({
         isDragging: false,
@@ -340,7 +419,7 @@ const CanvasArea = forwardRef(function CanvasArea({
         dragY: 0
       });
     }
-  }, [addHoldState, calculateHoldParams, onAddHold, mode]);
+  }, [addHoldState, calculateHoldParams, addHold, mode]);
   
   // Handle click
   const handleClick = useCallback((e) => {
@@ -349,9 +428,9 @@ const CanvasArea = forwardRef(function CanvasArea({
     const { x, y } = getImageCoords(e);
     
     if (mode === 'remove') {
-      onRemoveHold(x, y);
+      removeHold(x, y);
     } else if (mode === 'view') {
-      const hold = onFindHold(x, y);
+      const hold = findHoldAt(x, y);
       if (hold) {
         const pullAngle = hold.pull_x !== undefined 
           ? `${(Math.atan2(-hold.pull_y, hold.pull_x) * 180 / Math.PI).toFixed(1)}°`
@@ -365,23 +444,25 @@ const CanvasArea = forwardRef(function CanvasArea({
         );
       }
     } else if (mode === 'climb') {
-      const foundHold = onFindHold(x,y);
+      const foundHold = findHoldAt(x,y);
       if (foundHold) {
         setPosition((prev) => {
           const newHolds = [...prev.holdsByLimb];
-          newHolds[prev.activeLimb] = foundHold;
-          return { holdsByLimb: newHolds, activeLimb: (prev.activeLimb + 1) % 4 }
+          newHolds[prev.activeLimb] = foundHold.hold_id;
+          return { holdsByLimb: newHolds, activeLimb: (prev.activeLimb + 1) % 2 }
         });
       }
+    } else if (mode === 'move') {
+      // NEW: Handle move mode clicks
+      const foundHold = findHoldAt(x, y);
+      if (foundHold && handleMoveHoldClick) {
+        handleMoveHoldClick(foundHold.hold_id);
+      }
     }
-  }, [image, mode, getImageCoords, onRemoveHold, onFindHold]);
+  }, [image, mode, getImageCoords, removeHold, findHoldAt, setPosition, handleMoveHoldClick]);
 
   const handleKeyDown = useCallback((e) => {
     if (mode === 'climb') {
-      // if(e.key==='Enter'){ This hotkey is being fucky, going to not use it for now.
-      //     e.preventDefault();
-      //     addCurrentClimbToClimbs();
-      //   }
       if (e.target.tagName === 'INPUT'){
         return;
       }
@@ -401,25 +482,11 @@ const CanvasArea = forwardRef(function CanvasArea({
             newHoldsByLimb[1] = -1;
             return {holdsByLimb: newHoldsByLimb, activeLimb: 1 }});
           break;
-        case 'd':
-        case 'D':
-          setPosition((prev)=>{
-            const newHoldsByLimb = [...prev.holdsByLimb];
-            newHoldsByLimb[2] = -1;
-            return {holdsByLimb: newHoldsByLimb, activeLimb: 2 }});
-          break;
-        case 'f':
-        case 'F':
-          setPosition((prev)=>{
-            const newHoldsByLimb = [...prev.holdsByLimb];
-            newHoldsByLimb[3] = -1;
-            return {holdsByLimb: newHoldsByLimb, activeLimb: 3 }});
-          break;
         case 'x':
         case 'X':
           setPosition((prev)=>{
             const newHoldsByLimb = [...prev.holdsByLimb];
-            const previouslyActiveLimb = (prev.activeLimb + 3) % 4;
+            const previouslyActiveLimb = (prev.activeLimb + 1) % 2;
             newHoldsByLimb[previouslyActiveLimb] = -1;
             return { holdsByLimb: newHoldsByLimb, activeLimb: previouslyActiveLimb }
           });
@@ -432,20 +499,58 @@ const CanvasArea = forwardRef(function CanvasArea({
         case 'V': 
           setPosition((prev) => ({
             ...prev,
-            activeLimb: (prev.activeLimb + 1) % 4
+            activeLimb: (prev.activeLimb + 1) % 2
           }));
           break;
         case 'r':
         case 'R':
-          setPosition(currentClimb[currentClimb.length - 1] ?? {holdsByLimb:[-1,-1,-1,-1], activeLimb: 0});
+          setPosition({holdsByLimb: currentClimb[currentClimb.length - 1] ?? [-1,-1], activeLimb: 0});
           removeLastPositionFromCurrentClimb();
           break;
         case ' ':
           addPositionToCurrentClimb()
           break;
       }
+    } else if (mode === 'move') {
+      // NEW: Handle move mode keyboard shortcuts
+      if (e.target.tagName === 'INPUT') {
+        return;
+      }
+      
+      switch (e.key) {
+        case 'q':
+        case 'Q':
+          e.preventDefault();
+          setMoveCursorMode(MOVE_CURSOR_MODES.LH_START);
+          break;
+        case 'w':
+        case 'W':
+          e.preventDefault();
+          setMoveCursorMode(MOVE_CURSOR_MODES.RH_START);
+          break;
+        case 'e':
+        case 'E':
+          e.preventDefault();
+          setMoveCursorMode(MOVE_CURSOR_MODES.LH_FINISH);
+          break;
+        case 'r':
+        case 'R':
+          e.preventDefault();
+          setMoveCursorMode(MOVE_CURSOR_MODES.RH_FINISH);
+          break;
+        case ' ':
+          e.preventDefault();
+          addCurrentMoveToMoves();
+          break;
+        case 'c':
+        case 'C':
+          e.preventDefault();
+          resetCurrentMove();
+          break;
+      }
     }
-  },[mode, position, currentClimb]);
+  },[mode, position, currentClimb, setPosition, resetPosition, addPositionToCurrentClimb, 
+     removeLastPositionFromCurrentClimb, setMoveCursorMode, addCurrentMoveToMoves, resetCurrentMove]);
   
   // Global mouse events
   useEffect(() => {
@@ -494,6 +599,7 @@ const CanvasArea = forwardRef(function CanvasArea({
       case 'hold': return 'crosshair';
       case 'foot': return 'crosshair';
       case 'climb': return 'crosshair';
+      case 'move': return 'crosshair';
       case 'remove': return 'pointer';
       default: return 'default';
     }
@@ -544,11 +650,13 @@ CanvasArea.propTypes = {
     offsetX: PropTypes.number.isRequired,
     offsetY: PropTypes.number.isRequired
   }).isRequired,
-  onAddHold: PropTypes.func.isRequired,
-  onRemoveHold: PropTypes.func.isRequired,
-  onFindHold: PropTypes.func.isRequired,
-  onSetNewClimb: PropTypes.func, // Added optional prop
-  onZoom: PropTypes.func.isRequired
+  addHold: PropTypes.func.isRequired,
+  removeHold: PropTypes.func.isRequired,
+  findHoldAt: PropTypes.func.isRequired,
+  onSetNewClimb: PropTypes.func,
+  onZoom: PropTypes.func.isRequired,
+  useClimbParams: PropTypes.object.isRequired,
+  useMovesParams: PropTypes.object // NEW: Optional move params
 };
 
 export default CanvasArea;

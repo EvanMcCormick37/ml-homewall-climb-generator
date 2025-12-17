@@ -1,13 +1,13 @@
 import PropTypes from 'prop-types';
-import { LIMB_CONFIG } from './config';
-import { useState } from 'react';
+import { LIMB_CONFIG } from '../config';
 
 export default function ClimbsPanel({
-  useClimbParams
+  climbParams
 }) {
   const {
     position,
     currentClimb,
+    holdsUsedInCurrentClimb,
     climbName,
     climbGrade,
     climbs,
@@ -20,7 +20,7 @@ export default function ClimbsPanel({
     addPositionToCurrentClimb,
     removeLastPositionFromCurrentClimb,
     addCurrentClimbToClimbs
-  } = useClimbParams;
+  } = climbParams;
   const { holdsByLimb, activeLimb } = position;
 
   // Helper to switch active limb manually
@@ -50,9 +50,13 @@ export default function ClimbsPanel({
       }
     }
   }
-
   const handleRemoveLastPositionFromClimb = () => {
-    setPosition(currentClimb[currentClimb.length-1] ?? {holdsByLimb: [-1,-1,-1,-1], activeLimb: 0 });
+    setPosition(
+      {
+        holdsByLimb: currentClimb[currentClimb.length-1] ?? [-1,-1],
+        activeLimb: 0
+      }
+    );
     removeLastPositionFromCurrentClimb();
   }
 
@@ -90,7 +94,7 @@ export default function ClimbsPanel({
               >
                 <span style={{ color: limb.color, fontWeight: 'bold' }}>{limb.label}</span>
                 <div className="hold-info">
-                  {hasHold ? `Hold #${hold.hold_id}` : 'Empty'}
+                  {hasHold ? `Hold #${hold}` : 'Empty'}
                 </div>
               </div>
             );
@@ -123,6 +127,7 @@ export default function ClimbsPanel({
         <h4>Current Sequence</h4>
         <div className="climbs-stats">
           <div>Steps: <strong>{currentClimb.length}</strong></div>
+          {holdsUsedInCurrentClimb.map((h)=>(<strong>{`${h}, `}</strong>))}
         </div>
 
         {/* New Input Fields */}

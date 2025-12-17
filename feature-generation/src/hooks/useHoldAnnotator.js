@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { MOVE_CURSOR_MODES } from '../config';
 
 /**
  * Custom hook for managing hold annotation  and operations.
@@ -224,21 +225,34 @@ export function useClimbs() {
   const [climbGrade, setClimbGrade] = useState('');
   const [currentClimb, setCurrentClimb] = useState([]);
   const [position, setPosition] = useState({
-    holdsByLimb: [-1,-1,-1,-1], // [LeftHand, RightHand, LeftFoot, RightFoot]. -1 or null means not using a hold.
-    activeLimb: 0 
+    holdsByLimb: [-1, -1], // [LeftHand, RightHand]. -1 or null means not using a hold.
+    activeLimb: 0
   });
-  const resetPosition = useCallback(()=>(setPosition({
-    holdsByLimb: [-1,-1,-1,-1],
+
+  // --- NEW LOGIC START ---
+  const holdsUsedInCurrentClimb = useMemo(() => {
+    const allHolds = currentClimb.flat();
+    const validHolds = allHolds.filter(h => h !== -1 && h !== null);
+
+    return Array.from(new Set(validHolds)).sort((a, b) => a - b);
+  }, [currentClimb]);
+
+  const resetPosition = useCallback(() => (setPosition({
+    holdsByLimb: [-1, -1],
     activeLimb: 0
   })), []);
-  const addPositionToCurrentClimb = useCallback(()=>{
-    setCurrentClimb((prev)=>([...prev, { ...position }]));
-  },[position]);
-  const removeLastPositionFromCurrentClimb = useCallback(()=>{
-    setCurrentClimb((prev)=>(prev.slice(0,-1) ?? []));
-  },[]);
-  const addCurrentClimbToClimbs = useCallback(()=>{
-    setClimbs((prev)=>([...prev,{
+
+  const addPositionToCurrentClimb = useCallback(() => {
+    setCurrentClimb((prev) => ([...prev, [...position.holdsByLimb]]));
+    resetPosition();
+  }, [position]);
+
+  const removeLastPositionFromCurrentClimb = useCallback(() => {
+    setCurrentClimb((prev) => (prev.slice(0, -1) ?? []));
+  }, []);
+
+  const addCurrentClimbToClimbs = useCallback(() => {
+    setClimbs((prev) => ([...prev, {
       name: climbName,
       grade: climbGrade,
       sequence: currentClimb
@@ -247,29 +261,31 @@ export function useClimbs() {
     setClimbName('');
     setClimbGrade('');
     resetPosition();
-  }, [climbName, climbGrade, currentClimb]);
-  const exportClimbs = useCallback(()=>{
-    const formattedClimbs = climbs.map((climb)=>({
-          name: climb.name,
-          grade: climb.grade,
-          sequence: climb.sequence,
-          num_moves: (climb.sequence.length - 1)
-        }));
+  }, [climbName, climbGrade, currentClimb, resetPosition]);
+
+  const exportClimbs = useCallback(() => {
+    const formattedClimbs = climbs.map((climb) => ({
+      name: climb.name,
+      grade: climb.grade,
+      sequence: climb.sequence,
+      num_moves: (climb.sequence.length - 1)
+    }));
     return {
       metadata: {
         wall_name: "Sideways Wall",
         data_type: "Climb",
         num_climbs: climbs.length,
-        num_moves: formattedClimbs.reduce((sum, climb)=>(sum+climb.num_moves),0),
+        num_moves: formattedClimbs.reduce((sum, climb) => (sum + climb.num_moves), 0),
         exported: new Date().toISOString()
       },
       climbs: formattedClimbs
     };
-  },[climbs])
+  }, [climbs]);
 
   return {
     position,
     currentClimb,
+    holdsUsedInCurrentClimb,
     climbs,
     climbName,
     climbGrade,
@@ -283,5 +299,163 @@ export function useClimbs() {
     removeLastPositionFromCurrentClimb,
     addCurrentClimbToClimbs,
     exportClimbs
-  }
+  };
+}
+
+export function useMoves() {
+  // Current move being constructed
+  const [currentMove, setCurrentMove] = useState({
+    lh_start: null,      // Single hold_id or null
+    rh_start: null,      // Single hold_id or null
+    lh_finish: [],       // Array of hold_ids (no duplicates)
+    rh_finish: [],       // Array of hold_ids (no duplicates)
+  });
+  
+  // Active cursor mode for move annotation
+  const [moveCursorMode, setMoveCursorMode] = useState(MOVE_CURSOR_MODES.LH_START);
+  
+  // All saved moves
+  const [moves, setMoves] = useState([]);
+
+  // Reset current move to empty state
+  const resetCurrentMove = useCallback(() => {
+    setCurrentMove({
+      lh_start: null,
+      rh_start: null,
+      lh_finish: [],
+      rh_finish: [],
+    });
+  }, []);
+
+  // Set a start hold (LH or RH)
+  const setStartHold = useCallback((side, holdId) => {
+    setCurrentMove(prev => ({
+      ...prev,
+      [side === 'lh' ? 'lh_start' : 'rh_start']: holdId
+    }));
+  }, []);
+
+  // Toggle a finish hold (add if not present, remove if present)
+  const toggleFinishHold = useCallback((side, holdId) => {
+    setCurrentMove(prev => {
+      const key = side === 'lh' ? 'lh_finish' : 'rh_finish';
+      const currentFinishes = prev[key];
+      
+      if (currentFinishes.includes(holdId)) {
+        // Remove if already present
+        return {
+          ...prev,
+          [key]: currentFinishes.filter(id => id !== holdId)
+        };
+      } else {
+        // Add if not present
+        return {
+          ...prev,
+          [key]: [...currentFinishes, holdId]
+        };
+      }
+    });
+  }, []);
+
+  // Handle a hold click based on current cursor mode
+  const handleMoveHoldClick = useCallback((holdId) => {
+    switch (moveCursorMode) {
+      case MOVE_CURSOR_MODES.LH_START:
+        setStartHold('lh', holdId);
+        break;
+      case MOVE_CURSOR_MODES.RH_START:
+        setStartHold('rh', holdId);
+        break;
+      case MOVE_CURSOR_MODES.LH_FINISH:
+        toggleFinishHold('lh', holdId);
+        break;
+      case MOVE_CURSOR_MODES.RH_FINISH:
+        toggleFinishHold('rh', holdId);
+        break;
+      default:
+        break;
+    }
+  }, [moveCursorMode, setStartHold, toggleFinishHold]);
+
+  // Check if current move is valid (has at least one start and one finish)
+  const isCurrentMoveValid = useCallback(() => {
+    const hasStart = currentMove.lh_start !== null || currentMove.rh_start !== null;
+    const hasFinish = currentMove.lh_finish.length > 0 || currentMove.rh_finish.length > 0;
+    return hasStart && hasFinish;
+  }, [currentMove]);
+
+  // Add current move to moves list
+  const addCurrentMoveToMoves = useCallback(() => {
+    if (!isCurrentMoveValid()) return false;
+    
+    setMoves(prev => [...prev, { ...currentMove }]);
+    resetCurrentMove();
+    return true;
+  }, [currentMove, isCurrentMoveValid, resetCurrentMove]);
+
+  // Remove a move from the list by index
+  const removeMove = useCallback((index) => {
+    setMoves(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Clear all moves
+  const clearMoves = useCallback(() => {
+    setMoves([]);
+    resetCurrentMove();
+  }, [resetCurrentMove]);
+
+  // Load moves from JSON data
+  const loadMoves = useCallback((data) => {
+    const loadedMoves = data.moves || [];
+    setMoves(loadedMoves);
+  }, []);
+
+  // Export moves as JSON-ready object
+  const exportMoves = useCallback(() => {
+    const formattedMoves = moves.map((move, idx) => ({
+      move_id: idx,
+      lh_start: move.lh_start,
+      rh_start: move.rh_start,
+      lh_finish: move.lh_finish,
+      rh_finish: move.rh_finish,
+      num_finish_options: move.lh_finish.length + move.rh_finish.length
+    }));
+
+    return {
+      metadata: {
+        wall_name: "Sideways Wall",
+        data_type: "Moves",
+        num_moves: formattedMoves.length,
+        total_finish_options: formattedMoves.reduce((sum, move) => sum + move.num_finish_options, 0),
+        exported: new Date().toISOString()
+      },
+      moves: formattedMoves
+    };
+  }, [moves]);
+
+  return {
+    // Current move state
+    currentMove,
+    setCurrentMove,
+    resetCurrentMove,
+    
+    // Cursor mode
+    moveCursorMode,
+    setMoveCursorMode,
+    
+    // Move actions
+    setStartHold,
+    toggleFinishHold,
+    handleMoveHoldClick,
+    isCurrentMoveValid,
+    addCurrentMoveToMoves,
+    
+    // Moves collection
+    moves,
+    setMoves,
+    removeMove,
+    clearMoves,
+    loadMoves,
+    exportMoves
+  };
 }

@@ -155,26 +155,32 @@ class ClimbDataset(Dataset):
 
 
 # --- Data Pipeline ---
-def load_and_preprocess_data(json_path: str, val_split: float = 0.2) -> Tuple[ClimbDataset, ClimbDataset]:
+def load_and_preprocess_data(hold_path: str, climb_path: str, val_split: float = 0.2) -> Tuple[ClimbDataset, ClimbDataset, dict[int, List[float]]]:
     """
     Loads JSON, converts to numpy, splits data, augments TRAINING set only,
     and returns ClimbDatasets.
     """
-    print(f"Loading data from {json_path}...")
-    with open(json_path, 'r') as f:
+    print(f"Loading hold data from {hold_path}...")
+    with open(hold_path, 'r') as f:
+        data = json.load(f)
+    
+    hold_map = {h['hold_id']: extract_hold_features(h) for h in data['holds']}
+
+    print(f"Loading climb data from {climb_path}...")
+    with open(climb_path, 'r') as f:
         data = json.load(f)
     
     all_climbs = data['climbs']
-    num_climbs = len(all_climbs)
     
     # 1. Convert all raw JSON climbs to Numpy arrays
     print("Parsing sequences...")
-    all_sequences = [parse_climb_to_numpy(c) for c in all_climbs]
-    
+    all_sequences = augment_sequence_list([parse_climb_to_numpy(c) for c in all_climbs])
+    num_sequences = len(all_sequences)
+
     # 2. Split indices
-    indices = np.arange(num_climbs)
+    indices = np.arange(num_sequences)
     np.random.shuffle(indices)
-    split_idx = int(num_climbs * (1 - val_split))
+    split_idx = int(num_sequences * (1 - val_split))
     
     train_indices = indices[:split_idx]
     val_indices = indices[split_idx:]
@@ -184,16 +190,11 @@ def load_and_preprocess_data(json_path: str, val_split: float = 0.2) -> Tuple[Cl
     
     print(f"Split: {len(train_seqs)} Train / {len(val_seqs)} Val")
     
-    # 3. Augment ONLY the training set
-    print("Augmenting training set (6x)...")
-    train_seqs_augmented = augment_sequence_list(train_seqs)
-    print(f"Augmented Train size: {len(train_seqs_augmented)}")
-    
     # 4. Create Datasets
-    train_dataset = ClimbDataset(train_seqs_augmented)
+    train_dataset = ClimbDataset(train_seqs)
     val_dataset = ClimbDataset(val_seqs)
     
-    return train_dataset, val_dataset
+    return train_dataset, val_dataset, hold_map
 
 
 # --- Model ---
@@ -248,9 +249,67 @@ def run_epoch(
     return total_loss / n_samples, total_dist / n_samples
 
 
-def train_model(train_ds: Dataset, val_ds: Dataset, 
-                num_epochs: int = 100, lr: float = 0.001, 
-                batch_size: int = 32, device: str = "cpu") -> nn.Module:
+# --- Inference ---
+class ClimbGenerator:
+    """Generate climb sequences by predicting holds in feature space."""
+    
+    def __init__(self, model: ClimbMLP, hold_map: dict[int, List[float]], device: str):
+        self.model = model.to(device).eval()
+        self.hold_map = hold_map
+        self.device = device
+
+    def _to_input(self, lh: List[float], rh: List[float]) -> torch.Tensor:
+        """Convert hand features to model input tensor."""
+        return torch.tensor(lh + rh, dtype=torch.float32).unsqueeze(0).to(self.device)
+
+    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float]]:
+        """Find hold with minimum Euclidean distance to predicted features."""
+        best_id, best_dist = -1, float('inf')
+        
+        for hold_id, hold_features in self.hold_map.items():
+            dist = np.linalg.norm(features - np.array(hold_features))
+            if dist < best_dist:
+                best_id, best_dist = hold_id, dist
+                
+        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES))
+
+    def generate(self, 
+                 start_lh: int, 
+                 start_rh: int, 
+                 max_moves: int = 10) -> List[Tuple[int, int, List[float], List[float]]]:
+        """
+        Generate a climb sequence from starting hold indices.
+        
+        Returns list of (lh_id, rh_id, lh_features, rh_features) tuples.
+        """
+        lh = self.hold_map[start_lh]
+        rh = self.hold_map[start_rh]
+        sequence = []
+        
+        with torch.no_grad():
+            for move in range(max_moves):
+                inputs = self._to_input(lh, rh)
+                predicted = self.model(inputs).cpu().numpy().flatten()
+                lh_id, lh = self._nearest_hold(predicted[:5])
+                rh_id, rh = self._nearest_hold(predicted[5:])
+                
+                if (len(sequence) > 0 and (lh_id, rh_id) == sequence[-1]) or (lh == NULL_FEATURES and rh == NULL_FEATURES):
+                    break
+
+                sequence.append((lh_id, rh_id))
+                    
+        return sequence
+
+
+def train_climb_generator(
+    train_ds: Dataset,
+    val_ds: Dataset,
+    hold_map: dict[int,List[float]],
+    num_epochs: int = 100,
+    lr: float = 0.001, 
+    batch_size: int = 32,
+    device: str = "cpu"
+    ) -> ClimbGenerator:
     
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
@@ -271,4 +330,4 @@ def train_model(train_ds: Dataset, val_ds: Dataset,
             best_val_loss = val_loss
             torch.save(model.state_dict(), 'best_climb_mlp.pth')
             
-    return model
+    return ClimbGenerator(model, hold_map, device)

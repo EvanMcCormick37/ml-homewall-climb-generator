@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Toolbar, CanvasArea, AlignmentPanel, HelpPanel, ClimbsPanel } from './components';
-import { useClimbs, useHolds, useViewTransform } from './hooks/useHoldAnnotator';
+import { Toolbar, CanvasArea, AlignmentPanel, HelpPanel, ClimbsPanel, MovesPanel } from './components';
+import { useClimbs, useHolds, useMoves, useViewTransform } from './hooks/useHoldAnnotator';
 import './App.css';
 
 function App() {
@@ -16,20 +16,9 @@ function App() {
   const [mode, setMode] = useState('view'); // 'view', 'hold', 'foot', 'climb', 'remove', 'pan'
   
   // Custom hooks for holds and view transform
-  const {
-    holds,
-    alignment,
-    setAlignment,
-    loadHolds,
-    addHold,
-    removeHold,
-    findHoldAt,
-    applyAlignment,
-    resetAlignment,
-    clearHolds,
-    exportHolds
-  } = useHolds(imageDimensions);
-  
+  const holdParams = useHolds(imageDimensions);
+  const climbParams = useClimbs();
+  const moveParams = useMoves();
   const {
     viewTransform,
     setViewTransform,
@@ -38,24 +27,7 @@ function App() {
     fitToContainer
   } = useViewTransform();
 
-  const {
-    position,
-    currentClimb,
-    climbs,
-    climbName,
-    climbGrade,
-    setPosition,
-    resetPosition,
-    setCurrentClimb,
-    setClimbName,
-    setClimbGrade,
-    setClimbs,
-    addPositionToCurrentClimb,
-    removeLastPositionFromCurrentClimb,
-    addCurrentClimbToClimbs,
-    exportClimbs
-  } = useClimbs();
-  
+
   // Refs
   const wrapperRef = useRef(null);
   
@@ -85,13 +57,13 @@ function App() {
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target.result);
-        loadHolds(data);
+        holdParams.loadHolds(data);
       } catch (err) {
         alert('Error loading JSON: ' + err.message);
       }
     };
     reader.readAsText(file);
-  }, [loadHolds]);
+  }, [holdParams.loadHolds]);
   
   // Fit to window
   const fitToWindow = useCallback(() => {
@@ -119,18 +91,18 @@ function App() {
   // Clear with confirmation
   const handleClear = useCallback(() => {
     if (window.confirm('Remove all holds?')) {
-      clearHolds();
+      holdParams.clearHolds();
     }
     if (jsonInputRef.current.value){
       jsonInputRef.current.value = null;
     }
-  }, [clearHolds]);
+  }, [holdParams.clearHolds]);
   
   // Apply alignment with notification
   const handleApplyAlignment = useCallback(() => {
-    const count = applyAlignment();
+    const count = holdParams.applyAlignment();
     alert(`Applied alignment to ${count} holds.`);
-  }, [applyAlignment]);
+  }, [holdParams.applyAlignment]);
   
   // Keyboard shortcuts
   useEffect(() => {
@@ -142,8 +114,9 @@ function App() {
         case '2': setMode('hold'); break;
         case '3': setMode('foot'); break;
         case '4': setMode('climb'); break;
-        case '5': setMode('remove'); break;
-        case '6': setMode('pan'); break;
+        case '5': setMode('move'); break;
+        case '6': setMode('remove'); break;
+        case '7': setMode('pan'); break;
         case 'w':
         case 'W': fitToWindow(); break;
         default: break;
@@ -155,7 +128,7 @@ function App() {
   }, [fitToWindow]);
   
   // Status text
-  const statusText = `${mode.charAt(0).toUpperCase() + mode.slice(1)} | Holds: ${holds.length} | Zoom: ${Math.round(viewTransform.zoom * 100)}%`;
+  const statusText = `${mode.charAt(0).toUpperCase() + mode.slice(1)} | Holds: ${holdParams.holds.length} | Zoom: ${Math.round(viewTransform.zoom * 100)}%`;
   
   return (
     <div className="app">
@@ -171,8 +144,8 @@ function App() {
         onFit={fitToWindow}
         onImageLoad={handleImageLoad}
         onJsonLoad={handleJsonLoad}
-        onExportHolds={()=>handleExport(exportHolds())}
-        onExportClimbs={()=>handleExport(exportClimbs())}
+        onExportHolds={()=>handleExport(holdParams.exportHolds())}
+        onExportClimbs={()=>handleExport(climbParams.exportClimbs())}
         onClear={handleClear}
         status={statusText}
       />
@@ -181,53 +154,26 @@ function App() {
         ref={wrapperRef}
         image={image}
         imageDimensions={imageDimensions}
-        holds={holds}
         mode={mode}
         viewTransform={viewTransform}
         setViewTransform={setViewTransform}
-        alignment={alignment}
-        useClimbParams={{
-          position,
-          currentClimb,
-          setPosition,
-          resetPosition,
-          addPositionToCurrentClimb, 
-          removeLastPositionFromCurrentClimb,
-          addCurrentClimbToClimbs
-        }}
-        onAddHold={addHold}
-        onRemoveHold={removeHold}
-        onFindHold={findHoldAt}
         onZoom={handleZoom}
+        climbParams={climbParams}
+        moveParams={moveParams}
+        holdParams={holdParams}
       />
       
-      {image && holds.length > 0 && (
+      {image && holdParams.holds.length > 0 && (
         <AlignmentPanel
-          alignment={alignment}
-          setAlignment={setAlignment}
-          onReset={resetAlignment}
-          onApply={handleApplyAlignment}
+          holdParams={holdParams}
         />
       )}
-      {mode==='climb' && (
-        <ClimbsPanel 
-          useClimbParams={{
-            position,
-            currentClimb,
-            climbName,
-            climbGrade,
-            climbs,
-            setPosition,
-            resetPosition,
-            setCurrentClimb,
-            setClimbs,
-            setClimbName,
-            setClimbGrade,
-            addPositionToCurrentClimb,
-            removeLastPositionFromCurrentClimb,
-            addCurrentClimbToClimbs
-          }}
-        />)}
+      {mode==='climb' && (<ClimbsPanel climbParams={climbParams}/>)}
+      {mode==='move' && (<MovesPanel
+                          moveParams = {moveParams}
+                          holds = {holdParams.holds}
+                        />)
+      }
       <HelpPanel mode={mode}/>
     </div>
   );
