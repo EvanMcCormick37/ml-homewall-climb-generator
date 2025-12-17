@@ -12,10 +12,9 @@ function Toolbar({
   onFit,
   onImageLoad,
   onJsonLoad,
-  onExportHolds,
-  onExportClimbs,
   onClear,
   status,
+  exportFunctions,
 }) {
   
   const modes = [
@@ -27,6 +26,8 @@ function Toolbar({
     { id: 'remove', label: '➖ Remove', key: '6' },
     { id: 'pan', label: '✋ Pan', key: '7' }
   ];
+
+  const exportButtonsText = ["Export Holds", "Export Climbs", "Export Movesets", "Export All"]
   
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -105,12 +106,11 @@ function Toolbar({
         
         {/* Export controls */}
         <div className="toolbar-group">
-          <button className="action-btn" onClick={onExportHolds}>
-            💾 Export Holds
-          </button>
-          <button className="action-btn" onClick={onExportClimbs}>
-            💾 Export Climbs
-          </button>
+          {
+            exportFunctions.map((func, idx)=>(
+              <button key={idx} className="action-btn" onClick={func}>{exportButtonsText[idx]}</button>
+            ))
+          }
           <button className="action-btn danger" onClick={onClear}>
             🗑️ Clear
           </button>

@@ -17,7 +17,6 @@ function MovesPanel({ moveParams, holds }) {
     moves,
     removeMove,
     clearMoves,
-    exportMoves
   } = moveParams;
 
   // Get hold label by ID
@@ -26,18 +25,6 @@ function MovesPanel({ moveParams, holds }) {
     const hold = holds.find(h => h.hold_id === holdId);
     return hold ? `#${hold.hold_id}` : `#${holdId}`;
   }, [holds]);
-
-  // Handle export
-  const handleExport = useCallback(() => {
-    const data = exportMoves();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `moves_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [exportMoves]);
 
   return (
     <div className="moves-panel">
@@ -189,13 +176,6 @@ function MovesPanel({ moveParams, holds }) {
 
       {/* Export Actions */}
       <div className="button-group">
-        <button
-          onClick={handleExport}
-          disabled={moves.length === 0}
-          className="btn btn-primary"
-        >
-          Export ({moves.length})
-        </button>
         <button
           onClick={clearMoves}
           disabled={moves.length === 0}

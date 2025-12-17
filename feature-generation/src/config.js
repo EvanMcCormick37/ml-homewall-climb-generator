@@ -28,12 +28,12 @@ export const MOVE_CURSOR_CONFIG = {
   },
   [MOVE_CURSOR_MODES.LH_FINISH]: {
     label: 'LHF',
-    color: '#ff6b6b',
+    color: '#c40000ff',
     description: 'Left Hand Finish (multi)'
   },
   [MOVE_CURSOR_MODES.RH_FINISH]: {
     label: 'RHF',
-    color: '#4ecdc4', 
+    color: '#0004ffff', 
     description: 'Right Hand Finish (multi)'
   }
 };

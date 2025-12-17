@@ -8,12 +8,12 @@ from typing import List, Tuple
 from tqdm import tqdm
 
 # --- Constants ---
-HOLD_PATH = 'data/holds_final.json'
+PATH = 'data/all-data.json'
 NUM_LIMBS = 2
 FEATURE_DIM = 5
 INPUT_DIM = NUM_LIMBS * FEATURE_DIM     # 2 hands × 5 features
 OUTPUT_DIM = NUM_LIMBS * FEATURE_DIM    # Next position in Feature space
-HIDDEN_DIM = 128
+HIDDEN_DIM = 256
 
 NULL_FEATURES = [-1.0, -1.0, 0.0, 0.0, -1.0]
 
@@ -118,19 +118,8 @@ def parse_climb_to_numpy(climb_data: dict, hold_map: dict[int, List[float]]) -> 
     sequence_features = []
     
     for position in climb_data['sequence']:
-        if isinstance(position, dict) and 'holdsByLimb' in position:
-            holds = position['holdsByLimb']
-        elif isinstance(position, list):
-            holds = position
-        else:
-            print("Error processing position, invalid position type: ")
-            print(position, position.__class__)
-            continue
-
-        feature_list = []
-        for hold_idx in holds:
-            if isinstance(hold_idx, dict) and 'hold_id' in hold_idx:
-                hold_idx = hold_idx['hold_id']
+        feature_list=[]
+        for hold_idx in position:
             if hold_idx == -1:
                 feature_list.append(NULL_FEATURES)
             else:
@@ -141,7 +130,22 @@ def parse_climb_to_numpy(climb_data: dict, hold_map: dict[int, List[float]]) -> 
         
     return np.array(sequence_features, dtype=np.float32)
 
+def parse_moveset_to_numpy(moveset: dict, hold_map: dict[int, List[float]]) -> List[np.ndarray]:
+    """
+    Converts a moveset JSON into a list of sequence pairs.
+    """
+    moves = []
+    lh_start = hold_map[moveset["lh_start"]]
+    rh_start = hold_map[moveset["rh_start"]]
 
+    for h in moveset['lh_finish']:
+        lh_end = hold_map[h]
+        moves.append(np.array([lh_start+rh_start,lh_end+rh_start],dtype=np.float32))
+    for h in moveset['rh_finish']:
+        rh_end = hold_map[h]
+        moves.append(np.array([lh_start+rh_start,lh_start+rh_end],dtype=np.float32))
+
+    return moves
 # --- Dataset ---
 class ClimbDataset(Dataset):
     """
@@ -171,30 +175,24 @@ class ClimbDataset(Dataset):
 
 
 # --- Data Pipeline ---
-def load_and_preprocess_data(climb_paths: List[str], hold_path: str = HOLD_PATH, val_split: float = 0.2) -> Tuple[ClimbDataset, ClimbDataset, dict[int, List[float]]]:
+def load_and_preprocess_data(path: str, val_split: float = 0.2) -> Tuple[ClimbDataset, ClimbDataset, dict[int, List[float]]]:
     """
     Loads JSON, converts to numpy, splits data, augments TRAINING set only,
     and returns ClimbDatasets.
     """
-    print(f"Loading hold data from {hold_path}...")
-    with open(hold_path, 'r') as f:
+    print(f"Loading data from {path}...")
+    with open(path, 'r') as f:
         data = json.load(f)
     
     hold_map = {h['hold_id']: extract_hold_features(h) for h in data['holds']}
     all_sequences = []
+    print(f"Extracted {len(hold_map)} holds...")
 
-    for p in climb_paths:
-        print(f"Loading climb data from {p}...")
-        with open(p, 'r') as f:
-            data = json.load(f)
-        
-        all_climbs = data['climbs']
-        
-        # 1. Convert all raw JSON climbs to Numpy arrays
-        print("Parsing sequences...")
-        all_sequences.append(augment_sequence_list([parse_climb_to_numpy(c,hold_map) for c in all_climbs]))
-
+    all_sequences.extend(augment_sequence_list([parse_climb_to_numpy(s,hold_map) for s in data['sequences']]))
+    all_sequences.extend([seq for moveset in data['movesets'] for seq in parse_moveset_to_numpy(moveset,hold_map)])
     num_sequences = len(all_sequences)
+    print(f"Extracted {num_sequences} sequences...")
+    print(f"{int(data['metadata']['num_moves']) * 6} training moves estimated with dataset augmentation...")
 
     # 2. Split indices
     indices = np.arange(num_sequences)
@@ -226,6 +224,8 @@ class ClimbMLP(nn.Module):
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+                        nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, output_dim)
         )
@@ -281,7 +281,7 @@ class ClimbGenerator:
         """Convert hand features to model input tensor."""
         return torch.tensor(lh + rh, dtype=torch.float32).unsqueeze(0).to(self.device)
 
-    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float]]:
+    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float], int]:
         """Find hold with minimum Euclidean distance to predicted features."""
         best_id, best_dist = -1, float('inf')
         
@@ -290,7 +290,7 @@ class ClimbGenerator:
             if dist < best_dist:
                 best_id, best_dist = hold_id, dist
                 
-        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES))
+        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES)), best_dist
 
     def generate(self, 
                  start_lh: int, 
@@ -301,6 +301,8 @@ class ClimbGenerator:
         
         Returns list of (lh_id, rh_id, lh_features, rh_features) tuples.
         """
+        lh_id = start_lh
+        rh_id = start_rh
         lh = self.hold_map[start_lh]
         rh = self.hold_map[start_rh]
         sequence = []
@@ -309,8 +311,19 @@ class ClimbGenerator:
             for move in range(max_moves):
                 inputs = self._to_input(lh, rh)
                 predicted = self.model(inputs).cpu().numpy().flatten()
-                lh_id, lh = self._nearest_hold(predicted[:5])
-                rh_id, rh = self._nearest_hold(predicted[5:])
+                lh_id_next, lh_next, lh_dist = self._nearest_hold(predicted[:5])
+                rh_id_next, rh_next, rh_dist = self._nearest_hold(predicted[5:])
+
+                if lh_id_next != lh_id and rh_id_next != rh_id:
+                    if lh_dist < rh_dist:
+                        lh_id = lh_id_next
+                        lh = lh_next
+                    else:
+                        rh_id = rh_id_next
+                        rh = rh_next
+                else:
+                    lh, rh = lh_next, rh_next
+                    lh_id, rh_id = lh_id_next, rh_id_next
                 
                 if (len(sequence) > 0 and (lh_id, rh_id) == sequence[-1]) or (lh == NULL_FEATURES and rh == NULL_FEATURES):
                     break

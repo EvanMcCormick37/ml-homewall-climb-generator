@@ -16,6 +16,9 @@ const CanvasArea = forwardRef(function CanvasArea({
 
   const canvasRef = useRef(null);
 
+  // Size of Climb Hold direction indicators. TODO: Add slider to toggle arrow size.
+  const [ arrowSize, setArrowSize ] = useState(2);
+
   // Pan drag state
   const panDragRef = useRef({
     isDragging: false,
@@ -144,7 +147,8 @@ const CanvasArea = forwardRef(function CanvasArea({
       const x = hold.pixel_x * scale + offsetX;
       const y = hold.pixel_y * scale + offsetY;
       const radius = 15 * scale; 
-      
+
+      // Useful when we add feet back in
       // Draw hold circle
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -154,30 +158,35 @@ const CanvasArea = forwardRef(function CanvasArea({
       
       // Draw pull direction arrow
       if (!holdInClimb && hold.pull_x !== undefined && hold.pull_y !== undefined) {
-        const arrowLength = 50 * scale * (hold.useability / 10); 
+        const arrowLength = 10 + 30 * arrowSize * scale * (hold.useability / 10); 
         const endX = x + hold.pull_x * arrowLength;
         const endY = y + hold.pull_y * arrowLength;
-        
+
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(endX, endY);
         ctx.strokeStyle = getUseabilityColor(hold.useability);
-        ctx.lineWidth = 2;
+        ctx.lineWidth = arrowSize;
         ctx.stroke();
-        
-        // Arrow head
-        const headLength = 8;
+
+        const headLength = arrowLength/5.0;
         const angle = Math.atan2(hold.pull_y, hold.pull_x);
         ctx.beginPath();
-        ctx.moveTo(endX, endY);
-        ctx.lineTo(
-          endX - headLength * Math.cos(angle - Math.PI / 6),
-          endY - headLength * Math.sin(angle - Math.PI / 6)
+        ctx.moveTo(
+          endX + (arrowSize/2.0) * Math.cos(angle - Math.PI / 4),
+          endY + (arrowSize/2.0) * Math.sin(angle - Math.PI / 4)
         );
-        ctx.moveTo(endX, endY);
         ctx.lineTo(
-          endX - headLength * Math.cos(angle + Math.PI / 6),
-          endY - headLength * Math.sin(angle + Math.PI / 6)
+          endX - headLength * Math.cos(angle - Math.PI / 4),
+          endY - headLength * Math.sin(angle - Math.PI / 4)
+        );
+        ctx.moveTo(
+          endX + (arrowSize/2.0) * Math.cos(angle + Math.PI / 4),
+          endY + (arrowSize/2.0) * Math.sin(angle + Math.PI / 4)
+        );
+        ctx.lineTo(
+          endX - headLength * Math.cos(angle + Math.PI / 4),
+          endY - headLength * Math.sin(angle + Math.PI / 4)
         );
         ctx.stroke();
       }
@@ -185,7 +194,7 @@ const CanvasArea = forwardRef(function CanvasArea({
       // --- Highlight holds selected in current Position State (CLIMB MODE) ---
       if (mode === 'climb') {
         position.holdsByLimb.forEach((limbHold, idx)=>{
-          if (limbHold && limbHold === hold.hold_id) {
+          if (limbHold >= 0 && limbHold === hold.hold_id) {
           const limbInfo = LIMB_CONFIG[idx];
           const [x_adj, y_adj] = [x+limbInfo.adjust[0],y+limbInfo.adjust[1]]
           
@@ -243,9 +252,9 @@ const CanvasArea = forwardRef(function CanvasArea({
         if (isSelected) {
           // Draw selection ring (dashed for finish holds)
           ctx.beginPath();
-          ctx.arc(x, y, radius + 10, 0, 2 * Math.PI);
+          ctx.arc(x, y, radius + 12, 0, 2 * Math.PI);
           ctx.strokeStyle = color;
-          ctx.lineWidth = 4;
+          ctx.lineWidth = 6;
           if (isFinish) {
             ctx.setLineDash([5, 3]);
           }
@@ -267,16 +276,10 @@ const CanvasArea = forwardRef(function CanvasArea({
       const textWidth = ctx.measureText(text).width;
       ctx.fillRect(x - textWidth / 2 - 4, y - 9, textWidth + 8, 18);
       
-      ctx.fillStyle = 'white';
+      ctx.fillStyle = hold.type === 'hold' ? 'white' : 'purple';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, x, y);
-      
-      if (hold.useability !== undefined) {
-        ctx.font = '10px sans-serif';
-        ctx.fillStyle = '#aaa';
-        ctx.fillText(`U:${hold.useability}`, x, y + radius + 12);
-      }
     });
     
     // Draw add-hold preview if dragging

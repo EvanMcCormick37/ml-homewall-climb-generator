@@ -87,6 +87,34 @@ function App() {
     a.click();
     URL.revokeObjectURL(url);
   }, []);
+
+  const handleExportHolds = useCallback(()=>handleExport(holdParams.exportHolds()),[holdParams.exportHolds]);
+  const handleExportClimbs = useCallback(()=>handleExport(climbParams.exportClimbs()),[climbParams.exportClimbs]);
+  const handleExportMoves = useCallback(()=>handleExport(moveParams.exportMoves()),[moveParams.exportMoves]);
+  const handleExportAll = useCallback(()=>{
+    const holds_data = holdParams.exportHolds();
+    const climbs_data = climbParams.exportClimbs();
+    const moves_data = moveParams.exportMoves();
+    const metadata = {
+      ...holds_data.metadata,
+      data_type: 'all',
+      num_sequences: climbs_data?.metadata?.num_climbs ?? 0,
+      num_moves: (climbs_data?.metadata?.num_moves ?? 0) + (moves_data?.metadata?.num_moves ?? 0),
+    }
+    const all_data = {
+      metadata,
+      holds: holds_data.holds,
+      sequences: climbs_data.climbs,
+      movesets: moves_data.moves
+    }
+    handleExport(all_data);
+  }, [holdParams.exportHolds, climbParams.exportClimbs, moveParams.exportMoves])
+  const exportFunctions = [
+    handleExportHolds,
+    handleExportClimbs,
+    handleExportMoves,
+    handleExportAll
+  ];
   
   // Clear with confirmation
   const handleClear = useCallback(() => {
@@ -144,10 +172,9 @@ function App() {
         onFit={fitToWindow}
         onImageLoad={handleImageLoad}
         onJsonLoad={handleJsonLoad}
-        onExportHolds={()=>handleExport(holdParams.exportHolds())}
-        onExportClimbs={()=>handleExport(climbParams.exportClimbs())}
         onClear={handleClear}
         status={statusText}
+        exportFunctions = {exportFunctions}
       />
       
       <CanvasArea
