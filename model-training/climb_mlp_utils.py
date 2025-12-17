@@ -4,8 +4,7 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from typing import List, Tuple, Dict, Optional
-from pathlib import Path
+from typing import List, Tuple
 from tqdm import tqdm
 
 # --- Constants ---
@@ -219,7 +218,7 @@ class ClimbMLP(nn.Module):
 def run_epoch(
     model: nn.Module,
     loader: DataLoader, criterion: nn.Module, 
-    optimizer: Optional[optim.Optimizer],
+    optimizer: optim.Optimizer | None,
     device: str
 ) -> Tuple[float, float]:
     is_train = optimizer is not None
