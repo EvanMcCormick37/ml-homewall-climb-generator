@@ -8,6 +8,7 @@ from typing import List, Tuple
 from tqdm import tqdm
 
 # --- Constants ---
+HOLD_PATH = 'data/holds_final.json'
 NUM_LIMBS = 2
 FEATURE_DIM = 5
 INPUT_DIM = NUM_LIMBS * FEATURE_DIM     # 2 hands × 5 features
@@ -110,18 +111,33 @@ def extract_hold_features(hold_data: dict) -> List[float]:
     ]
 
 
-def parse_climb_to_numpy(climb_data: dict) -> np.ndarray:
+def parse_climb_to_numpy(climb_data: dict, hold_map: dict[int, List[float]]) -> np.ndarray:
     """
     Converts a raw climb dict into a (T, 10) numpy array of features.
     """
     sequence_features = []
     
     for position in climb_data['sequence']:
-        holds = position['holdsByLimb']
-        # Extract features for Left Hand (0) and Right Hand (1)
-        lh_feat = extract_hold_features(holds[0])
-        rh_feat = extract_hold_features(holds[1])
-        sequence_features.append(lh_feat + rh_feat)
+        if isinstance(position, dict) and 'holdsByLimb' in position:
+            holds = position['holdsByLimb']
+        elif isinstance(position, list):
+            holds = position
+        else:
+            print("Error processing position, invalid position type: ")
+            print(position, position.__class__)
+            continue
+
+        feature_list = []
+        for hold_idx in holds:
+            if isinstance(hold_idx, dict) and 'hold_id' in hold_idx:
+                hold_idx = hold_idx['hold_id']
+            if hold_idx == -1:
+                feature_list.append(NULL_FEATURES)
+            else:
+                feature_list.append(hold_map[hold_idx])
+        
+        # Combine features (Left + Right)
+        sequence_features.append(feature_list[0] + feature_list[1])
         
     return np.array(sequence_features, dtype=np.float32)
 
@@ -155,7 +171,7 @@ class ClimbDataset(Dataset):
 
 
 # --- Data Pipeline ---
-def load_and_preprocess_data(hold_path: str, climb_path: str, val_split: float = 0.2) -> Tuple[ClimbDataset, ClimbDataset, dict[int, List[float]]]:
+def load_and_preprocess_data(climb_paths: List[str], hold_path: str = HOLD_PATH, val_split: float = 0.2) -> Tuple[ClimbDataset, ClimbDataset, dict[int, List[float]]]:
     """
     Loads JSON, converts to numpy, splits data, augments TRAINING set only,
     and returns ClimbDatasets.
@@ -165,16 +181,19 @@ def load_and_preprocess_data(hold_path: str, climb_path: str, val_split: float =
         data = json.load(f)
     
     hold_map = {h['hold_id']: extract_hold_features(h) for h in data['holds']}
+    all_sequences = []
 
-    print(f"Loading climb data from {climb_path}...")
-    with open(climb_path, 'r') as f:
-        data = json.load(f)
-    
-    all_climbs = data['climbs']
-    
-    # 1. Convert all raw JSON climbs to Numpy arrays
-    print("Parsing sequences...")
-    all_sequences = augment_sequence_list([parse_climb_to_numpy(c) for c in all_climbs])
+    for p in climb_paths:
+        print(f"Loading climb data from {p}...")
+        with open(p, 'r') as f:
+            data = json.load(f)
+        
+        all_climbs = data['climbs']
+        
+        # 1. Convert all raw JSON climbs to Numpy arrays
+        print("Parsing sequences...")
+        all_sequences.append(augment_sequence_list([parse_climb_to_numpy(c,hold_map) for c in all_climbs]))
+
     num_sequences = len(all_sequences)
 
     # 2. Split indices
