@@ -124,7 +124,7 @@ def parse_climb_to_numpy(climb_data: dict, hold_map: dict[int, List[float]]) -> 
         # Combine features (Left + Right)
         sequence_features.append(feature_list[0] + feature_list[1])
     # Append NULL, NULL as a <STOP> token to alert the nn that the sequence is done.
-    sequence_features.append(NULL_FEATURES+NULL_FEATURES)
+    # sequence_features.append(NULL_FEATURES+NULL_FEATURES)
     return np.array(sequence_features, dtype=np.float32)
 
 def parse_moveset_to_numpy(moveset: dict, hold_map: dict[int, List[float]]) -> List[np.ndarray]:
@@ -515,7 +515,7 @@ class ClimbGenerator:
         """Convert hand features to model input tensor."""
         return torch.tensor(lh + rh, dtype=torch.float32).unsqueeze(0).to(self.device)
 
-    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float], int]:
+    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float]]:
         """Find hold with minimum Euclidean distance to predicted features."""
         best_id, best_dist = -1, float('inf')
         
@@ -524,52 +524,56 @@ class ClimbGenerator:
             if dist < best_dist:
                 best_id, best_dist = hold_id, dist
                 
-        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES)), best_dist
+        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES))
 
     def generate(self, 
-                 start_lh: int, 
-                 start_rh: int, 
-                 max_moves: int = 10) -> List[Tuple[int, int, List[float], List[float]]]:
-        """
-        Generate a climb sequence from starting hold indices.
-        
-        Returns list of (lh_id, rh_id, lh_features, rh_features) tuples.
-        """
-        lh_id = start_lh
-        rh_id = start_rh
-        lh = self.hold_map[start_lh]
-        rh = self.hold_map[start_rh]
-        sequence = []
+             start_lh: int, 
+             start_rh: int, 
+             max_moves: int = 10) -> List[Tuple[int, int]]:
+        """Generate a climb sequence from starting hold indices."""
+        lh_id, rh_id = start_lh, start_rh
+        lh, rh = self.hold_map[start_lh], self.hold_map[start_rh]
+        sequence = [(lh_id, rh_id)]
         
         with torch.no_grad():
-            for move in range(max_moves):
+            for _ in range(max_moves):
                 inputs = self._to_input(lh, rh)
-                predicted = self.model(inputs).cpu().numpy().flatten()
-                lh_id_next, lh_next, lh_dist = self._nearest_hold(predicted[:5])
-                rh_id_next, rh_next, rh_dist = self._nearest_hold(predicted[5:])
-
-                if lh_id_next != lh_id and rh_id_next != rh_id:
-                    if lh_dist < rh_dist:
-                        lh_id = lh_id_next
-                        lh = lh_next
-                    else:
-                        rh_id = rh_id_next
-                        rh = rh_next
-                else:
-                    lh, rh = lh_next, rh_next
-                    lh_id, rh_id = lh_id_next, rh_id_next
+                predicted = self.model.forward(inputs)
+                predicted = predicted.cpu().numpy().flatten()
                 
-                if (len(sequence) > 0 and (lh_id, rh_id) == sequence[-1]) or (lh == NULL_FEATURES and rh == NULL_FEATURES):
+                # Snap predictions to nearest holds
+                new_lh_id, new_lh = self._nearest_hold(predicted[:5])
+                new_rh_id, new_rh = self._nearest_hold(predicted[5:])
+                
+                # Termination: both hands predict off-wall
+                if new_lh == NULL_FEATURES and new_rh == NULL_FEATURES:
                     break
-
-                sequence.append((lh_id, rh_id))
+                
+                # Calculate movement distance for each hand
+                lh_moved = np.linalg.norm(np.array(lh) - np.array(new_lh))
+                rh_moved = np.linalg.norm(np.array(rh) - np.array(new_rh))
+                
+                # Only move the hand that moved MORE; snap the other back
+                if lh_moved > rh_moved:
+                    lh_id, lh = new_lh_id, new_lh  # Move LH
+                    # RH stays as-is
+                else:
+                    rh_id, rh = new_rh_id, new_rh  # Move RH
+                    # LH stays as-is
+                
+                # Termination: stuck in same position
+                if (lh_id, rh_id) == sequence[-1]:
+                    break
+                # Stop on Top: End climb if we are matched on a high hold
+                if lh_id == rh_id and lh_id < 25:
+                    break
                     
-        return sequence
+                sequence.append((lh_id, rh_id))
 
-class ClimbGeneratorRNN:
-    """Generate climb sequences using RNN with persistent hidden state."""
+class ClimbGeneratorSequential:
+    """Generate climb sequences using RNN or LSTM with persistent hidden state."""
     
-    def __init__(self, model: ClimbRNN, hold_map: dict[int, List[float]], device: str):
+    def __init__(self, model: nn.Module, hold_map: dict[int, List[float]], device: str):
         self.model = model.to(device).eval()
         self.hold_map = hold_map
         self.device = device
@@ -578,63 +582,64 @@ class ClimbGeneratorRNN:
         """Convert hand features to model input tensor."""
         return torch.tensor(lh + rh, dtype=torch.float32).unsqueeze(0).to(self.device)
 
-    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float], float]:
+    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float]]:
         """Find hold with minimum Euclidean distance to predicted features."""
         best_id, best_dist = -1, float('inf')
         
         for hold_id, hold_features in self.hold_map.items():
-            dist = np.linalg.norm(features - np.array(hold_features))
+            dist = np.linalg.norm(np.array(features) - np.array(hold_features))
             if dist < best_dist:
                 best_id, best_dist = hold_id, dist
                 
-        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES)), best_dist
+        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES)) 
 
     def generate(self, 
-                 start_lh: int, 
-                 start_rh: int, 
-                 max_moves: int = 10) -> List[Tuple[int, int]]:
-        """
-        Generate a climb sequence from starting hold indices.
-        
-        Returns list of (lh_id, rh_id) tuples.
-        """
-        lh_id = start_lh
-        rh_id = start_rh
-        lh = self.hold_map[start_lh]
-        rh = self.hold_map[start_rh]
-        sequence = []
-        
-        # Initialize hidden state once at the start
+             start_lh: int, 
+             start_rh: int, 
+             max_moves: int = 10) -> List[Tuple[int, int]]:
+        """Generate a climb sequence from starting hold indices."""
+        lh_id, rh_id = start_lh, start_rh
+        lh, rh = self.hold_map[start_lh], self.hold_map[start_rh]
+        sequence = [(lh_id, rh_id)]
         hidden = self.model.init_hidden(batch_size=1, device=self.device)
         
         with torch.no_grad():
-            for move in range(max_moves):
+            for _ in range(max_moves):
                 inputs = self._to_input(lh, rh)
-                
-                # Use forward_step to maintain hidden state across moves
                 predicted, hidden = self.model.forward_step(inputs, hidden)
                 predicted = predicted.cpu().numpy().flatten()
                 
-                lh_id_next, lh_next, lh_dist = self._nearest_hold(predicted[:5])
-                rh_id_next, rh_next, rh_dist = self._nearest_hold(predicted[5:])
-
-                if lh_id_next != lh_id and rh_id_next != rh_id:
-                    if lh_dist < rh_dist:
-                        lh_id = lh_id_next
-                        lh = lh_next
-                    else:
-                        rh_id = rh_id_next
-                        rh = rh_next
-                else:
-                    lh, rh = lh_next, rh_next
-                    lh_id, rh_id = lh_id_next, rh_id_next
+                # Snap predictions to nearest holds
+                new_lh_id, new_lh = self._nearest_hold(predicted[:5])
+                new_rh_id, new_rh = self._nearest_hold(predicted[5:])
                 
-                if (len(sequence) > 0 and (lh_id, rh_id) == sequence[-1]) or (lh == NULL_FEATURES and rh == NULL_FEATURES):
+                # Termination: both hands predict off-wall
+                if new_lh == NULL_FEATURES and new_rh == NULL_FEATURES:
                     break
-
+                
+                # Calculate movement distance for each hand
+                lh_moved = np.linalg.norm(np.array(lh) - np.array(new_lh))
+                rh_moved = np.linalg.norm(np.array(rh) - np.array(new_rh))
+                
+                # Only move the hand that moved MORE; snap the other back
+                if lh_moved > rh_moved:
+                    lh_id, lh = new_lh_id, new_lh  # Move LH
+                    # RH stays as-is
+                else:
+                    rh_id, rh = new_rh_id, new_rh  # Move RH
+                    # LH stays as-is
+                
+                # Termination: stuck in same position
+                if (lh_id, rh_id) == sequence[-1]:
+                    break
+                # Stop on Top: End climb if we are matched on a high hold
+                if lh_id == rh_id and lh_id < 25:
+                    break
+                    
                 sequence.append((lh_id, rh_id))
                     
         return sequence
+
 
 
 # --- Training ---
@@ -717,37 +722,6 @@ def run_epoch_sequential(
 
     return total_loss / n_samples, total_dist / n_samples
 
-def train_climb_generator_rnn(
-    train_ds: ClimbSequenceDataset,
-    val_ds: ClimbSequenceDataset,
-    hold_map: dict[int, List[float]],
-    num_epochs: int = 200,
-    lr: float = 0.001,
-    batch_size: int = 32,
-    device: str = "cpu"
-) -> ClimbGeneratorRNN:
-    
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=collate_sequences)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_sequences)
-    
-    model = ClimbRNN().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
-    best_val_loss = float('inf')
-    
-    pbar = tqdm(range(num_epochs), desc="Training RNN")
-    for _ in pbar:
-        train_loss, train_dist = run_epoch_sequential(model, train_loader, criterion, optimizer, device)
-        val_loss, val_dist = run_epoch_sequential(model, val_loader, criterion, None, device)
-        
-        pbar.set_postfix({"T_MSE": f"{train_loss:.4f}", "V_MSE": f"{val_loss:.4f}"})
-        
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            torch.save(model.state_dict(), 'best_climb_rnn.pth')
-            
-    return ClimbGeneratorRNN(model, hold_map, device)
-
 def train_climb_generator(
     train_ds: Dataset,
     val_ds: Dataset,
@@ -778,4 +752,45 @@ def train_climb_generator(
             torch.save(model.state_dict(), 'best_climb_mlp.pth')
             
     return ClimbGenerator(model, hold_map, device)
+
+def train_climb_generator_sequential(
+    train_ds: ClimbSequenceDataset,
+    val_ds: ClimbSequenceDataset,
+    hold_map: dict[int, List[float]],
+    model_type: str = "lstm",  # "rnn" or "lstm"
+    num_epochs: int = 100,
+    lr: float = 0.001,
+    batch_size: int = 32,
+    device: str = "cpu"
+) -> ClimbGeneratorSequential:
+    
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, collate_fn=collate_sequences)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, collate_fn=collate_sequences)
+    
+    # Select model type
+    if model_type.lower() == "lstm":
+        model = ClimbLSTM().to(device)
+        save_path = 'best_climb_lstm.pth'
+    elif model_type.lower() == "rnn":
+        model = ClimbRNN().to(device)
+        save_path = 'best_climb_rnn.pth'
+    else:
+        raise ValueError(f"model_type must be 'rnn' or 'lstm', got '{model_type}'")
+    
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.MSELoss()
+    best_val_loss = float('inf')
+    
+    pbar = tqdm(range(num_epochs), desc=f"Training {model_type.upper()}")
+    for _ in pbar:
+        train_loss, _ = run_epoch_sequential(model, train_loader, criterion, optimizer, device)
+        val_loss, _ = run_epoch_sequential(model, val_loader, criterion, None, device)
+        
+        pbar.set_postfix({"T_MSE": f"{train_loss:.4f}", "V_MSE": f"{val_loss:.4f}"})
+        
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), save_path)
+            
+    return ClimbGeneratorSequential(model, hold_map, device)
 

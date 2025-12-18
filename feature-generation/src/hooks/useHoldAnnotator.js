@@ -228,6 +228,10 @@ export function useClimbs() {
     holdsByLimb: [-1, -1], // [LeftHand, RightHand]. -1 or null means not using a hold.
     activeLimb: 0
   });
+  const [climbDisplayOptions,setClimbDisplayOptions] = useState({
+    allHolds: false,
+    path: true
+  })
 
   // --- NEW LOGIC START ---
   const holdsUsedInCurrentClimb = useMemo(() => {
@@ -289,12 +293,14 @@ export function useClimbs() {
     climbs,
     climbName,
     climbGrade,
+    climbDisplayOptions,
     setPosition,
     resetPosition,
     setCurrentClimb,
     setClimbName,
     setClimbGrade,
     setClimbs,
+    setClimbDisplayOptions,
     addPositionToCurrentClimb,
     removeLastPositionFromCurrentClimb,
     addCurrentClimbToClimbs,

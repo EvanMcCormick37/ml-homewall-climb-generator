@@ -54,7 +54,7 @@ const CanvasArea = forwardRef(function CanvasArea({
     resetPosition,
     addPositionToCurrentClimb, 
     removeLastPositionFromCurrentClimb,
-    addCurrentClimbToClimbs,
+    climbDisplayOptions,
   } = climbParams;
 
   // Move State (NEW)
@@ -112,6 +112,165 @@ const CanvasArea = forwardRef(function CanvasArea({
     return `rgb(${r}, ${g}, ${b})`;
   }
 
+  // Helper function to get hold screen coordinates
+  const getHoldScreenCoords = useCallback((holdId) => {
+    const hold = holds.find(h => h.hold_id === holdId);
+    if (!hold) return null;
+    
+    const { scale, offsetX, offsetY } = alignment;
+    return {
+      x: hold.pixel_x * scale + offsetX,
+      y: hold.pixel_y * scale + offsetY
+    };
+  }, [holds, alignment]);
+
+  // Draw the climb sequence visualization
+  const drawClimbSequence = useCallback((ctx, scale) => {
+    if (!currentClimb || currentClimb.length === 0) return;
+
+    const LH_COLOR = '#ff6b6b'; // Red for left hand
+    const RH_COLOR = '#4ecdc4'; // Teal for right hand
+    const LINE_WIDTH = 3;
+    const SEQUENCE_CIRCLE_RADIUS = 12;
+
+    // Collect all positions with their screen coordinates
+    const positions = currentClimb.map((pos, idx) => {
+      const lhCoords = pos[0] >= 0 ? getHoldScreenCoords(pos[0]) : null;
+      const rhCoords = pos[1] >= 0 ? getHoldScreenCoords(pos[1]) : null;
+      return { lh: lhCoords, rh: rhCoords, lhId: pos[0], rhId: pos[1], moveNum: idx + 1 };
+    });
+
+    // Draw connecting lines for left hand path
+    ctx.beginPath();
+    ctx.strokeStyle = LH_COLOR;
+    ctx.lineWidth = LINE_WIDTH;
+    ctx.setLineDash([8, 4]);
+    
+    let firstLH = true;
+    for (const pos of positions) {
+      if (pos.lh) {
+        if (firstLH) {
+          ctx.moveTo(pos.lh.x - 15, pos.lh.y);
+          firstLH = false;
+        } else {
+          ctx.lineTo(pos.lh.x - 15, pos.lh.y);
+        }
+      }
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw connecting lines for right hand path
+    ctx.beginPath();
+    ctx.strokeStyle = RH_COLOR;
+    ctx.lineWidth = LINE_WIDTH;
+    ctx.setLineDash([8, 4]);
+    
+    let firstRH = true;
+    for (const pos of positions) {
+      if (pos.rh) {
+        if (firstRH) {
+          ctx.moveTo(pos.rh.x + 15, pos.rh.y);
+          firstRH = false;
+        } else {
+          ctx.lineTo(pos.rh.x + 15, pos.rh.y);
+        }
+      }
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw move number indicators at each position
+    positions.forEach((pos, idx) => {
+      const isStart = idx === 0;
+      const isEnd = idx === positions.length - 1;
+
+      // Draw LH move number
+      if (pos.lh) {
+        const x = pos.lh.x - 25;
+        const y = pos.lh.y - 25;
+        
+        // Background circle
+        ctx.beginPath();
+        ctx.arc(x, y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
+        ctx.fillStyle = isStart ? '#d400ffff' : isEnd ? '#d1b200ff' : LH_COLOR;
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Move number text
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pos.moveNum.toString(), x, y);
+
+        // Label for start/end
+        if (isStart || isEnd) {
+          ctx.fillStyle = isStart ? '#22c55e' : '#ef4444';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(isStart ? 'START' : 'END', x, y - 20);
+        }
+      }
+
+      // Draw RH move number (offset to the right)
+      if (pos.rh) {
+        const x = pos.rh.x + 25;
+        const y = pos.rh.y - 25;
+        
+        // Background circle
+        ctx.beginPath();
+        ctx.arc(x, y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
+        ctx.fillStyle = isStart ? '#22c55e' : isEnd ? '#d1b200ff' : RH_COLOR;
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Move number text
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pos.moveNum.toString(), x, y);
+      }
+    });
+
+    // Draw legend in corner
+    const legendX = 10;
+    const legendY = 50;
+    
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(legendX, legendY, 120, 70);
+    
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    
+    // LH legend
+    ctx.fillStyle = LH_COLOR;
+    ctx.beginPath();
+    ctx.arc(legendX + 12, legendY + 18, 8, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = 'white';
+    ctx.fillText('Left Hand', legendX + 28, legendY + 18);
+    
+    // RH legend
+    ctx.fillStyle = RH_COLOR;
+    ctx.beginPath();
+    ctx.arc(legendX + 12, legendY + 40, 8, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = 'white';
+    ctx.fillText('Right Hand', legendX + 28, legendY + 40);
+    
+    // Move count
+    ctx.fillStyle = '#aaa';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(`${currentClimb.length} moves`, legendX + 8, legendY + 58);
+
+  }, [currentClimb, getHoldScreenCoords]);
+
   // Draw canvas
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -146,20 +305,20 @@ const CanvasArea = forwardRef(function CanvasArea({
       
       const x = hold.pixel_x * scale + offsetX;
       const y = hold.pixel_y * scale + offsetY;
-      const radius = holdInClimb? 45 * scale : 15 * scale; 
+      const radius = holdInClimb ? 60 * scale : 15 * scale; 
 
       // Useful when we add feet back in
       // Draw hold circle
-      if((mode !== 'climb') || holdInClimb){
+      if((mode !== 'climb' || climbDisplayOptions.allHolds && holdInClimb)){
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, 2 * Math.PI);
-        ctx.strokeStyle = hold.type === 'hold' ? (holdInClimb? '#ff0000ff' : '#009165ff') : '#63008aff';
-        ctx.lineWidth = holdInClimb? 8 : 3;
+        ctx.strokeStyle = hold.type === 'hold' ? '#00b679ff' : '#63008aff';
+        ctx.lineWidth = holdInClimb? 6 : 3;
         ctx.stroke();
       }
       
       // Draw pull direction arrow
-      if ((mode !== 'climb') || holdInClimb && hold.pull_x !== undefined && hold.pull_y !== undefined) {
+      if ((mode !== 'climb') && hold.pull_x !== undefined && hold.pull_y !== undefined) {
         const arrowLength = 10 + 30 * arrowSize * scale * (hold.useability / 10); 
         const endX = x + hold.pull_x * arrowLength;
         const endY = y + hold.pull_y * arrowLength;
@@ -272,17 +431,25 @@ const CanvasArea = forwardRef(function CanvasArea({
       }
       
       // Standard Hold ID Label
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-      const text = hold.hold_id.toString();
-      ctx.font = 'bold 14px sans-serif';
-      const textWidth = ctx.measureText(text).width;
-      ctx.fillRect(x - textWidth / 2 - 4, y - 9, textWidth + 8, 18);
-      
-      ctx.fillStyle = hold.type === 'hold' ? 'white' : 'purple';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, x, y);
+      if(mode === 'hold' || mode === 'foot' || mode === 'remove')
+      {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        const text = hold.hold_id.toString();
+        ctx.font = 'bold 14px sans-serif';
+        const textWidth = ctx.measureText(text).width;
+        ctx.fillRect(x - textWidth / 2 - 4, y - 9, textWidth + 8, 18);
+        
+        ctx.fillStyle = hold.type === 'hold' ? 'white' : 'purple';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, x, y);
+      }
     });
+
+    // Draw climb sequence visualization (NEW)
+    if (mode === 'climb' && currentClimb && currentClimb.length > 0) {
+      drawClimbSequence(ctx, scale);
+    }
     
     // Draw add-hold preview if dragging
     if (addHoldState.isDragging) {
@@ -350,7 +517,8 @@ const CanvasArea = forwardRef(function CanvasArea({
     position,
     currentClimb,
     currentMove,
-    moveCursorMode
+    moveCursorMode,
+    drawClimbSequence
   ]);
   
   // Handle mouse down
