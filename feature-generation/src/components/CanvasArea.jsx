@@ -129,7 +129,7 @@ const CanvasArea = forwardRef(function CanvasArea({
 
     const LH_COLOR = '#ff6b6b'; // Red for left hand
     const RH_COLOR = '#4ecdc4'; // Teal for right hand
-    const START_COLOR = '#d400ffff'
+    const START_COLOR = '#22c55e'
     const END_COLOR = '#d1b200ff'
     const DEFAULT_COLOR = '#ff4800ff'
     const LINE_WIDTH = 3;
@@ -185,8 +185,12 @@ const CanvasArea = forwardRef(function CanvasArea({
     }
 
     // Draw move number indicators at each position
+    const startHolds = [positions[0].lhId, positions[0].rhId];
+
     positions.forEach((pos, idx) => {
       const isStart = idx === 0;
+      const lhStart = startHolds.some((h)=>(pos.lhId===h));
+      const rhStart = startHolds.some((h)=>(pos.rhId===h));
       const isEnd = idx === positions.length - 1;
 
       // Draw LH move number
@@ -197,13 +201,13 @@ const CanvasArea = forwardRef(function CanvasArea({
         // Hold-in-climb-indicator
         ctx.beginPath();
         ctx.arc(pos.lh.x, pos.lh.y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
-        ctx.fillStyle = isStart ? '#22c55e' : isEnd ? '#d1b200ff' : DEFAULT_COLOR;
+        ctx.fillStyle = lhStart ? START_COLOR : isEnd ? END_COLOR : DEFAULT_COLOR;
         ctx.fill();
 
         // Background circle
         ctx.beginPath();
         ctx.arc(x, y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
-        ctx.fillStyle = isStart ? START_COLOR : isEnd ? END_COLOR : LH_COLOR;
+        ctx.fillStyle = lhStart ? START_COLOR : isEnd ? END_COLOR : LH_COLOR;
         ctx.fill();
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
@@ -217,10 +221,10 @@ const CanvasArea = forwardRef(function CanvasArea({
         ctx.fillText(pos.moveNum.toString(), x, y);
 
         // Label for start/end
-        if (isStart || isEnd) {
-          ctx.fillStyle = isStart ? '#22c55e' : '#ef4444';
+        if (lhStart || isEnd) {
+          ctx.fillStyle = lhStart ? START_COLOR : '#ef4444';
           ctx.font = 'bold 10px sans-serif';
-          ctx.fillText(isStart ? 'START' : 'END', x, y - 20);
+          ctx.fillText(lhStart ? 'START' : 'END', x, y - 20);
         }
       }
 
@@ -232,13 +236,13 @@ const CanvasArea = forwardRef(function CanvasArea({
         // Hold-in-climb-indicator
         ctx.beginPath();
         ctx.arc(pos.rh.x, pos.rh.y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
-        ctx.fillStyle = isStart ? '#22c55e' : isEnd ? '#d1b200ff' : DEFAULT_COLOR;
+        ctx.fillStyle = rhStart ? START_COLOR : isEnd ? END_COLOR : DEFAULT_COLOR;
         ctx.fill();
         
         // Background circle
         ctx.beginPath();
         ctx.arc(x, y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
-        ctx.fillStyle = isStart ? '#22c55e' : isEnd ? '#d1b200ff' : RH_COLOR;
+        ctx.fillStyle = rhStart ? START_COLOR : isEnd ? END_COLOR : RH_COLOR;
         ctx.fill();
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
@@ -250,6 +254,13 @@ const CanvasArea = forwardRef(function CanvasArea({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(pos.moveNum.toString(), x, y);
+
+        // Label for start/end
+        if (lhStart || isEnd) {
+          ctx.fillStyle = lhStart ? START_COLOR : '#ef4444';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillText(lhStart ? 'START' : 'END', x, y - 20);
+        }
       }
     });
 
