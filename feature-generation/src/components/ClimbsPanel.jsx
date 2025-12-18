@@ -15,12 +15,14 @@ export default function ClimbsPanel({
     climbName,
     climbGrade,
     climbs,
+    climbDisplayOptions,
     setPosition,
     resetPosition,
     setCurrentClimb,
     setClimbs,
     setClimbName,
     setClimbGrade,
+    setClimbDisplayOptions,
     addPositionToCurrentClimb,
     removeLastPositionFromCurrentClimb,
     addCurrentClimbToClimbs
@@ -109,6 +111,12 @@ export default function ClimbsPanel({
     addCurrentClimbToClimbs();
   };
 
+  const toggleShowHandPath = () => {
+    setClimbDisplayOptions((prev)=>({
+      showPath: !prev.showPath,
+    }));
+  }
+
   return (
     <div className="climbs-panel">
       <h3>Climb Builder</h3>
@@ -179,6 +187,7 @@ export default function ClimbsPanel({
         <div className="climbs-stats">
           {currentClimb.map((pos)=>(<div><strong>{`[${pos}]`}</strong></div>))}
           <div>Holds used: <strong>{currentClimb.length}</strong></div>
+          <button className={`btn-tiny ${climbDisplayOptions.showPath?'active':''}`} onClick={toggleShowHandPath}>Show Hand Path</button>
         </div>
 
         {/* New Input Fields */}

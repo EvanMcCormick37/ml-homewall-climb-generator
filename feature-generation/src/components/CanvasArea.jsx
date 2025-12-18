@@ -49,12 +49,11 @@ const CanvasArea = forwardRef(function CanvasArea({
   const {
     position, 
     currentClimb,
-    holdsUsedInCurrentClimb,
+    climbDisplayOptions,
     setPosition,
     resetPosition,
     addPositionToCurrentClimb, 
     removeLastPositionFromCurrentClimb,
-    climbDisplayOptions,
   } = climbParams;
 
   // Move State (NEW)
@@ -125,11 +124,14 @@ const CanvasArea = forwardRef(function CanvasArea({
   }, [holds, alignment]);
 
   // Draw the climb sequence visualization
-  const drawClimbSequence = useCallback((ctx, scale) => {
+  const drawClimbSequence = useCallback((ctx) => {
     if (!currentClimb || currentClimb.length === 0) return;
 
     const LH_COLOR = '#ff6b6b'; // Red for left hand
     const RH_COLOR = '#4ecdc4'; // Teal for right hand
+    const START_COLOR = '#d400ffff'
+    const END_COLOR = '#d1b200ff'
+    const DEFAULT_COLOR = '#ff4800ff'
     const LINE_WIDTH = 3;
     const SEQUENCE_CIRCLE_RADIUS = 12;
 
@@ -140,45 +142,47 @@ const CanvasArea = forwardRef(function CanvasArea({
       return { lh: lhCoords, rh: rhCoords, lhId: pos[0], rhId: pos[1], moveNum: idx + 1 };
     });
 
-    // Draw connecting lines for left hand path
-    ctx.beginPath();
-    ctx.strokeStyle = LH_COLOR;
-    ctx.lineWidth = LINE_WIDTH;
-    ctx.setLineDash([8, 4]);
-    
-    let firstLH = true;
-    for (const pos of positions) {
-      if (pos.lh) {
-        if (firstLH) {
-          ctx.moveTo(pos.lh.x - 15, pos.lh.y);
-          firstLH = false;
-        } else {
-          ctx.lineTo(pos.lh.x - 15, pos.lh.y);
+    if(climbDisplayOptions.showPath){
+      // Draw connecting lines for left hand path
+      ctx.beginPath();
+      ctx.strokeStyle = LH_COLOR;
+      ctx.lineWidth = LINE_WIDTH;
+      ctx.setLineDash([8, 4]);
+      
+      let firstLH = true;
+      for (const pos of positions) {
+        if (pos.lh) {
+          if (firstLH) {
+            ctx.moveTo(pos.lh.x - 15, pos.lh.y);
+            firstLH = false;
+          } else {
+            ctx.lineTo(pos.lh.x - 15, pos.lh.y);
+          }
         }
       }
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-    // Draw connecting lines for right hand path
-    ctx.beginPath();
-    ctx.strokeStyle = RH_COLOR;
-    ctx.lineWidth = LINE_WIDTH;
-    ctx.setLineDash([8, 4]);
-    
-    let firstRH = true;
-    for (const pos of positions) {
-      if (pos.rh) {
-        if (firstRH) {
-          ctx.moveTo(pos.rh.x + 15, pos.rh.y);
-          firstRH = false;
-        } else {
-          ctx.lineTo(pos.rh.x + 15, pos.rh.y);
+      // Draw connecting lines for right hand path
+      ctx.beginPath();
+      ctx.strokeStyle = RH_COLOR;
+      ctx.lineWidth = LINE_WIDTH;
+      ctx.setLineDash([8, 4]);
+      
+      let firstRH = true;
+      for (const pos of positions) {
+        if (pos.rh) {
+          if (firstRH) {
+            ctx.moveTo(pos.rh.x + 15, pos.rh.y);
+            firstRH = false;
+          } else {
+            ctx.lineTo(pos.rh.x + 15, pos.rh.y);
+          }
         }
       }
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
-    ctx.stroke();
-    ctx.setLineDash([]);
 
     // Draw move number indicators at each position
     positions.forEach((pos, idx) => {
@@ -190,10 +194,16 @@ const CanvasArea = forwardRef(function CanvasArea({
         const x = pos.lh.x - 25;
         const y = pos.lh.y - 25;
         
+        // Hold-in-climb-indicator
+        ctx.beginPath();
+        ctx.arc(pos.lh.x, pos.lh.y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
+        ctx.fillStyle = isStart ? '#22c55e' : isEnd ? '#d1b200ff' : DEFAULT_COLOR;
+        ctx.fill();
+
         // Background circle
         ctx.beginPath();
         ctx.arc(x, y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
-        ctx.fillStyle = isStart ? '#d400ffff' : isEnd ? '#d1b200ff' : LH_COLOR;
+        ctx.fillStyle = isStart ? START_COLOR : isEnd ? END_COLOR : LH_COLOR;
         ctx.fill();
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
@@ -218,6 +228,12 @@ const CanvasArea = forwardRef(function CanvasArea({
       if (pos.rh) {
         const x = pos.rh.x + 25;
         const y = pos.rh.y - 25;
+
+        // Hold-in-climb-indicator
+        ctx.beginPath();
+        ctx.arc(pos.rh.x, pos.rh.y, SEQUENCE_CIRCLE_RADIUS, 0, 2 * Math.PI);
+        ctx.fillStyle = isStart ? '#22c55e' : isEnd ? '#d1b200ff' : DEFAULT_COLOR;
+        ctx.fill();
         
         // Background circle
         ctx.beginPath();
@@ -269,7 +285,7 @@ const CanvasArea = forwardRef(function CanvasArea({
     ctx.font = '11px sans-serif';
     ctx.fillText(`${currentClimb.length} moves`, legendX + 8, legendY + 58);
 
-  }, [currentClimb, getHoldScreenCoords]);
+  }, [currentClimb, getHoldScreenCoords, climbDisplayOptions]);
 
   // Draw canvas
   useEffect(() => {
@@ -301,24 +317,20 @@ const CanvasArea = forwardRef(function CanvasArea({
     const { scale, offsetX, offsetY } = alignment;
     
     holds.forEach((hold) => {
-      const holdInClimb = (mode==='climb' && holdsUsedInCurrentClimb && holdsUsedInCurrentClimb.length > 0 && holdsUsedInCurrentClimb.includes(hold.hold_id))
-      
       const x = hold.pixel_x * scale + offsetX;
       const y = hold.pixel_y * scale + offsetY;
-      const radius = holdInClimb ? 60 * scale : 15 * scale; 
+      const radius = 15 * scale; 
 
       // Useful when we add feet back in
       // Draw hold circle
-      if((mode !== 'climb' || climbDisplayOptions.allHolds && holdInClimb)){
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, 2 * Math.PI);
-        ctx.strokeStyle = hold.type === 'hold' ? '#00b679ff' : '#63008aff';
-        ctx.lineWidth = holdInClimb? 6 : 3;
-        ctx.stroke();
-      }
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = hold.type === 'hold' ? '#00b679ff' : '#63008aff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
       
       // Draw pull direction arrow
-      if ((mode !== 'climb') && hold.pull_x !== undefined && hold.pull_y !== undefined) {
+      if ((mode !== 'climb' && mode !== 'move') && hold.pull_x !== undefined && hold.pull_y !== undefined) {
         const arrowLength = 10 + 30 * arrowSize * scale * (hold.useability / 10); 
         const endX = x + hold.pull_x * arrowLength;
         const endY = y + hold.pull_y * arrowLength;
@@ -431,7 +443,7 @@ const CanvasArea = forwardRef(function CanvasArea({
       }
       
       // Standard Hold ID Label
-      if(mode === 'hold' || mode === 'foot' || mode === 'remove')
+      if(mode !== 'climb' && mode !== 'move')
       {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
         const text = hold.hold_id.toString();

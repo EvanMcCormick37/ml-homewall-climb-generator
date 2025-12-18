@@ -229,8 +229,7 @@ export function useClimbs() {
     activeLimb: 0
   });
   const [climbDisplayOptions,setClimbDisplayOptions] = useState({
-    allHolds: false,
-    path: true
+    showPath: true
   })
 
   // --- NEW LOGIC START ---
@@ -248,7 +247,6 @@ export function useClimbs() {
 
   const addPositionToCurrentClimb = useCallback(() => {
     setCurrentClimb((prev) => ([...prev, [...position.holdsByLimb]]));
-    resetPosition();
   }, [position]);
 
   const removeLastPositionFromCurrentClimb = useCallback(() => {
