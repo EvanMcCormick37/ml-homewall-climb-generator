@@ -188,7 +188,6 @@ const CanvasArea = forwardRef(function CanvasArea({
     const startHolds = [positions[0].lhId, positions[0].rhId];
 
     positions.forEach((pos, idx) => {
-      const isStart = idx === 0;
       const lhStart = startHolds.some((h)=>(pos.lhId===h));
       const rhStart = startHolds.some((h)=>(pos.rhId===h));
       const isEnd = idx === positions.length - 1;

@@ -212,7 +212,7 @@ def load_and_preprocess_data(path: str, val_split: float = 0.2, sequential: bool
         all_sequences.extend([seq for moveset in data['movesets'] for seq in parse_moveset_to_numpy(moveset,hold_map)])
     num_sequences = len(all_sequences)
     print(f"Extracted {num_sequences} sequences...")
-    print(f"{int(data['metadata']['num_moves']) * 6} training moves estimated with dataset augmentation...")
+    print(f"{num_sequences * 4} training moves estimated with dataset augmentation...")
 
     # 2. Split indices
     indices = np.arange(num_sequences)
@@ -520,7 +520,7 @@ class ClimbGenerator:
         best_id, best_dist = -1, float('inf')
         
         for hold_id, hold_features in self.hold_map.items():
-            dist = np.linalg.norm(features - np.array(hold_features))
+            dist = np.linalg.norm(features[:2] - np.array(hold_features[:2]))
             if dist < best_dist:
                 best_id, best_dist = hold_id, dist
                 
@@ -533,10 +533,12 @@ class ClimbGenerator:
         """Generate a climb sequence from starting hold indices."""
         lh_id, rh_id = start_lh, start_rh
         lh, rh = self.hold_map[start_lh], self.hold_map[start_rh]
-        sequence = [(lh_id, rh_id)]
+        sequence = []
         
         with torch.no_grad():
             for _ in range(max_moves):
+                sequence.append((lh_id, rh_id))
+
                 inputs = self._to_input(lh, rh)
                 predicted = self.model.forward(inputs)
                 predicted = predicted.cpu().numpy().flatten()
@@ -550,8 +552,8 @@ class ClimbGenerator:
                     break
                 
                 # Calculate movement distance for each hand
-                lh_moved = np.linalg.norm(np.array(lh) - np.array(new_lh))
-                rh_moved = np.linalg.norm(np.array(rh) - np.array(new_rh))
+                lh_moved = np.linalg.norm(np.array(lh[:2]) - np.array(new_lh[:2]))
+                rh_moved = np.linalg.norm(np.array(rh[:2]) - np.array(new_rh[:2]))
                 
                 # Only move the hand that moved MORE; snap the other back
                 if lh_moved > rh_moved:
@@ -568,7 +570,8 @@ class ClimbGenerator:
                 if lh_id == rh_id and lh_id < 25:
                     break
                     
-                sequence.append((lh_id, rh_id))
+        sequence.append((lh_id, rh_id))
+        return sequence
 
 class ClimbGeneratorSequential:
     """Generate climb sequences using RNN or LSTM with persistent hidden state."""
@@ -587,39 +590,42 @@ class ClimbGeneratorSequential:
         best_id, best_dist = -1, float('inf')
         
         for hold_id, hold_features in self.hold_map.items():
-            dist = np.linalg.norm(np.array(features) - np.array(hold_features))
+            dist = np.linalg.norm(np.array(features) - np.array(hold_features[:len(features)]))
             if dist < best_dist:
                 best_id, best_dist = hold_id, dist
                 
-        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES)) 
+        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES))
 
     def generate(self, 
              start_lh: int, 
              start_rh: int, 
-             max_moves: int = 10) -> List[Tuple[int, int]]:
+             max_moves: int = 10,
+             num_check_features: int = 5) -> List[Tuple[int, int]]:
         """Generate a climb sequence from starting hold indices."""
         lh_id, rh_id = start_lh, start_rh
         lh, rh = self.hold_map[start_lh], self.hold_map[start_rh]
-        sequence = [(lh_id, rh_id)]
+        sequence = []
         hidden = self.model.init_hidden(batch_size=1, device=self.device)
         
         with torch.no_grad():
             for _ in range(max_moves):
+                sequence.append((lh_id, rh_id))
+
                 inputs = self._to_input(lh, rh)
                 predicted, hidden = self.model.forward_step(inputs, hidden)
                 predicted = predicted.cpu().numpy().flatten()
                 
                 # Snap predictions to nearest holds
-                new_lh_id, new_lh = self._nearest_hold(predicted[:5])
-                new_rh_id, new_rh = self._nearest_hold(predicted[5:])
+                new_lh_id, new_lh = self._nearest_hold(predicted[:num_check_features])
+                new_rh_id, new_rh = self._nearest_hold(predicted[5:num_check_features+5])
                 
                 # Termination: both hands predict off-wall
                 if new_lh == NULL_FEATURES and new_rh == NULL_FEATURES:
                     break
                 
                 # Calculate movement distance for each hand
-                lh_moved = np.linalg.norm(np.array(lh) - np.array(new_lh))
-                rh_moved = np.linalg.norm(np.array(rh) - np.array(new_rh))
+                lh_moved = np.linalg.norm(np.array(lh[:num_check_features]) - np.array(new_lh[:num_check_features]))
+                rh_moved = np.linalg.norm(np.array(rh[:num_check_features]) - np.array(new_rh[:num_check_features]))
                 
                 # Only move the hand that moved MORE; snap the other back
                 if lh_moved > rh_moved:
@@ -633,11 +639,9 @@ class ClimbGeneratorSequential:
                 if (lh_id, rh_id) == sequence[-1]:
                     break
                 # Stop on Top: End climb if we are matched on a high hold
-                if lh_id == rh_id and lh_id < 25:
-                    break
-                    
-                sequence.append((lh_id, rh_id))
-                    
+                if (lh_id == rh_id and lh_id < 25) or lh_id + rh_id < 25:
+                    break        
+        sequence.append((lh_id, rh_id))
         return sequence
 
 
