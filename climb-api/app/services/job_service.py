@@ -7,8 +7,7 @@ the status of long-running tasks like model training.
 import json
 import uuid
 from datetime import datetime
-from typing import Optional, Any
-
+from typing import Any
 from app.database import get_db
 from app.schemas.jobs import Job, JobStatus, JobType
 
@@ -19,7 +18,7 @@ class JobService:
     def create_job(
         self, 
         job_type: JobType, 
-        params: Optional[dict[str, Any]] = None
+        params: dict[str, Any] | None = None
     ) -> str:
         """
         Create a new job record.
@@ -49,7 +48,7 @@ class JobService:
         
         return job_id
     
-    def get_job(self, job_id: str) -> Optional[Job]:
+    def get_job(self, job_id: str) -> Job | None:
         """
         Get job status by ID.
         
@@ -83,7 +82,7 @@ class JobService:
         self,
         job_id: str,
         status: JobStatus,
-        progress: Optional[float] = None,
+        progress: float | None = None,
     ):
         """
         Update job status and progress.
@@ -115,7 +114,7 @@ class JobService:
     def complete_job(
         self,
         job_id: str,
-        result: Optional[dict[str, Any]] = None,
+        result: dict[str, Any] | None = None,
     ):
         """
         Mark a job as completed.

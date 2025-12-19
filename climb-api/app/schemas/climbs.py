@@ -2,7 +2,7 @@
 Pydantic schemas for climb-related requests and responses.
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Tuple
 from datetime import datetime
 from enum import Enum
 
@@ -36,7 +36,7 @@ class Climb(BaseModel):
     name: str | None
     grade: str | None
     setter: str | None
-    sequence: list[list[int]]
+    sequence: list[Tuple[int]]
     tags: list[str] | None
     num_moves: int
     created_at: datetime

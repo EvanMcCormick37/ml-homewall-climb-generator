@@ -37,7 +37,9 @@ class WallMetadata(BaseModel):
     num_holds: int
     num_climbs: int = 0
     num_models: int = 0
-    photo_url: str | None = None
+    dimensions: tuple[int, int] | None = None
+    angle: int | None = None
+    photo_url: str
     created_at: datetime
 
 
@@ -54,8 +56,10 @@ class WallDetail(BaseModel):
     num_holds: int
     num_climbs: int = 0
     num_models: int = 0
+    dimensions: tuple[int, int] | None = None
+    angle: int | None = None
     holds: list[Hold]
-    photo_url: str | None = None
+    photo_url: str
     created_at: datetime
     updated_at: datetime
 

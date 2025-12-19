@@ -47,6 +47,9 @@ def init_db():
             CREATE TABLE IF NOT EXISTS walls (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
+                photo TEXT NOT NULL,
+                dimensions TEXT,
+                angle INTEGER,
                 num_holds INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -61,8 +64,8 @@ def init_db():
                 name TEXT,
                 grade TEXT,
                 setter TEXT,
-                sequence TEXT NOT NULL,  -- JSON array of positions
-                tags TEXT,               -- JSON array of tags
+                sequence TEXT NOT NULL,  -- serialized list of positions
+                tags TEXT,               -- serialized list of tags
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (wall_id) REFERENCES walls(id) ON DELETE CASCADE
             )
@@ -76,6 +79,8 @@ def init_db():
                 model_type TEXT NOT NULL,
                 features TEXT NOT NULL,  -- JSON object of feature flags
                 status TEXT DEFAULT 'untrained',
+                moves_trained INTEGER DEFAULT 0,
+                climbs_trained INTEGER DEFAULT 0,
                 val_loss REAL,
                 epochs_trained INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -10,7 +10,6 @@ import json
 import uuid
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
 import traceback
 
 from app.database import get_db, WALLS_DIR
@@ -55,6 +54,8 @@ class ModelService:
                 id=row["id"],
                 model_type=row["model_type"],
                 status=ModelStatus(row["status"]),
+                moves_trained=row["moves_trained"],
+                climbs_trained=row["climbs_trained"],
                 val_loss=row["val_loss"],
                 created_at=row["created_at"],
                 trained_at=row["trained_at"],
@@ -62,7 +63,7 @@ class ModelService:
             for row in rows
         ]
     
-    def get_model(self, wall_id: str, model_id: str) -> Optional[ModelDetail]:
+    def get_model(self, wall_id: str, model_id: str) -> ModelDetail | None:
         """Get detailed model info."""
         with get_db() as conn:
             row = conn.execute(

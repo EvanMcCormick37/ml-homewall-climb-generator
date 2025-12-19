@@ -45,6 +45,8 @@ class ModelSummary(BaseModel):
     id: str
     model_type: ModelType
     status: ModelStatus
+    moves_trained: float
+    climbs_trained: float
     val_loss: float | None
     created_at: datetime
     trained_at: datetime | None

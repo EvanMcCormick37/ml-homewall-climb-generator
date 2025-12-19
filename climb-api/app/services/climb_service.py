@@ -8,7 +8,6 @@ Handles:
 import json
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from app.database import get_db
 from app.schemas import Climb, ClimbCreate, ClimbSortBy
@@ -20,13 +19,15 @@ class ClimbService:
     def get_climbs(
         self,
         wall_id: str,
-        name: Optional[str] = None,
-        setter: Optional[str] = None,
-        after: Optional[datetime] = None,
+        setter: str | None = None,        
+        name_includes: str | None = None,
+        holds_include: list[int] | None = None,
+        tags_include: list[str] | None = None,
+        after: datetime | None = None,
         sort_by: ClimbSortBy = ClimbSortBy.DATE,
+        descending: bool = True,
         limit: int = 50,
         offset: int = 0,
-        includes_holds: Optional[list[int]] = None,
     ) -> tuple[list[Climb], int]:
         """
         Get climbs for a wall with filtering.
@@ -49,19 +50,6 @@ class ClimbService:
         # Handle includes_holds by checking JSON sequence
         # Apply sorting and pagination
         raise NotImplementedError
-    
-    def get_climb(self, wall_id: str, climb_id: str) -> Optional[Climb]:
-        """Get a single climb by ID."""
-        with get_db() as conn:
-            row = conn.execute(
-                "SELECT * FROM climbs WHERE id = ? AND wall_id = ?",
-                (climb_id, wall_id),
-            ).fetchone()
-        
-        if not row:
-            return None
-        
-        return self._row_to_climb(row)
     
     def create_climb(self, wall_id: str, climb_data: ClimbCreate) -> str:
         """
@@ -136,7 +124,11 @@ class ClimbService:
     
     def _row_to_climb(self, row) -> Climb:
         """Convert a database row to a Climb object."""
-        sequence = json.loads(row["sequence"])
+        sequence = [
+            tuple(int(h) 
+            for h in hold_ids.split())
+            for hold_ids in row["sequence"].split(", ")
+        ]
         return Climb(
             id=row["id"],
             wall_id=row["wall_id"],

@@ -32,15 +32,24 @@ climb_service = ClimbService()
 )
 async def list_climbs(
     wall_id: str,
-    name: str | None = Query(
-        None, 
-        description="Filter by name (partial match)"
-    ),
     setter: str | None = Query(
         None, 
         description="Filter by setter ID"
     ),
-    after: datetime | None = Query(
+    name_includes: str | None = Query(
+        None, 
+        description="Filter by name (partial match)"
+    ),
+    holds_include: str | None = Query(
+        None,
+        description="Comma-separated hold IDs that must be in the climb",
+        example="1,5,12",
+    ),
+    tags_include: str | None = Query(
+        None,
+        description="Comma-separated tags that are used in the climb",
+        example="1,5,12",
+    ),after: datetime | None = Query(
         None, 
         description="Filter climbs created after this date"
     ),
@@ -58,11 +67,6 @@ async def list_climbs(
         0, 
         ge=0, 
         description="Offset for pagination"
-    ),
-    includes_holds: str | None = Query(
-        None,
-        description="Comma-separated hold IDs that must be in the climb",
-        example="1,5,12",
     ),
 ):
     """

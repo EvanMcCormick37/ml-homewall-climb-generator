@@ -8,14 +8,25 @@ Handles:
 """
 import json
 import uuid
+import shutil
 from pathlib import Path
-from typing import Optional
 from datetime import datetime
 
 from fastapi import UploadFile
 
 from app.database import get_db, WALLS_DIR
-from app.schemas import WallCreate, WallDetail, WallMetadata
+from app.schemas import WallCreate, WallDetail, WallMetadata, Hold
+
+
+def _parse_dimensions(dim_str: str | None) -> tuple[int, int] | None:
+    """Parse dimensions string 'width, height' into tuple."""
+    if not dim_str:
+        return None
+    try:
+        parts = dim_str.split(",")
+        return (int(parts[0].strip()), int(parts[1].strip()))
+    except (ValueError, IndexError):
+        return None
 
 
 class WallService:
@@ -43,27 +54,108 @@ class WallService:
     
     def get_all_walls(self) -> list[WallMetadata]:
         """Get all walls with basic metadata."""
-        # TODO: Implement
-        # Query walls table
-        # For each wall, count climbs and models
-        # Return list of WallMetadata
-        raise NotImplementedError
+        with get_db() as conn:
+            # Get all walls with climb and model counts
+            rows = conn.execute("""
+                SELECT 
+                    w.id,
+                    w.name,
+                    w.num_holds,
+                    w.dimensions,
+                    w.angle,
+                    w.photo,
+                    w.created_at,
+                    COUNT(DISTINCT c.id) AS num_climbs,
+                    COUNT(DISTINCT m.id) AS num_models
+                FROM walls w
+                LEFT JOIN climbs c ON c.wall_id = w.id
+                LEFT JOIN models m ON m.wall_id = w.id
+                GROUP BY w.id
+                ORDER BY w.created_at DESC
+            """).fetchall()
+        
+        walls = []
+        for row in rows:
+            walls.append(WallMetadata(
+                id=row["id"],
+                name=row["name"],
+                num_holds=row["num_holds"] or 0,
+                num_climbs=row["num_climbs"],
+                num_models=row["num_models"],
+                dimensions=_parse_dimensions(row["dimensions"]),
+                angle=row["angle"],
+                photo_url=row["photo"],
+                created_at=datetime.fromisoformat(row["created_at"]) 
+                    if isinstance(row["created_at"], str) else row["created_at"],
+            ))
+        
+        return walls
     
-    def get_wall(self, wall_id: str) -> Optional[WallDetail]:
+    def get_wall(self, wall_id: str) -> WallDetail | None:
         """Get full wall details including holds."""
-        # TODO: Implement
-        # 1. Query walls table for metadata
-        # 2. Load holds from JSON file
-        # 3. Count climbs and models
-        # 4. Return WallDetail
-        raise NotImplementedError
+        with get_db() as conn:
+            # Get wall metadata with counts
+            row = conn.execute("""
+                SELECT 
+                    w.id,
+                    w.name,
+                    w.num_holds,
+                    w.dimensions,
+                    w.angle,
+                    w.photo,
+                    w.created_at,
+                    w.updated_at,
+                    COUNT(DISTINCT c.id) AS num_climbs,
+                    COUNT(DISTINCT m.id) AS num_models
+                FROM walls w
+                LEFT JOIN climbs c ON c.wall_id = w.id
+                LEFT JOIN models m ON m.wall_id = w.id
+                WHERE w.id = ?
+                GROUP BY w.id
+            """, (wall_id,)).fetchone()
+        
+        if not row:
+            return None
+        
+        # Load holds from JSON file
+        holds = []
+        json_path = self._get_wall_json_path(wall_id)
+        if json_path.exists():
+            with open(json_path, "r") as f:
+                wall_json = json.load(f)
+                holds = [Hold(**hold_data) for hold_data in wall_json.get("holds", [])]
+        
+        return WallDetail(
+            id=row["id"],
+            name=row["name"],
+            num_holds=row["num_holds"] or 0,
+            num_climbs=row["num_climbs"],
+            num_models=row["num_models"],
+            dimensions=_parse_dimensions(row["dimensions"]),
+            angle=row["angle"],
+            holds=holds,
+            photo_url=row["photo"],
+            created_at=datetime.fromisoformat(row["created_at"]) 
+                if isinstance(row["created_at"], str) else row["created_at"],
+            updated_at=datetime.fromisoformat(row["updated_at"]) 
+                if isinstance(row["updated_at"], str) else row["updated_at"],
+        )
     
-    def create_wall(self, wall_data: WallCreate) -> str:
+    def create_wall(
+        self, 
+        wall_data: WallCreate, 
+        photo_url: str,
+        dimensions: tuple[int, int] | None = None,
+        angle: int | None = None,
+    ) -> str:
         """
         Create a new wall.
         
         Args:
             wall_data: Wall creation data with holds
+            photo_url: URL/path to the wall photo
+            dimensions: Optional wall dimensions (width, height) in cm
+            angle: Optional wall angle in degrees from vertical
             
         Returns:
             The new wall ID
@@ -84,14 +176,17 @@ class WallService:
         with open(self._get_wall_json_path(wall_id), "w") as f:
             json.dump(wall_json, f, indent=2)
         
+        # Serialize dimensions
+        dim_str = f"{dimensions[0]}, {dimensions[1]}" if dimensions else None
+        
         # Insert into database
         with get_db() as conn:
             conn.execute(
                 """
-                INSERT INTO walls (id, name, num_holds)
-                VALUES (?, ?, ?)
+                INSERT INTO walls (id, name, photo, dimensions, angle, num_holds)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (wall_id, wall_data.name, len(wall_data.holds)),
+                (wall_id, wall_data.name, photo_url, dim_str, angle, len(wall_data.holds)),
             )
         
         return wall_id
@@ -106,13 +201,21 @@ class WallService:
         Returns:
             True if deleted, False if not found
         """
-        # TODO: Implement
-        # 1. Check wall exists
-        # 2. Delete from database (cascades to climbs/models)
-        # 3. Delete wall directory (JSON, photo, model files)
-        raise NotImplementedError
+        if not self.wall_exists(wall_id):
+            return False
+        
+        # Delete from database (cascades to climbs/models due to FK)
+        with get_db() as conn:
+            conn.execute("DELETE FROM walls WHERE id = ?", (wall_id,))
+        
+        # Delete wall directory (JSON, photo, model files)
+        wall_dir = self._get_wall_dir(wall_id)
+        if wall_dir.exists():
+            shutil.rmtree(wall_dir)
+        
+        return True
     
-    def get_photo_path(self, wall_id: str) -> Optional[Path]:
+    def get_photo_path(self, wall_id: str) -> Path | None:
         """Get path to wall photo if it exists."""
         path = self._get_photo_path(wall_id)
         return path if path.exists() else None

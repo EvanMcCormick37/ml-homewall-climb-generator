@@ -249,9 +249,27 @@ class ClimbMLP(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-                        nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, output_dim)
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+    
+class ClimbMLPSoftmax(nn.Module):
+    def __init__(self, input_dim: int = INPUT_DIM,
+                 hidden_dim: int = HIDDEN_DIM,
+                 output_dim: int = OUTPUT_DIM):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim),
+            nn.ReLU(),
+            nn.Softmax(output_dim)
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
