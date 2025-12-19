@@ -175,7 +175,7 @@ class ModelService:
             model, is_sequential = create_model_instance(config)
             
             # Preprocess the training data and hold-id<->feature map.
-            train_ds, val_ds, hold_map = process_training_data(wall_id,config)
+            train_ds, val_ds, hold_map, num_climbs, num_moves = process_training_data(wall_id,config)
             # Collate sequential training data
             train_loader = DataLoader(train_ds, batch_size=settings.BATCH_SIZE, shuffle=True, collate_fn=(collate_sequences if is_sequential else None))
             val_loader = DataLoader(val_ds, batch_size=settings.BATCH_SIZE, shuffle=False, collate_fn=(collate_sequences if is_sequential else None))
@@ -197,7 +197,7 @@ class ModelService:
                     progress = float(epoch/config.epochs)
                     self.job_service.update_job_status(job_id, JobStatus.PROCESSING, progress=progress)
             
-            self._complete_model_training(model_id, val_loss, config.epochs)
+            self._complete_model_training(model_id, val_loss, config.epochs, num_climbs, num_moves)
             
             # Complete job
             self.job_service.complete_job(
@@ -261,7 +261,6 @@ class ModelService:
         #
         # return climbs
         
-        # Placeholder: return dummy data
         return [
             GeneratedClimb(
                 sequence=[[request.starting_holds[0], request.starting_holds[1]]] 
@@ -281,23 +280,27 @@ class ModelService:
     
     def _complete_model_training(
         self, 
-        model_id: str, 
-        val_loss: float, 
-        epochs: int
+        model_id: str,
+        val_loss: float,
+        epochs: int,
+        climbs_trained: int,
+        moves_trained: int,
     ):
         """Mark model as successfully trained."""
         with get_db() as conn:
             conn.execute(
                 """
                 UPDATE models 
-                SET status = ?, val_loss = ?, epochs_trained = ?, trained_at = ?
+                SET status = ?, val_loss = ?, epochs_trained = ?, climbs_trained = ?, moves_trained = ?, trained_at = ?
                 WHERE id = ?
                 """,
                 (
                     ModelStatus.TRAINED.value,
                     val_loss,
                     epochs,
-                    datetime.utcnow().isoformat(),
+                    climbs_trained,
+                    moves_trained,
+                    datetime.now(),
                     model_id,
                 ),
             )

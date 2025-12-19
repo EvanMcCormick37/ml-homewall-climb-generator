@@ -79,10 +79,10 @@ def init_db():
                 model_type TEXT NOT NULL,
                 features TEXT NOT NULL,  -- JSON object of feature flags
                 status TEXT DEFAULT 'untrained',
-                moves_trained INTEGER DEFAULT 0,
-                climbs_trained INTEGER DEFAULT 0,
                 val_loss REAL,
                 epochs_trained INTEGER DEFAULT 0,
+                climbs_trained INTEGER DEFAULT 0,
+                moves_trained INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 trained_at TIMESTAMP,
                 FOREIGN KEY (wall_id) REFERENCES walls(id) ON DELETE CASCADE

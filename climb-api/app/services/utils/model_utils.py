@@ -1,18 +1,12 @@
 import torch
-import numpy as np
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from typing import List, Tuple
 from app.config import settings
 from app.schemas import ModelCreate, ModelType
-from app.services.utils.train_data_utils import process_training_data
+from app.services.utils.train_data_utils import get_feature_dim
 
-FEATURE_LENGTH_MAP = {
-    "position": 2,
-    "pull_direction": 2,
-    "difficulty": 1,
-}
 
 # --- Models ---
 class ClimbMLP(nn.Module):
@@ -307,7 +301,7 @@ def create_model_instance(
     config: ModelCreate
     ) -> nn.Module:
     """Create a fresh (untrained) model according to specifications"""
-    num_features = sum([(FEATURE_LENGTH_MAP[k] if v else 0)for k,v in config.features])
+    num_features = get_feature_dim(config.features)
     input_dim = num_features * settings.NUM_LIMBS
     output_dim = num_features * settings.NUM_LIMBS
     if config.model_type == ModelType.MLP:
