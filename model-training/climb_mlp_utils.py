@@ -585,23 +585,35 @@ class ClimbGeneratorSequential:
         """Convert hand features to model input tensor."""
         return torch.tensor(lh + rh, dtype=torch.float32).unsqueeze(0).to(self.device)
 
-    def _nearest_hold(self, features: np.ndarray) -> Tuple[int, List[float]]:
-        """Find hold with minimum Euclidean distance to predicted features."""
-        best_id, best_dist = -1, float('inf')
+    def _sample_hold(self, features: np.ndarray, temperature: float) -> Tuple[int, List[float]]:
+        """Sample a hold with probability inversely proportional to distance."""
+        hold_ids = list(self.hold_map.keys())
+        distances = np.array([
+            np.linalg.norm(features - np.array(self.hold_map[hid])[:len(features)]) 
+            for hid in hold_ids
+        ])
         
-        for hold_id, hold_features in self.hold_map.items():
-            dist = np.linalg.norm(np.array(features) - np.array(hold_features[:len(features)]))
-            if dist < best_dist:
-                best_id, best_dist = hold_id, dist
-                
-        return best_id, list(self.hold_map.get(best_id, NULL_FEATURES))
+        # Convert distances to probabilities (lower distance = higher prob)
+        # Using negative distance as logits
+        logits = -distances / temperature
+        probs = np.exp(logits - np.max(logits))  # Softmax with stability
+        probs /= probs.sum()
+        
+        chosen_idx = np.random.choice(len(hold_ids), p=probs)
+        chosen_id = hold_ids[chosen_idx]
+        
+        return chosen_id, list(self.hold_map[chosen_id])
 
     def generate(self, 
              start_lh: int, 
              start_rh: int, 
              max_moves: int = 10,
-             num_check_features: int = 5) -> List[Tuple[int, int]]:
+             num_check_features: int = 5,
+             temperature: float = 0.01,
+             force_movement: bool = True) -> List[Tuple[int, int]]:
         """Generate a climb sequence from starting hold indices."""
+        assert temperature > 0
+
         lh_id, rh_id = start_lh, start_rh
         lh, rh = self.hold_map[start_lh], self.hold_map[start_rh]
         sequence = []
@@ -615,25 +627,27 @@ class ClimbGeneratorSequential:
                 predicted, hidden = self.model.forward_step(inputs, hidden)
                 predicted = predicted.cpu().numpy().flatten()
                 
+                # Sample the hold 
                 # Snap predictions to nearest holds
-                new_lh_id, new_lh = self._nearest_hold(predicted[:num_check_features])
-                new_rh_id, new_rh = self._nearest_hold(predicted[5:num_check_features+5])
+                new_lh_id, new_lh = self._sample_hold(predicted[:num_check_features],temperature)
+                new_rh_id, new_rh = self._sample_hold(predicted[5:num_check_features+5],temperature)
                 
                 # Termination: both hands predict off-wall
                 if new_lh == NULL_FEATURES and new_rh == NULL_FEATURES:
                     break
                 
-                # Calculate movement distance for each hand
-                lh_moved = np.linalg.norm(np.array(lh[:num_check_features]) - np.array(new_lh[:num_check_features]))
-                rh_moved = np.linalg.norm(np.array(rh[:num_check_features]) - np.array(new_rh[:num_check_features]))
-                
-                # Only move the hand that moved MORE; snap the other back
-                if lh_moved > rh_moved:
-                    lh_id, lh = new_lh_id, new_lh  # Move LH
-                    # RH stays as-is
-                else:
-                    rh_id, rh = new_rh_id, new_rh  # Move RH
-                    # LH stays as-is
+                if force_movement:
+                    # Calculate movement distance for each hand
+                    lh_moved = np.linalg.norm(np.array(lh[:num_check_features]) - np.array(new_lh[:num_check_features]))
+                    rh_moved = np.linalg.norm(np.array(rh[:num_check_features]) - np.array(new_rh[:num_check_features]))
+                    
+                    # Only move the hand that moved MORE; snap the other back
+                    if lh_moved > rh_moved:
+                        lh_id, lh = new_lh_id, new_lh  # Move LH
+                        # RH stays as-is
+                    else:
+                        rh_id, rh = new_rh_id, new_rh  # Move RH
+                        # LH stays as-is
                 
                 # Termination: stuck in same position
                 if (lh_id, rh_id) == sequence[-1]:
