@@ -11,4 +11,9 @@ wall_service = WallService()
 model_service = ModelService()
 job_service = JobService()
 
-__all__ = ["wall_service","climb_service","model_service","job_service"]
+__all__ = [
+    "wall_service",
+    "climb_service",
+    "model_service",
+    "job_service"
+]

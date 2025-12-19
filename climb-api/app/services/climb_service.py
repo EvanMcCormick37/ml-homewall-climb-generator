@@ -19,7 +19,7 @@ class ClimbService:
     def get_climbs(
         self,
         wall_id: str,
-        grade_range: str | None = None,
+        grade_range: list[int] = [0,180],
         include_projects: bool = True,
         setter: str | None = None,        
         name_includes: str | None = None,
@@ -36,6 +36,8 @@ class ClimbService:
         
         Args:
             wall_id: The wall ID
+            grade_range: Range of grade (converted to decimal V-grade; v9 = 90, v3- = 27)
+            include_projects: Whether to include ungraded climbs
             setter: Filter by setter ID
             name_includes: Filter by name (partial match)
             holds_include: Hold IDs that must be in the climb
@@ -53,6 +55,14 @@ class ClimbService:
         conditions = ["wall_id = ?"]
         params: list = [wall_id]
         
+        if include_projects:
+            # Projects (NULL) OR within grade range
+            conditions.append("(grade IS NULL OR (grade >= ? AND grade <= ?))")
+        else:
+            # Only graded climbs within range
+            conditions.append("(grade IS NOT NULL AND grade >= ? AND grade <= ?)")
+        params.extend([grade_range[0], grade_range[1]])
+        
         if setter:
             conditions.append("setter = ?")
             params.append(setter)
@@ -64,6 +74,7 @@ class ClimbService:
         if after:
             conditions.append("created_at > ?")
             params.append(after.isoformat())
+        
         
         # Filter by holds - check if hold ID appears anywhere in sequence
         # Sequence is [[lh, rh], [lh, rh], ...] so we need nested json_each

@@ -19,12 +19,9 @@ from app.schemas import (
     GenerateRequest,
     GenerateResponse,
 )
-from app.services.model_service import ModelService
-from app.services.job_service import JobService
+from app.services import model_service, job_service
 
 router = APIRouter()
-model_service = ModelService()
-job_service = JobService()
 
 
 @router.get(

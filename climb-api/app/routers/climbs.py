@@ -20,7 +20,6 @@ from app.schemas import (
 from app.services import climb_service, wall_service
 
 router = APIRouter()
-climb_service = ClimbService()
 
 
 @router.get(
@@ -31,7 +30,7 @@ climb_service = ClimbService()
 )
 async def list_climbs(
     wall_id: str,
-    grade_range: str = Query(
+    grade_range: list[int] = Query(
         "0,180",
         description="min,max grade to filter climbs by"
     ),
@@ -47,12 +46,12 @@ async def list_climbs(
         None, 
         description="Filter by name (partial match)"
     ),
-    holds_include: str | None = Query(
+    holds_include: list[int] | None = Query(
         None,
         description="Comma-separated hold IDs that must be in the climb",
         example="1,5,12",
     ),
-    tags_include: str | None = Query(
+    tags_include: list[str] | None = Query(
         None,
         description="Comma-separated tags that are used in the climb",
         example="1,5,12",
@@ -89,24 +88,13 @@ async def list_climbs(
     - after: Only climbs created after this datetime
     - holds_include: Climbs must include ALL specified hold IDs
     """
-    # Parse holds_include from comma-separated string to list of ints
-    hold_ids = None
-    if holds_include:
-        try:
-            hold_ids = [int(h.strip()) for h in holds_include.split(",")]
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail="holds_include must be comma-separated integers",
-            )
-    
     return climb_service.get_climbs(
         wall_id=wall_id,
         grade_range=grade_range,
         include_projects=include_projects,
         setter=setter,
         name_includes=name_includes,
-        holds_include=hold_ids,
+        holds_include=holds_include,
         tags_include=tags_include,
         after=after,
         sort_by=sort_by,
@@ -125,7 +113,7 @@ async def list_climbs(
 )
 async def create_climb(wall_id: str, climb_data: ClimbCreate):
     """Create a new climb for a wall."""
-    num_holds = wall_service.num_holds(wall_id)
+    num_holds = wall_service.get_num_holds(wall_id)
     if num_holds is None:
         raise HTTPException(status_code=404, detail="Wall not found")
     if num_holds < max(climb_data.sequence):

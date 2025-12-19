@@ -18,10 +18,9 @@ from app.schemas import (
     WallListResponse,
     WallCreateResponse,
 )
-from app.services.wall_service import WallService
+from app.services import wall_service
 
 router = APIRouter()
-wall_service = WallService()
 
 
 @router.get(
