@@ -9,7 +9,7 @@ from typing import Generator
 
 # Database paths
 DATA_DIR = Path("data")
-DB_PATH = DATA_DIR / "climbs.db"
+DB_PATH = DATA_DIR / "storage.db"
 WALLS_DIR = DATA_DIR / "walls"
 
 

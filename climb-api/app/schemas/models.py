@@ -2,7 +2,6 @@
 Pydantic schemas for ML model-related requests and responses.
 """
 from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import datetime
 from enum import Enum
 
@@ -10,6 +9,7 @@ from enum import Enum
 class ModelType(str, Enum):
     """Available model architectures."""
     MLP = "mlp"
+    RNN = "rnn"
     LSTM = "lstm"
 
 

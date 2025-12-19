@@ -11,6 +11,10 @@ import uuid
 from pathlib import Path
 from datetime import datetime
 import traceback
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
 
 from app.database import get_db, WALLS_DIR
 from app.schemas import (
@@ -25,6 +29,8 @@ from app.schemas import (
 from app.schemas.jobs import JobStatus
 from app.services.job_service import JobService
 from app.services.climb_service import ClimbService
+from app.services.utils import collate_sequences, create_model_instance, run_epoch, process_training_data
+from app.config import settings
 
 
 class ModelService:
@@ -165,49 +171,32 @@ class ModelService:
             
             # Update model status
             self._update_model_status(model_id, ModelStatus.TRAINING)
+            # Return the nn.Module instance of a model, and a Boolean indicating whether it's sequential
+            model, is_sequential = create_model_instance(config)
             
-            # ===== TRAINING LOGIC GOES HERE =====
-            # TODO: Implement actual training
-            #
-            # 1. Load wall data (holds)
-            # wall_json_path = WALLS_DIR / wall_id / "wall.json"
-            # with open(wall_json_path) as f:
-            #     wall_data = json.load(f)
-            # hold_map = {h["hold_id"]: h for h in wall_data["holds"]}
-            #
-            # 2. Load climb sequences
-            # climbs = self.climb_service.get_climbs_for_training(wall_id)
-            #
-            # 3. Preprocess into training format
-            # (Use your existing climb_mlp_utils functions)
-            #
-            # 4. Train model with progress updates
-            # for epoch in range(config.epochs):
-            #     # ... training step ...
-            #     progress = (epoch + 1) / config.epochs
-            #     self.job_service.update_job_status(job_id, JobStatus.PROCESSING, progress)
-            #
-            # 5. Save trained weights
-            # model_path = self._get_model_path(wall_id, model_id)
-            # torch.save(model.state_dict(), model_path)
-            #
-            # 6. Record final validation loss
-            # val_loss = ...
-            #
-            # ====================================
+            # Preprocess the training data and hold-id<->feature map.
+            train_ds, val_ds, hold_map = process_training_data(wall_id,config)
+            # Collate sequential training data
+            train_loader = DataLoader(train_ds, batch_size=settings.BATCH_SIZE, shuffle=True, collate_fn=(collate_sequences if is_sequential else None))
+            val_loader = DataLoader(val_ds, batch_size=settings.BATCH_SIZE, shuffle=False, collate_fn=(collate_sequences if is_sequential else None))
+
+            save_path = f"{settings.WALLS_DIR}/{wall_id}/{model_id}.pth"
+            optimizer = optim.Adam(model.parameters(),lr=settings.LR)
+            criterion = nn.MSELoss()
+            best_val_loss = float('inf')
+
+            for epoch in range(config.epochs):
+                train_loss, _ = run_epoch(model, is_sequential, train_loader, criterion, optimizer, settings.DEVICE)
+                val_loss, _ = run_epoch(model, is_sequential, val_loader, criterion, None, settings.DEVICE)
+
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    torch.save(model.state_dict(), save_path)
+                
+                if epoch > 0 and (epoch % max(1,config.epochs//10) == 0):
+                    progress = float(epoch/config.epochs)
+                    self.job_service.update_job_status(job_id, JobStatus.PROCESSING, progress=progress)
             
-            # Placeholder: simulate training
-            import time
-            for i in range(10):
-                time.sleep(0.5)  # Simulate work
-                progress = (i + 1) / 10
-                self.job_service.update_job_status(
-                    job_id, JobStatus.PROCESSING, progress=progress
-                )
-            
-            val_loss = 0.032  # Placeholder
-            
-            # Update model as trained
             self._complete_model_training(model_id, val_loss, config.epochs)
             
             # Complete job
