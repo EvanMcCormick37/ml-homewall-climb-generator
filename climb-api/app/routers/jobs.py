@@ -7,7 +7,7 @@ Endpoints:
 from fastapi import APIRouter, HTTPException
 
 from app.schemas import Job
-from app.services.job_service import job_service
+from app.services import job_service
 
 router = APIRouter()
 

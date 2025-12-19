@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from typing import List, Tuple
 from app.config import settings
 from app.schemas import ModelCreate, ModelType
 from app.services.utils.train_data_utils import get_feature_dim
@@ -113,7 +112,7 @@ class ClimbRNN(nn.Module):
     def forward_sequence(self, 
                          x: torch.Tensor, 
                          hidden: torch.Tensor | None = None
-                         ) -> Tuple[torch.Tensor, torch.Tensor]:
+                         ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Full sequence forward pass with hidden state management.
         
@@ -141,7 +140,7 @@ class ClimbRNN(nn.Module):
     def forward_step(self,
                      x: torch.Tensor,
                      hidden: torch.Tensor | None = None
-                     ) -> Tuple[torch.Tensor, torch.Tensor]:
+                     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Single step with explicit hidden state (for autoregressive generation).
         
@@ -229,8 +228,8 @@ class ClimbLSTM(nn.Module):
     
     def forward_sequence(self,
                          x: torch.Tensor,
-                         hidden: Tuple[torch.Tensor, torch.Tensor] | None = None
-                         ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+                         hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+                         ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Full sequence forward pass with hidden state management.
         
@@ -241,7 +240,7 @@ class ClimbLSTM(nn.Module):
         
         Returns:
             output: Predictions of shape (batch, seq_len, output_dim)
-            hidden: Tuple of final (h_n, c_n) states
+            hidden: tuple of final (h_n, c_n) states
         """
         batch_size = x.size(0)
         
@@ -258,14 +257,14 @@ class ClimbLSTM(nn.Module):
     
     def forward_step(self,
                      x: torch.Tensor,
-                     hidden: Tuple[torch.Tensor, torch.Tensor] | None = None
-                     ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+                     hidden: tuple[torch.Tensor, torch.Tensor] | None = None
+                     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Single step with explicit hidden state (for autoregressive generation).
         
         Args:
             x: Input tensor of shape (batch, input_dim)
-            hidden: Tuple of (h, c), each of shape (num_layers, batch, hidden_dim)
+            hidden: tuple of (h, c), each of shape (num_layers, batch, hidden_dim)
         
         Returns:
             output: Predictions of shape (batch, output_dim)
@@ -285,7 +284,7 @@ class ClimbLSTM(nn.Module):
     def init_hidden(self, 
                     batch_size: int, 
                     device: torch.device
-                    ) -> Tuple[torch.Tensor, torch.Tensor]:
+                    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Initialize hidden state (h_0) and cell state (c_0) with zeros."""
         h_0 = torch.zeros(
             self.num_layers, batch_size, self.hidden_dim,
@@ -329,7 +328,7 @@ def create_model_instance(
 
 
 # --- Training ---
-def collate_sequences(batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Tensor, torch.Tensor]:
+def collate_sequences(batch: list[tuple[torch.Tensor, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor]:
     """Pad variable-length sequences to the same length within a batch."""
     inputs, targets = zip(*batch)
     inputs_padded = nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=0.0)
@@ -342,7 +341,7 @@ def run_epoch_mlp(
     criterion: nn.Module,
     optimizer: optim.Optimizer | None,
     device: str
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
     
@@ -375,7 +374,7 @@ def run_epoch_sequential(
     criterion: nn.Module,
     optimizer: optim.Optimizer | None,
     device: str
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """Training loop for sequence models (RNN/LSTM)."""
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
@@ -416,7 +415,7 @@ def run_epoch(
     criterion: nn.Module,
     optimizer: optim.Optimizer | None,
     device: str
-) -> Tuple[float,float]:
+) -> tuple[float,float]:
     if is_sequential:
         return run_epoch_sequential(model,loader,criterion,optimizer,device)
     else:

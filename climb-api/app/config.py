@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     VAL_SPLIT: float = 0.2
     EPOCHS: int = 100
     MAX_EPOCHS: int = 1000
-    LR: int = 0.001
+    LR: float = 0.001
     DEVICE: str = "cpu"
     
     # File upload limits

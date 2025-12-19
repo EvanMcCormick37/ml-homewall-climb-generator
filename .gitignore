@@ -1,3 +1,10 @@
-feature-embedding/best_climb_mlp.pth
-feature-embedding/__pycache__/generate_climbs.cpython-312.pyc
-feature-generation/public/data/homewall.jpg
+# File storage
+*-data.json
+*.pth
+*.db
+data/
+
+
+# Caches
+__pycache__
+.ipynb_checkpoints
