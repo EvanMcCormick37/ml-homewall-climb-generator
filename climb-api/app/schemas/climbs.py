@@ -20,9 +20,9 @@ class ClimbSortBy(str, Enum):
 class ClimbCreate(BaseModel):
     """Schema for creating a climb."""
     name: str | None = Field(None, max_length=100)
-    grade: str | None = Field(None, max_length=10)
+    grade: int | None = Field(None, max_length=10)
     setter: str | None = Field(None, max_length=50)
-    sequence: list[list[int]] = Field(
+    sequence: list[tuple[int]] = Field(
         ..., 
         description="List of positions, each position is [lh_hold_id, rh_hold_id]"
     )
@@ -34,7 +34,7 @@ class Climb(BaseModel):
     id: str
     wall_id: str
     name: str | None
-    grade: str | None
+    grade: int | None
     setter: str | None
     sequence: list[Tuple[int]]
     tags: list[str] | None

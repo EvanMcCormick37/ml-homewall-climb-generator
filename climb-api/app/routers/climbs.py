@@ -11,14 +11,13 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.schemas import (
-    Climb,
     ClimbCreate,
     ClimbSortBy,
     ClimbListResponse,
     ClimbCreateResponse,
     ClimbDeleteResponse,
 )
-from app.services.climb_service import ClimbService
+from app.services import climb_service, wall_service
 
 router = APIRouter()
 climb_service = ClimbService()
@@ -32,6 +31,14 @@ climb_service = ClimbService()
 )
 async def list_climbs(
     wall_id: str,
+    grade_range: str = Query(
+        "0,180",
+        description="min,max grade to filter climbs by"
+    ),
+    include_projects: bool = Query(
+        True,
+        description="Whether to include ungraded climbs."
+    ),
     setter: str | None = Query(
         None, 
         description="Filter by setter ID"
@@ -57,6 +64,10 @@ async def list_climbs(
         ClimbSortBy.DATE, 
         description="Sort order"
     ),
+    descending: bool = Query(
+        True,
+        description="Sort results descending?"
+    ),
     limit: int = Query(
         50, 
         ge=1, 
@@ -76,32 +87,33 @@ async def list_climbs(
     - name: Partial match on climb name
     - setter: Exact match on setter ID
     - after: Only climbs created after this datetime
-    - includes_holds: Climbs must include ALL specified hold IDs
+    - holds_include: Climbs must include ALL specified hold IDs
     """
-    # Parse includes_holds from comma-separated string to list of ints
+    # Parse holds_include from comma-separated string to list of ints
     hold_ids = None
-    if includes_holds:
+    if holds_include:
         try:
-            hold_ids = [int(h.strip()) for h in includes_holds.split(",")]
+            hold_ids = [int(h.strip()) for h in holds_include.split(",")]
         except ValueError:
             raise HTTPException(
                 status_code=400,
-                detail="includes_holds must be comma-separated integers",
+                detail="holds_include must be comma-separated integers",
             )
     
-    # TODO: Implement
-    # climbs, total = climb_service.get_climbs(
-    #     wall_id=wall_id,
-    #     name=name,
-    #     setter=setter,
-    #     after=after,
-    #     sort_by=sort_by,
-    #     limit=limit,
-    #     offset=offset,
-    #     includes_holds=hold_ids,
-    # )
-    # return ClimbListResponse(climbs=climbs, total=total, limit=limit, offset=offset)
-    raise HTTPException(status_code=501, detail="Not implemented")
+    return climb_service.get_climbs(
+        wall_id=wall_id,
+        grade_range=grade_range,
+        include_projects=include_projects,
+        setter=setter,
+        name_includes=name_includes,
+        holds_include=hold_ids,
+        tags_include=tags_include,
+        after=after,
+        sort_by=sort_by,
+        descending=descending,
+        limit=limit,
+        offset=offset
+    )
 
 
 @router.post(
@@ -113,17 +125,14 @@ async def list_climbs(
 )
 async def create_climb(wall_id: str, climb_data: ClimbCreate):
     """Create a new climb for a wall."""
-    # TODO: Implement
-    # Validate wall exists
-    # if not wall_service.wall_exists(wall_id):
-    #     raise HTTPException(status_code=404, detail="Wall not found")
+    num_holds = wall_service.num_holds(wall_id)
+    if num_holds is None:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    if num_holds < max(climb_data.sequence):
+        raise HTTPException(status_code=501, detail="Wall doesn't include some holds listed")
     
-    # Validate hold IDs exist in wall
-    # ...
-    
-    # climb_id = climb_service.create_climb(wall_id, climb_data)
-    # return ClimbCreateResponse(id=climb_id)
-    raise HTTPException(status_code=501, detail="Not implemented")
+    climb_id = climb_service.create_climb(wall_id, climb_data)
+    return ClimbCreateResponse(id=climb_id)
 
 
 @router.delete(
@@ -134,9 +143,8 @@ async def create_climb(wall_id: str, climb_data: ClimbCreate):
 )
 async def delete_climb(wall_id: str, climb_id: str):
     """Delete a climb."""
-    # TODO: Implement
-    # success = climb_service.delete_climb(wall_id, climb_id)
-    # if not success:
-    #     raise HTTPException(status_code=404, detail="Climb not found")
-    # return ClimbDeleteResponse(id=climb_id)
+    success = climb_service.delete_climb(wall_id, climb_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Climb not found")
+        return ClimbDeleteResponse(id=climb_id)
     raise HTTPException(status_code=501, detail="Not implemented")

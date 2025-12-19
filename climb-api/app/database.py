@@ -62,7 +62,7 @@ def init_db():
                 id TEXT PRIMARY KEY,
                 wall_id TEXT NOT NULL,
                 name TEXT,
-                grade TEXT,
+                grade INTEGER,
                 setter TEXT,
                 sequence TEXT NOT NULL,  -- serialized list of positions
                 tags TEXT,               -- serialized list of tags

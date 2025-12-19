@@ -19,6 +19,8 @@ class ClimbService:
     def get_climbs(
         self,
         wall_id: str,
+        grade_range: str | None = None,
+        include_projects: bool = True,
         setter: str | None = None,        
         name_includes: str | None = None,
         holds_include: list[int] | None = None,
@@ -34,22 +36,101 @@ class ClimbService:
         
         Args:
             wall_id: The wall ID
-            name: Filter by name (partial match)
             setter: Filter by setter ID
+            name_includes: Filter by name (partial match)
+            holds_include: Hold IDs that must be in the climb
+            tags_include: Tags that the climb must have
             after: Filter climbs created after this date
             sort_by: Sort order
+            descending: whether to order descending
             limit: Maximum results
             offset: Pagination offset
-            includes_holds: Hold IDs that must be in the climb
             
         Returns:
-            Tuple of (list of climbs, total count before pagination)
+            Tuple of (list of climbs, total count)
         """
-        # TODO: Implement
-        # Build dynamic SQL query based on filters
-        # Handle includes_holds by checking JSON sequence
-        # Apply sorting and pagination
-        raise NotImplementedError
+        # Build WHERE clauses
+        conditions = ["wall_id = ?"]
+        params: list = [wall_id]
+        
+        if setter:
+            conditions.append("setter = ?")
+            params.append(setter)
+        
+        if name_includes:
+            conditions.append("name LIKE ?")
+            params.append(f"%{name_includes}%")
+        
+        if after:
+            conditions.append("created_at > ?")
+            params.append(after.isoformat())
+        
+        # Filter by holds - check if hold ID appears anywhere in sequence
+        # Sequence is [[lh, rh], [lh, rh], ...] so we need nested json_each
+        if holds_include:
+            for hold_id in holds_include:
+                conditions.append("""
+                    EXISTS (
+                        SELECT 1 FROM json_each(sequence) AS pos
+                        WHERE EXISTS (
+                            SELECT 1 FROM json_each(pos.value) AS hold
+                            WHERE hold.value = ?
+                        )
+                    )
+                """)
+                params.append(hold_id)
+        
+        # Filter by tags - check if tag exists in tags array
+        if tags_include:
+            for tag in tags_include:
+                conditions.append("""
+                    EXISTS (
+                        SELECT 1 FROM json_each(tags) 
+                        WHERE value = ?
+                    )
+                """)
+                params.append(tag)
+        
+        where_clause = " AND ".join(conditions)
+        
+        # Build ORDER BY clause
+        sort_column = self._get_sort_column(sort_by)
+        order_direction = "DESC" if descending else "ASC"
+        order_clause = f"{sort_column} {order_direction}"
+        
+        with get_db() as conn:
+            # Get total count (without pagination)
+            count_query = f"SELECT COUNT(*) FROM climbs WHERE {where_clause}"
+            total = conn.execute(count_query, params).fetchone()[0]
+            
+            # Get paginated results
+            query = f"""
+                SELECT * FROM climbs 
+                WHERE {where_clause}
+                ORDER BY {order_clause}
+                LIMIT ? OFFSET ?
+            """
+            rows = conn.execute(query, params + [limit, offset]).fetchall()
+        
+        climbs = [self._row_to_climb(row) for row in rows]
+        return climbs, total
+    
+    def _get_sort_column(self, sort_by: ClimbSortBy) -> str:
+        """Map sort enum to SQL column/expression."""
+        match sort_by:
+            case ClimbSortBy.DATE:
+                return "created_at"
+            case ClimbSortBy.NAME:
+                return "name"
+            case ClimbSortBy.GRADE:
+                return "grade"
+            case ClimbSortBy.TICKS:
+                # Ticks not yet implemented - fall back to date
+                return "created_at"
+            case ClimbSortBy.NUM_MOVES:
+                return "json_array_length(sequence)"
+            case _:
+                return "created_at"
     
     def create_climb(self, wall_id: str, climb_data: ClimbCreate) -> str:
         """
@@ -101,20 +182,41 @@ class ClimbService:
             )
         return cursor.rowcount > 0
     
-    def get_climbs_for_training(self, wall_id: str) -> list[dict]:
+    def get_climbs_for_training(
+        self, 
+        wall_id: str, 
+        tags: list[str] | None = None,
+    ) -> list[dict]:
         """
         Get all climbs for a wall in format suitable for ML training.
         
         Args:
             wall_id: The wall ID
+            tags: Optional list of tags - climb must have ALL specified tags
             
         Returns:
             List of climb dicts with parsed sequences
         """
+        conditions = ["wall_id = ?"]
+        params: list = [wall_id]
+        
+        # Filter by tags if provided
+        if tags:
+            for tag in tags:
+                conditions.append("""
+                    EXISTS (
+                        SELECT 1 FROM json_each(tags) 
+                        WHERE value = ?
+                    )
+                """)
+                params.append(tag)
+        
+        where_clause = " AND ".join(conditions)
+        
         with get_db() as conn:
             rows = conn.execute(
-                "SELECT id, sequence FROM climbs WHERE wall_id = ?",
-                (wall_id,),
+                f"SELECT id, sequence FROM climbs WHERE {where_clause}",
+                params,
             ).fetchall()
         
         return [
@@ -124,11 +226,7 @@ class ClimbService:
     
     def _row_to_climb(self, row) -> Climb:
         """Convert a database row to a Climb object."""
-        sequence = [
-            tuple(int(h) 
-            for h in hold_ids.split())
-            for hold_ids in row["sequence"].split(", ")
-        ]
+        sequence = json.loads(row["sequence"]) if row["sequence"] else []
         return Climb(
             id=row["id"],
             wall_id=row["wall_id"],
@@ -137,6 +235,6 @@ class ClimbService:
             setter=row["setter"],
             sequence=sequence,
             tags=json.loads(row["tags"]) if row["tags"] else None,
-            num_moves=len(sequence),
+            num_moves=len(sequence) - 1 if sequence else 0,
             created_at=row["created_at"],
         )

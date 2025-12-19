@@ -52,6 +52,14 @@ class WallService:
             ).fetchone()
         return row is not None
     
+    def get_num_holds(self, wall_id: str) -> int | None:
+        """Get the number of holds of a wall, if it exists"""
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT num_holds FROM walls WHERE id = ?", (wall_id,)
+            ).fetchone()
+        return row["num_holds"] if row else None
+    
     def get_all_walls(self) -> list[WallMetadata]:
         """Get all walls with basic metadata."""
         with get_db() as conn:
@@ -201,8 +209,6 @@ class WallService:
         Returns:
             True if deleted, False if not found
         """
-        if not self.wall_exists(wall_id):
-            return False
         
         # Delete from database (cascades to climbs/models due to FK)
         with get_db() as conn:
