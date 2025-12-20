@@ -134,5 +134,4 @@ async def delete_climb(wall_id: str, climb_id: str):
     success = climb_service.delete_climb(wall_id, climb_id)
     if not success:
         raise HTTPException(status_code=404, detail="Climb not found")
-        return ClimbDeleteResponse(id=climb_id)
-    raise HTTPException(status_code=501, detail="Not implemented")
+    return ClimbDeleteResponse(id=climb_id)
