@@ -186,7 +186,7 @@ class ModelService:
             best_val_loss = float('inf')
 
             for epoch in range(config.epochs):
-                train_loss, _ = run_epoch(model, is_sequential, train_loader, criterion, optimizer, settings.DEVICE)
+                run_epoch(model, is_sequential, train_loader, criterion, optimizer, settings.DEVICE)
                 val_loss, _ = run_epoch(model, is_sequential, val_loader, criterion, None, settings.DEVICE)
 
                 if val_loss < best_val_loss:
@@ -232,43 +232,32 @@ class ModelService:
         Returns:
             List of generated climbs
         """
-        # TODO: Implement actual generation
-        #
         # 1. Load model weights
-        # model_path = self._get_model_path(wall_id, model_id)
-        # model = ClimbMLP()  # or ClimbLSTM based on model_type
-        # model.load_state_dict(torch.load(model_path))
-        #
-        # 2. Load hold map
-        # wall_json_path = WALLS_DIR / wall_id / "wall.json"
-        # with open(wall_json_path) as f:
-        #     wall_data = json.load(f)
-        # hold_map = {h["hold_id"]: extract_hold_features(h) for h in wall_data["holds"]}
-        #
-        # 3. Create generator
-        # generator = ClimbGenerator(model, hold_map, device="cpu")
-        #
-        # 4. Generate climbs
-        # climbs = []
-        # for _ in range(request.num_climbs):
-        #     sequence = generator.generate(
-        #         start_lh=request.starting_holds[0],
-        #         start_rh=request.starting_holds[1],
-        #         max_moves=request.max_moves,
-        #         temperature=request.temperature,
-        #     )
-        #     climbs.append(GeneratedClimb(sequence=sequence, num_moves=len(sequence)))
-        #
-        # return climbs
+        model_path = self._get_model_path(wall_id, model_id)
+        model = ClimbMLP()  # or ClimbLSTM based on model_type
+        model.load_state_dict(torch.load(model_path))
         
-        return [
-            GeneratedClimb(
-                sequence=[[request.starting_holds[0], request.starting_holds[1]]] 
-                         + [[i, i+1] for i in range(request.max_moves)],
-                num_moves=request.max_moves + 1,
+        # 2. Load hold map
+        wall_json_path = WALLS_DIR / wall_id / "wall.json"
+        with open(wall_json_path) as f:
+            wall_data = json.load(f)
+        hold_map = {h["hold_id"]: extract_hold_features(h) for h in wall_data["holds"]}
+        
+        # 3. Create generator
+        generator = ClimbGenerator(model, hold_map, device="cpu")
+        
+        # 4. Generate climbs
+        climbs = []
+        for _ in range(request.num_climbs):
+            sequence = generator.generate(
+                start_lh=request.starting_holds[0],
+                start_rh=request.starting_holds[1],
+                max_moves=request.max_moves,
+                temperature=request.temperature,
             )
-            for _ in range(request.num_climbs)
-        ]
+            climbs.append(GeneratedClimb(sequence=sequence, num_moves=len(sequence)))
+        
+        return climbs
     
     def _update_model_status(self, model_id: str, status: ModelStatus):
         """Update a model's status."""

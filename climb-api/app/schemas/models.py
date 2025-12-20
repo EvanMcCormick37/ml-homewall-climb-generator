@@ -4,7 +4,7 @@ Pydantic schemas for ML model-related requests and responses.
 from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
-
+from typing import Annotated
 
 class ModelType(str, Enum):
     """Available model architectures."""
@@ -85,18 +85,23 @@ class ModelDeleteResponse(BaseModel):
 
 
 # --- Generation Schemas ---
+PositiveInt = Annotated[int,Field(ge=0)]
 
 class GenerateRequest(BaseModel):
     """Request schema for generating climbs."""
-    starting_holds: list[int] = Field(
+    starting_holds: list[PositiveInt] = Field(
         ..., 
         min_length=2, 
         max_length=2,
         description="[left_hand_hold_id, right_hand_hold_id]"
     )
+    stop_holds: list[PositiveInt] = Field(
+        default_factory=list,
+        description="Optional List of 'stop holds' on which to force stop the climb"
+    )
     max_moves: int = Field(10, ge=1, le=50)
     num_climbs: int = Field(5, ge=1, le=20)
-    temperature: float = Field(1.0, ge=0.1, le=2.0)
+    temperature: float = Field(0.01, ge=0.001, le=1.0)
     force_alternating: bool = Field(
         True, 
         description="Force one limb to move at a time"

@@ -31,10 +31,8 @@ router = APIRouter()
 )
 async def list_walls():
     """Get all walls with basic metadata."""
-    # TODO: Implement
-    # walls = wall_service.get_all_walls()
-    # return WallListResponse(walls=walls, total=len(walls))
-    raise HTTPException(status_code=501, detail="Not implemented")
+    walls = wall_service.get_all_walls()
+    return WallListResponse(walls=walls, total=len(walls))
 
 
 @router.post(
@@ -46,10 +44,8 @@ async def list_walls():
 )
 async def create_wall(wall_data: WallCreate):
     """Create a new wall from holdset and metadata."""
-    # TODO: Implement
-    # wall_id = wall_service.create_wall(wall_data)
-    # return WallCreateResponse(id=wall_id, name=wall_data.name, num_holds=len(wall_data.holds))
-    raise HTTPException(status_code=501, detail="Not implemented")
+    wall_id = wall_service.create_wall(wall_data)
+    return WallCreateResponse(id=wall_id, name=wall_data.name, num_holds=len(wall_data.holds))
 
 
 @router.get(
@@ -60,12 +56,10 @@ async def create_wall(wall_data: WallCreate):
 )
 async def get_wall(wall_id: str):
     """Get detailed wall info including holds."""
-    # TODO: Implement
-    # wall = wall_service.get_wall(wall_id)
-    # if not wall:
-    #     raise HTTPException(status_code=404, detail="Wall not found")
-    # return wall
-    raise HTTPException(status_code=501, detail="Not implemented")
+    wall = wall_service.get_wall(wall_id)
+    if not wall:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    return wall
 
 
 @router.delete(
@@ -76,12 +70,10 @@ async def get_wall(wall_id: str):
 )
 async def delete_wall(wall_id: str):
     """Delete a wall and all associated data."""
-    # TODO: Implement
-    # success = wall_service.delete_wall(wall_id)
-    # if not success:
-    #     raise HTTPException(status_code=404, detail="Wall not found")
-    # return None
-    raise HTTPException(status_code=501, detail="Not implemented")
+    success = wall_service.delete_wall(wall_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    return None
 
 
 @router.get(
@@ -96,12 +88,10 @@ async def delete_wall(wall_id: str):
 )
 async def get_wall_photo(wall_id: str):
     """Get wall photo."""
-    # TODO: Implement
-    # photo_path = wall_service.get_photo_path(wall_id)
-    # if not photo_path or not photo_path.exists():
-    #     raise HTTPException(status_code=404, detail="Photo not found")
-    # return FileResponse(photo_path, media_type="image/jpeg")
-    raise HTTPException(status_code=501, detail="Not implemented")
+    photo_path = wall_service.get_photo_path(wall_id)
+    if not photo_path or not photo_path.exists():
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return FileResponse(photo_path, media_type="image/jpeg")
 
 
 @router.put(
@@ -121,10 +111,9 @@ async def upload_wall_photo(
             status_code=400,
             detail="Invalid file type. Only JPEG and PNG are supported.",
         )
-    
-    # TODO: Implement
-    # success = wall_service.save_photo(wall_id, photo)
-    # if not success:
-    #     raise HTTPException(status_code=404, detail="Wall not found")
-    # return {"message": "Photo uploaded successfully"}
+
+    success = wall_service.save_photo(wall_id, photo)
+    if not success:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    return {"message": "Photo uploaded successfully"}
     raise HTTPException(status_code=501, detail="Not implemented")
