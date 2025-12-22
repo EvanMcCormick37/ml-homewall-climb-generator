@@ -47,6 +47,9 @@ class WallCreate(BaseModel):
     """Schema for creating a wall."""
     name: str = Field(..., min_length=1, max_length=100)
     holds: list[HoldCreate]
+    photo_filepath: str
+    dimensions: tuple[int, int] | None = None
+    angle: int | None = None
 
 
 class WallDetail(BaseModel):

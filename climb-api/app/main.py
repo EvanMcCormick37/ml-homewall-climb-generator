@@ -23,10 +23,10 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(walls.router, prefix="/walls", tags=["walls"])
-app.include_router(climbs.router, prefix="/walls/{wall_id}/climbs", tags=["climbs"])
-app.include_router(models.router, prefix="/walls/{wall_id}/models", tags=["models"])
-app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+app.include_router(walls.router, prefix="/api/v1/walls", tags=["walls"])
+app.include_router(climbs.router, prefix="/api/v1/walls/{wall_id}/climbs", tags=["climbs"])
+app.include_router(models.router, prefix="/api/v1/walls/{wall_id}/models", tags=["models"])
+app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 
 
 @app.on_event("startup")

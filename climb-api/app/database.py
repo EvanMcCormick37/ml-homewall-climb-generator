@@ -51,8 +51,8 @@ def init_db():
                 dimensions TEXT,
                 angle INTEGER,
                 num_holds INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP,
+                updated_at TIMESTAMP
             )
         """)
         

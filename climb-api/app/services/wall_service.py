@@ -151,10 +151,7 @@ class WallService:
     
     def create_wall(
         self, 
-        wall_data: WallCreate, 
-        photo_url: str,
-        dimensions: tuple[int, int] | None = None,
-        angle: int | None = None,
+        wall_data: WallCreate,
     ) -> str:
         """
         Create a new wall.
@@ -174,27 +171,30 @@ class WallService:
         
         # Save holds to JSON
         holds_data = [hold.model_dump() for hold in wall_data.holds]
+        created_at = datetime.now()
         wall_json = {
             "id": wall_id,
             "name": wall_data.name,
             "holds": holds_data,
-            "created_at": datetime.utcnow().isoformat(),
         }
         
         with open(self._get_wall_json_path(wall_id), "w") as f:
             json.dump(wall_json, f, indent=2)
         
         # Serialize dimensions
-        dim_str = f"{dimensions[0]}, {dimensions[1]}" if dimensions else None
+        dims = wall_data.dimensions
+        dim_str = f"{dims[0]}, {dims[1]}" if dims else None
+        # Add wall angle if present
+        angle = wall_data.angle if wall_data.angle else None
         
         # Insert into database
         with get_db() as conn:
             conn.execute(
                 """
-                INSERT INTO walls (id, name, photo, dimensions, angle, num_holds)
+                INSERT INTO walls (id, name, dimensions, angle, num_holds, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (wall_id, wall_data.name, photo_url, dim_str, angle, len(wall_data.holds)),
+                (wall_id, wall_data.name, dim_str, angle, len(wall_data.holds), created_at, created_at),
             )
         
         return wall_id
