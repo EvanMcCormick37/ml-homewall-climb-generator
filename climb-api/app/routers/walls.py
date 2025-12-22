@@ -9,10 +9,12 @@ Endpoints:
 - GET  /walls/{wall_id}/photo    - Get wall photo
 - PUT  /walls/{wall_id}/photo    - Upload/replace wall photo
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, status
+import json
 from fastapi.responses import FileResponse
 
 from app.schemas import (
+    HoldCreate,
     WallCreate,
     WallDetail,
     WallListResponse,
@@ -40,13 +42,54 @@ async def list_walls():
     response_model=WallCreateResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new wall",
-    description="Create a new wall with holdset and metadata.",
+    description="Create a new wall with holdset, metadata, and photo.",
 )
-async def create_wall(wall_data: WallCreate):
-    """Create a new wall from holdset and metadata."""
-    wall_id = wall_service.create_wall(wall_data)
-    return WallCreateResponse(id=wall_id, name=wall_data.name, num_holds=len(wall_data.holds))
-
+async def create_wall(
+    name: str = Form(..., min_length=1, max_length=100),
+    holds: str = Form(..., description="JSON array of hold objects"),
+    photo: UploadFile = File(..., description="Wall photo (JPEG or PNG)"),
+    dimensions: str = Form(None, description="Comma-separated 'width,height' in cm"),
+    angle: int = Form(None, description="Wall angle in degrees from vertical"),
+):
+    """Create a new wall from holdset, metadata, and photo."""
+    
+    # Validate photo type
+    if photo.content_type not in ["image/jpeg", "image/png"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Only JPEG and PNG are supported.",
+        )
+    
+    # Parse holds JSON
+    try:
+        holds_data = json.loads(holds)
+        holds_list = [HoldCreate(**hold) for hold in holds_data]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid holds data: {str(e)}")
+    
+    # Parse dimensions
+    dims = None
+    if dimensions:
+        try:
+            parts = dimensions.split(",")
+            dims = (int(parts[0].strip()), int(parts[1].strip()))
+        except:
+            raise HTTPException(status_code=400, detail="Invalid dimensions format. Use 'width,height'")
+    
+    # Create wall data object
+    wall_data = WallCreate(
+        name=name,
+        holds=holds_list,
+        dimensions=dims,
+        angle=angle,
+    )
+    
+    # Create wall with photo
+    try:
+        wall_id = await wall_service.create_wall(wall_data, photo)
+        return WallCreateResponse(id=wall_id, name=wall_data.name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create wall: {str(e)}")
 
 @router.get(
     "/{wall_id}",

@@ -47,7 +47,6 @@ def init_db():
             CREATE TABLE IF NOT EXISTS walls (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                photo TEXT NOT NULL,
                 dimensions TEXT,
                 angle INTEGER,
                 num_holds INTEGER DEFAULT 0,

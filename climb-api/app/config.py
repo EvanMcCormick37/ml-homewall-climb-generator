@@ -4,7 +4,7 @@ Application configuration.
 Uses pydantic-settings to load from environment variables with sensible defaults.
 """
 from functools import lru_cache
-
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,14 +20,13 @@ class Settings(BaseSettings):
     # App metadata
     NAME: str = "Beta Zero API"
     VERSION: str = "0.1.0"
-    PREFIX: str = "/api/v1"
     DEBUG: bool = False
     
     # Paths
-    DATA_DIR: str = "data"
-    WALLS_DIR: str = f"{DATA_DIR}/walls"
-    MODELS_DIR: str = f"{DATA_DIR}/models"
-    DB_PATH: str = f"{DATA_DIR}/storage.db"
+    DATA_DIR: Path = Path("data")
+    WALLS_DIR: Path = DATA_DIR / "walls"
+    MODELS_DIR: Path = DATA_DIR / "models"
+    DB_PATH: Path = DATA_DIR / "storage.db"
     
     # Pagination defaults
     LIMIT: int = 50

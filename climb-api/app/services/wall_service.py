@@ -14,8 +14,9 @@ from datetime import datetime
 
 from fastapi import UploadFile
 
-from app.database import get_db, WALLS_DIR
+from app.database import get_db
 from app.schemas import WallCreate, WallDetail, WallMetadata, Hold
+from app.config import settings
 
 
 def _parse_dimensions(dim_str: str | None) -> tuple[int, int] | None:
@@ -31,19 +32,7 @@ def _parse_dimensions(dim_str: str | None) -> tuple[int, int] | None:
 
 class WallService:
     """Service for wall operations."""
-    
-    def _get_wall_dir(self, wall_id: str) -> Path:
-        """Get the directory for a wall's files."""
-        return WALLS_DIR / wall_id
-    
-    def _get_wall_json_path(self, wall_id: str) -> Path:
-        """Get path to wall's JSON data file."""
-        return self._get_wall_dir(wall_id) / "wall.json"
-    
-    def _get_photo_path(self, wall_id: str) -> Path:
-        """Get path to wall's photo."""
-        return self._get_wall_dir(wall_id) / "photo.jpg"
-    
+
     def wall_exists(self, wall_id: str) -> bool:
         """Check if a wall exists."""
         with get_db() as conn:
@@ -127,7 +116,7 @@ class WallService:
         
         # Load holds from JSON file
         holds = []
-        json_path = self._get_wall_json_path(wall_id)
+        json_path = settings.WALLS_DIR / wall_id / "wall.json"
         if json_path.exists():
             with open(json_path, "r") as f:
                 wall_json = json.load(f)
@@ -149,25 +138,27 @@ class WallService:
                 if isinstance(row["updated_at"], str) else row["updated_at"],
         )
     
-    def create_wall(
+    async def create_wall(
         self, 
         wall_data: WallCreate,
+        photo: UploadFile
     ) -> str:
         """
         Create a new wall.
         
         Args:
             wall_data: Wall creation data with holds
-            photo_url: URL/path to the wall photo
-            dimensions: Optional wall dimensions (width, height) in cm
-            angle: Optional wall angle in degrees from vertical
+            photo: UploadFile containing wall photo (JPEG or PNG)
             
         Returns:
             The new wall ID
         """
         wall_id = f"wall-{uuid.uuid4().hex[:12]}"
-        wall_dir = self._get_wall_dir(wall_id)
+        wall_dir = settings.WALLS_DIR / wall_id
         wall_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save photo
+        self.save_photo(wall_id, photo)
         
         # Save holds to JSON
         holds_data = [hold.model_dump() for hold in wall_data.holds]
@@ -178,7 +169,7 @@ class WallService:
             "holds": holds_data,
         }
         
-        with open(self._get_wall_json_path(wall_id), "w") as f:
+        with open(wall_dir / "wall.json", "w") as f:
             json.dump(wall_json, f, indent=2)
         
         # Serialize dimensions
@@ -215,36 +206,39 @@ class WallService:
             conn.execute("DELETE FROM walls WHERE id = ?", (wall_id,))
         
         # Delete wall directory (JSON, photo, model files)
-        wall_dir = self._get_wall_dir(wall_id)
+        wall_dir = settings.WALLS_DIR / wall_id
         if wall_dir.exists():
             shutil.rmtree(wall_dir)
         
         return True
     
-    def get_photo_path(self, wall_id: str) -> Path | None:
-        """Get path to wall photo if it exists."""
-        path = self._get_photo_path(wall_id)
-        return path if path.exists() else None
-    
     async def save_photo(self, wall_id: str, photo: UploadFile) -> bool:
         """
-        Save or replace wall photo.
-        
-        Args:
-            wall_id: The wall ID
-            photo: Uploaded photo file
-            
-        Returns:
-            True if saved, False if wall not found
+        Save or replace wall photo by removing old versions and saving the new one.
         """
         if not self.wall_exists(wall_id):
             return False
+
+        wall_dir = settings.WALLS_DIR / wall_id
         
-        photo_path = self._get_photo_path(wall_id)
+        # 1. Delete any existing "photo.*" files to avoid extension mismatches
+        for existing_file in wall_dir.glob("photo.*"):
+            try:
+                existing_file.unlink()
+            except OSError:
+                # Handle cases where file might be locked or already gone
+                pass
+
+        # 2. Get the extension from the incoming file
+        ext = Path(photo.filename).suffix
         
-        # Save file
+        # 3. Create the new destination path
+        new_photo_path = wall_dir / f"photo{ext}"
+
+        # 4. Save the new file
         contents = await photo.read()
-        with open(photo_path, "wb") as f:
+        with open(new_photo_path, "wb") as f:
             f.write(contents)
-        
+
         return True
+    

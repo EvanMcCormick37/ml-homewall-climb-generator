@@ -2,7 +2,7 @@
 Pydantic schemas for wall-related requests and responses.
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from fastapi import UploadFile, File
 from datetime import datetime
 
 
@@ -15,7 +15,7 @@ class HoldBase(BaseModel):
     norm_y: float = Field(..., ge=0, le=1)
     pull_x: float = Field(..., ge=-1, le=1)
     pull_y: float = Field(..., ge=-1, le=1)
-    useability: float = Field(..., ge=0, le=10)
+    useability: float | None = Field(None, ge=0, le=10)
 
 
 class HoldCreate(HoldBase):
@@ -47,7 +47,6 @@ class WallCreate(BaseModel):
     """Schema for creating a wall."""
     name: str = Field(..., min_length=1, max_length=100)
     holds: list[HoldCreate]
-    photo_filepath: str
     dimensions: tuple[int, int] | None = None
     angle: int | None = None
 
@@ -77,5 +76,3 @@ class WallCreateResponse(BaseModel):
     """Response after creating a wall."""
     id: str
     name: str
-    num_holds: int
-    message: str = "Wall created successfully"
