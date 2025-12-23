@@ -77,7 +77,7 @@ router = APIRouter()
         404: {"description": "Job not found"},
     },
 )
-async def get_job_status(job_id: str):
+def get_job_status(job_id: str):
     """
     Get the current status of a background job.
     

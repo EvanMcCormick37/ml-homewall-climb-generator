@@ -29,7 +29,6 @@ from fastapi import HTTPException
 from app.schemas.jobs import JobStatus
 from app.services.job_service import JobService
 from app.services.climb_service import ClimbService
-from app.services import wall_service
 from app.services.utils import ClimbGenerator, collate_sequences, create_model_instance, extract_hold_features, run_epoch, process_training_data
 from app.config import settings
 
@@ -238,19 +237,8 @@ class ModelService:
         Returns:
             List of generated climbs
         """
-        # 1. Validate model exists and is trained, wall exists and hold choice is valid.
-        model = self.get_model(wall_id, model_id)
-        if not model:
-            raise HTTPException(status_code=404, detail="Model not found")
-        if model.status != "trained":
-            raise HTTPException(status_code=400, detail="Model is not trained")
-        num_holds = wall_service.get_num_holds(wall_id)
-        if num_holds is None:
-            raise HTTPException(status_code=404, detail="Wall not found")
-        if num_holds < max(request.starting_holds+request.stop_holds):
-            raise HTTPException(status_code=400, detail=f"Invalid holds in climb. Hold-id {max(request.starting_holds+request.stop_holds)} not included in {wall_id}.")
-        
-        # 3. Get model parameters from models table and use them to instantiate model
+
+        # 1. Get model parameters from models table and use them to instantiate model
         with get_db() as conn:
             query = f"SELECT model_type, features FROM models WHERE id LIKE ?"
             params = [model_id]
@@ -261,11 +249,11 @@ class ModelService:
 
         model = create_model_instance(model_type, feature_config)
         
-        # 4. Rehydrate the model from the features and model path.
+        # 2. Rehydrate the model from the features and model path.
         model_weights_path = settings.WALLS_DIR / wall_id / model_id / "best.pth"
         model.load_state_dict(torch.load(model_weights_path))
 
-        # 5. Load hold map and generator and generate climbs
+        # 3. Load hold map and generator and generate climbs
         wall_json_path = settings.WALLS_DIR / wall_id / "wall.json"
         with open(wall_json_path) as f:
             wall_data = json.load(f)

@@ -145,7 +145,7 @@ class WallService:
             holds=holds
         )
     
-    async def create_wall(
+    def create_wall(
         self, 
         wall_data: WallCreate,
         photo: UploadFile
@@ -169,7 +169,7 @@ class WallService:
         ext = Path(photo.filename).suffix
         photo_path = wall_dir / f"photo{ext}"
 
-        contents = await photo.read()
+        contents = photo.file.read()
         with open(photo_path, "wb") as f:
             f.write(contents)
         
@@ -233,7 +233,7 @@ class WallService:
             row = conn.execute("SELECT photo_path FROM walls WHERE id = ?",(wall_id,)).fetchone()
         return settings.WALLS_DIR / wall_id / row['photo_path']
 
-    async def replace_photo(self, wall_id: str, photo: UploadFile) -> bool:
+    def replace_photo(self, wall_id: str, photo: UploadFile) -> bool:
         """
         Replace wall photo by removing old versions and saving the new one.
         """
@@ -249,13 +249,13 @@ class WallService:
 
         return True
     
-    async def save_photo(self, wall_id: str, photo: UploadFile):
+    def save_photo(self, wall_id: str, photo: UploadFile):
         # Get the extension from the incoming file and create the new photo path
         ext = Path(photo.filename).suffix
         photo_path = settings.WALLS_DIR / wall_id / f"photo{ext}"
 
         # Save the new file
-        contents = await photo.read()
+        contents = photo.file.read()
         with open(photo_path, "wb") as f:
             f.write(contents)
         

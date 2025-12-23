@@ -8,7 +8,7 @@ Endpoints:
 - DELETE /walls/{wall_id}/models/{model_id}        - Delete a model
 - POST /walls/{wall_id}/models/{model_id}/generate - Generate climbs
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks, status
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from app.schemas import (
     ModelCreate,
@@ -130,8 +130,20 @@ def generate_climbs(
     - temperature: Sampling temperature (higher = more random)
     - force_alternating: Require alternating limb movement
     - features: Which features to consider for hold selection
-    """ 
-    # 3. Load model and generate
+    """
+    # 1. Validate model exists and is trained, wall exists and hold choice is valid.
+    model = model_service.get_model(wall_id, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if model.status != "trained":
+        raise HTTPException(status_code=400, detail="Model is not trained")
+    num_holds = wall_service.get_num_holds(wall_id)
+    if num_holds is None:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    if num_holds < max(request.starting_holds+request.stop_holds):
+        raise HTTPException(status_code=400, detail=f"Invalid holds in climb. Hold-id {max(request.starting_holds+request.stop_holds)} not included in {wall_id}.")
+        
+    # 2. Load model and generate
     generated = model_service.generate_climbs(wall_id, model_id, request)
     
     return GenerateResponse(

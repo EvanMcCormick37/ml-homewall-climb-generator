@@ -9,7 +9,7 @@ Endpoints:
 - GET  /walls/{wall_id}/photo    - Get wall photo
 - PUT  /walls/{wall_id}/photo    - Upload/replace wall photo
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 import json
 from fastapi.responses import FileResponse
 
@@ -31,7 +31,7 @@ router = APIRouter()
     summary="List all walls",
     description="Returns metadata for all walls (without hold details).",
 )
-async def list_walls():
+def list_walls():
     """Get all walls with basic metadata."""
     walls = wall_service.get_all_walls()
     return WallListResponse(walls=walls, total=len(walls))
@@ -44,7 +44,7 @@ async def list_walls():
     summary="Create a new wall",
     description="Create a new wall with holdset, metadata, and photo.",
 )
-async def create_wall(
+def create_wall(
     name: str = Form(..., min_length=1, max_length=100),
     holds: str = Form(..., description="JSON array of hold objects"),
     photo: UploadFile = File(..., description="Wall photo (JPEG or PNG)"),
@@ -86,7 +86,7 @@ async def create_wall(
     
     # Create wall with photo
     try:
-        wall_id = await wall_service.create_wall(wall_data, photo)
+        wall_id = wall_service.create_wall(wall_data, photo)
         return WallCreateResponse(id=wall_id, name=wall_data.name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create wall: {str(e)}")
@@ -97,7 +97,7 @@ async def create_wall(
     summary="Get wall details",
     description="Returns full wall details including holds.",
 )
-async def get_wall(wall_id: str):
+def get_wall(wall_id: str):
     """Get detailed wall info including holds."""
     wall = wall_service.get_wall(wall_id)
     if wall is None:
@@ -111,7 +111,7 @@ async def get_wall(wall_id: str):
     summary="Delete a wall",
     description="Delete a wall and all associated climbs, models, and photos.",
 )
-async def delete_wall(wall_id: str):
+def delete_wall(wall_id: str):
     """Delete a wall and all associated data."""
     success = wall_service.delete_wall(wall_id)
     if not success:
@@ -129,7 +129,7 @@ async def delete_wall(wall_id: str):
         404: {"description": "Wall or photo not found"},
     },
 )
-async def get_wall_photo(wall_id: str):
+def get_wall_photo(wall_id: str):
     """Get wall photo."""
     photo_path = wall_service.get_photo_path(wall_id)
     if photo_path is None:
@@ -145,7 +145,7 @@ async def get_wall_photo(wall_id: str):
     summary="Upload wall photo",
     description="Upload or replace the wall photo.",
 )
-async def upload_wall_photo(
+def upload_wall_photo(
     wall_id: str,
     photo: UploadFile = File(..., description="Wall photo (JPEG or PNG)"),
 ):
