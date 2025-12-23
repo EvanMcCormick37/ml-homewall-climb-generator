@@ -19,7 +19,7 @@ from app.schemas import (
     GenerateRequest,
     GenerateResponse,
 )
-from app.services import model_service, job_service, wall_service
+from app.services import services
 
 router = APIRouter()
 
@@ -32,7 +32,7 @@ router = APIRouter()
 )
 def list_models(wall_id: str):
     """List all models for a wall."""
-    models = model_service.get_models_for_wall(wall_id)
+    models = services.get_models_for_wall(wall_id)
     return ModelListResponse(models=models, total=len(models))
 
 
@@ -56,21 +56,21 @@ def create_model(
     """
 
     # 1. Validate wall exists
-    if not wall_service.wall_exists(wall_id):
+    if not services.wall_exists(wall_id):
         raise HTTPException(status_code=404, detail="Wall not found")
     
     # 2. Create model record
-    model_id = model_service.create_model(wall_id, model_config)
+    model_id = services.create_model(wall_id, model_config)
     
     # 3. Create job record
-    job_id = job_service.create_job(
+    job_id = services.create_job(
         job_type="train_model",
         params={"model_id": model_id, "wall_id": wall_id, **model_config.model_dump()}
     )
     
     # 4. Start background training task
     background_tasks.add_task(
-        model_service.train_model_task,
+        services.train_model_task,
         job_id=job_id,
         model_id=model_id,
         wall_id=wall_id,
@@ -89,7 +89,7 @@ def create_model(
 def get_model(wall_id: str, model_id: str):
     """Get model details including training stats."""
 
-    model = model_service.get_model(wall_id, model_id)
+    model = services.get_model(wall_id, model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
     return model
@@ -103,7 +103,7 @@ def get_model(wall_id: str, model_id: str):
 )
 def delete_model(wall_id: str, model_id: str):
     """Delete a model."""
-    success = model_service.delete_model(wall_id, model_id)
+    success = services.delete_model(wall_id, model_id)
     if not success:
         raise HTTPException(status_code=404, detail="Model not found")
     return ModelDeleteResponse(id=model_id)
@@ -132,19 +132,19 @@ def generate_climbs(
     - features: Which features to consider for hold selection
     """
     # 1. Validate model exists and is trained, wall exists and hold choice is valid.
-    model = model_service.get_model(wall_id, model_id)
+    model = services.get_model(wall_id, model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
     if model.status != "trained":
         raise HTTPException(status_code=400, detail="Model is not trained")
-    num_holds = wall_service.get_num_holds(wall_id)
+    num_holds = services.get_num_holds(wall_id)
     if num_holds is None:
         raise HTTPException(status_code=404, detail="Wall not found")
     if num_holds < max(request.starting_holds+request.stop_holds):
         raise HTTPException(status_code=400, detail=f"Invalid holds in climb. Hold-id {max(request.starting_holds+request.stop_holds)} not included in {wall_id}.")
         
     # 2. Load model and generate
-    generated = model_service.generate_climbs(wall_id, model_id, request)
+    generated = services.generate_climbs(wall_id, model_id, request)
     
     return GenerateResponse(
         model_id=model_id,

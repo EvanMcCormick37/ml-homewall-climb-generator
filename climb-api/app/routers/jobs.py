@@ -7,7 +7,7 @@ Endpoints:
 from fastapi import APIRouter, HTTPException
 
 from app.schemas import Job
-from app.services import job_service
+from app.services import services
 
 router = APIRouter()
 
@@ -89,7 +89,7 @@ def get_job_status(job_id: str):
     - COMPLETED: Job finished successfully (check `result` field)
     - FAILED: Job failed (check `error` field)
     """
-    job = job_service.get_job(job_id)
+    job = services.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job

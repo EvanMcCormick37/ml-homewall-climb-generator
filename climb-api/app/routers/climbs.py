@@ -17,7 +17,7 @@ from app.schemas import (
     ClimbCreateResponse,
     ClimbDeleteResponse,
 )
-from app.services import climb_service, wall_service
+from app.services import services
 
 router = APIRouter()
 
@@ -90,7 +90,7 @@ def list_climbs(
     - after: Only climbs created after this datetime
     - holds_include: Climbs must include ALL specified hold IDs
     """
-    climbs, total, limit, offset = climb_service.get_climbs(
+    climbs, total, limit, offset = services.get_climbs(
         wall_id=wall_id,
         grade_range=grade_range,
         include_projects=include_projects,
@@ -122,14 +122,14 @@ def list_climbs(
 )
 def create_climb(wall_id: str, climb_data: ClimbCreate):
     """Create a new climb for a wall."""
-    num_holds = wall_service.get_num_holds(wall_id)
+    num_holds = services.get_num_holds(wall_id)
     holds_used = [h for pos in climb_data.sequence for h in pos]
     if num_holds is None:
         raise HTTPException(status_code=404, detail="Wall not found")
     if num_holds < max(holds_used):
         raise HTTPException(status_code=400, detail=f"Invalid hold sequence. hold_id {max(holds_used)} does not exist on wall {wall_id}.")
         
-    climb_id = climb_service.create_climb(wall_id, climb_data)
+    climb_id = services.create_climb(wall_id, climb_data)
     return ClimbCreateResponse(id=climb_id)
 
 
@@ -141,7 +141,7 @@ def create_climb(wall_id: str, climb_data: ClimbCreate):
 )
 def delete_climb(wall_id: str, climb_id: str):
     """Delete a climb."""
-    success = climb_service.delete_climb(wall_id, climb_id)
+    success = services.delete_climb(wall_id, climb_id)
     if not success:
         raise HTTPException(status_code=404, detail="Climb not found")
     return ClimbDeleteResponse(id=climb_id)

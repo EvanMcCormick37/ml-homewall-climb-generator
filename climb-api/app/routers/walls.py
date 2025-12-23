@@ -20,7 +20,7 @@ from app.schemas import (
     WallListResponse,
     WallCreateResponse,
 )
-from app.services import wall_service
+from app.services import services
 
 router = APIRouter()
 
@@ -33,7 +33,7 @@ router = APIRouter()
 )
 def list_walls():
     """Get all walls with basic metadata."""
-    walls = wall_service.get_all_walls()
+    walls = services.get_all_walls()
     return WallListResponse(walls=walls, total=len(walls))
 
 
@@ -86,7 +86,7 @@ def create_wall(
     
     # Create wall with photo
     try:
-        wall_id = wall_service.create_wall(wall_data, photo)
+        wall_id = services.create_wall(wall_data, photo)
         return WallCreateResponse(id=wall_id, name=wall_data.name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create wall: {str(e)}")
@@ -99,7 +99,7 @@ def create_wall(
 )
 def get_wall(wall_id: str):
     """Get detailed wall info including holds."""
-    wall = wall_service.get_wall(wall_id)
+    wall = services.get_wall(wall_id)
     if wall is None:
         raise HTTPException(status_code=404, detail="Wall not found")
     return wall
@@ -113,7 +113,7 @@ def get_wall(wall_id: str):
 )
 def delete_wall(wall_id: str):
     """Delete a wall and all associated data."""
-    success = wall_service.delete_wall(wall_id)
+    success = services.delete_wall(wall_id)
     if not success:
         raise HTTPException(status_code=404, detail="Wall not found")
     return None
@@ -131,7 +131,7 @@ def delete_wall(wall_id: str):
 )
 def get_wall_photo(wall_id: str):
     """Get wall photo."""
-    photo_path = wall_service.get_photo_path(wall_id)
+    photo_path = services.get_photo_path(wall_id)
     if photo_path is None:
         raise HTTPException(status_code=404, detail="Photo not found")
     ext = photo_path.suffix
@@ -157,7 +157,7 @@ def upload_wall_photo(
             detail="Invalid file type. Only JPEG and PNG are supported.",
         )
 
-    success = wall_service.replace_photo(wall_id, photo)
+    success = services.replace_photo(wall_id, photo)
     if not success:
         raise HTTPException(status_code=404, detail="Wall not found")
     return {"message": "Photo uploaded successfully"}
