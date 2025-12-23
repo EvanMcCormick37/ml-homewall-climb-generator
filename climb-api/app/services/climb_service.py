@@ -30,7 +30,7 @@ class ClimbService:
         descending: bool = True,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[list[Climb], int]:
+    ) -> tuple[list[Climb], int, int, int]:
         """
         Get climbs for a wall with filtering.
         
@@ -124,7 +124,7 @@ class ClimbService:
             rows = conn.execute(query, params + [limit, offset]).fetchall()
         
         climbs = [self._row_to_climb(row) for row in rows]
-        return climbs, total
+        return climbs, total, limit, offset
     
     def _get_sort_column(self, sort_by: ClimbSortBy) -> str:
         """Map sort enum to SQL column/expression."""

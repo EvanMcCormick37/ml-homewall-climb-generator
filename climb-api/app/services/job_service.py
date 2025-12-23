@@ -40,8 +40,8 @@ class JobService:
                 """,
                 (
                     job_id,
-                    job_type.value,
-                    JobStatus.PENDING.value,
+                    job_type,
+                    JobStatus.PENDING,
                     json.dumps(params) if params else None,
                 ),
             )

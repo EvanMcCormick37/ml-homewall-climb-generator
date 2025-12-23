@@ -8,7 +8,7 @@ Handles:
 """
 import json
 import uuid
-from pathlib import Path
+import shutil
 from datetime import datetime
 import traceback
 import torch
@@ -48,15 +48,18 @@ class ModelService:
         
         return [
             ModelSummary(
-                id=row["id"],
-                model_type=row["model_type"],
-                status=ModelStatus(row["status"]),
-                moves_trained=row["moves_trained"],
-                climbs_trained=row["climbs_trained"],
-                val_loss=row["val_loss"],
-                created_at=row["created_at"],
-                trained_at=row["trained_at"],
-            )
+            id=row["id"],
+            wall_id=row["wall_id"],
+            model_type=row["model_type"],
+            features=FeatureConfig(**json.loads(row["features"])),
+            status=ModelStatus(row["status"]),
+            val_loss=row["val_loss"],
+            epochs_trained=row["epochs_trained"],
+            climbs_trained=row["climbs_trained"],
+            moves_trained=row["moves_trained"],
+            created_at=row["created_at"],
+            trained_at=row["trained_at"],
+        )
             for row in rows
         ]
     
@@ -79,6 +82,8 @@ class ModelService:
             status=ModelStatus(row["status"]),
             val_loss=row["val_loss"],
             epochs_trained=row["epochs_trained"],
+            climbs_trained=row["climbs_trained"],
+            moves_trained=row["moves_trained"],
             created_at=row["created_at"],
             trained_at=row["trained_at"],
         )
@@ -130,9 +135,9 @@ class ModelService:
             return False
         
         # Delete weights file if exists
-        model_path = settings.WALLS_DIR / wall_id / model_id
-        if model_path.exists():
-            model_path.unlink()
+        model_dir = settings.WALLS_DIR / wall_id / model_id
+        if model_dir.exists():
+            shutil.rmtree(model_dir)
         
         return True
     
@@ -167,7 +172,13 @@ class ModelService:
             model, is_sequential = create_model_instance(config.model_type, config.features)
             
             # Preprocess the training data and hold-id<->feature map.
-            train_ds, val_ds, hold_map, num_climbs, num_moves = process_training_data(wall_id,config)
+            train_ds, val_ds, hold_map, num_climbs, num_moves = process_training_data(
+                wall_id,
+                feature_config=config.features,
+                sequential=is_sequential,
+                augment=config.augment_dataset,
+                val_split=config.val_split,
+            )
             
             # Collate sequential training data
             train_loader = DataLoader(train_ds, batch_size=settings.BATCH_SIZE, shuffle=True, collate_fn=(collate_sequences if is_sequential else None))
@@ -227,18 +238,18 @@ class ModelService:
         """
         # 1. Get model parameters from models table and use them to instantiate model
         with get_db() as conn:
-            query = f"SELECT model_type, features FROM models WHERE model_id LIKE ?"
+            query = f"SELECT model_type, features FROM models WHERE id LIKE ?"
             params = [model_id]
             row = conn.execute(query, params).fetchone()
-            model_type = row["type"]
+            model_type = row["model_type"]
             features = json.loads(row["features"])
         feature_config = FeatureConfig.model_validate(features)
 
         model, _ = create_model_instance(model_type, feature_config)
         
         # 2. Rehydrate the model from the features and model path.
-        model_path = settings.WALLS_DIR / wall_id / "f{model_id}.pth"
-        model.load_state_dict(torch.load(model_path))
+        model_weights_path = settings.WALLS_DIR / wall_id / model_id / "best.pth"
+        model.load_state_dict(torch.load(model_weights_path))
 
         # 2. Load hold map
         wall_json_path = settings.WALLS_DIR / wall_id / "wall.json"

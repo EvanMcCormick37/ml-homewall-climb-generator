@@ -38,6 +38,7 @@ class ModelCreate(BaseModel):
     features: FeatureConfig = Field(default_factory=FeatureConfig)
     epochs: int = Field(100, ge=1, le=10000)
     augment_dataset: bool = True
+    val_split: float = 0.2
 
 
 class ModelSummary(BaseModel):
@@ -59,7 +60,6 @@ class ModelCreateResponse(BaseModel):
     """Response after creating a model (training starts)."""
     model_id: str
     job_id: str
-    message: str = "Model training started"
 
 
 class ModelListResponse(BaseModel):
@@ -71,7 +71,6 @@ class ModelListResponse(BaseModel):
 class ModelDeleteResponse(BaseModel):
     """Response after deleting a model."""
     id: str
-    message: str = "Model deleted successfully"
 
 
 # --- Generation Schemas ---

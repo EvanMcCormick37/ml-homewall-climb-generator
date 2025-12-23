@@ -65,7 +65,7 @@ async def create_model(
     # 3. Create job record
     job_id = job_service.create_job(
         job_type="train_model",
-        params={"model_id": model_id, "wall_id": wall_id, **model_config.dict()}
+        params={"model_id": model_id, "wall_id": wall_id, **model_config.model_dump()}
     )
     
     # 4. Start background training task

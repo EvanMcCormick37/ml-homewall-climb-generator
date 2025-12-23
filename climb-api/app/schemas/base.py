@@ -4,7 +4,7 @@ from typing import Annotated
 
 # Climbing Position Annotations
 PositiveInt = Annotated[int,Field(ge=0)]
-HoldPosition = Annotated[PositiveInt,Field(
+HoldPosition = Annotated[list[PositiveInt],Field(
         ...,
         min_length=2, 
         max_length=2,

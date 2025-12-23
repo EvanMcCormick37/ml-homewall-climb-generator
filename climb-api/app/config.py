@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     VAL_SPLIT: float = 0.2
     EPOCHS: int = 100
     MAX_EPOCHS: int = 1000
+    BATCH_SIZE: int = 32
     LR: float = 0.001
     DEVICE: str = "cpu"
 

@@ -31,7 +31,9 @@ router = APIRouter()
 async def list_climbs(
     wall_id: str,
     grade_range: list[int] = Query(
-        "0,180",
+        [0,180],
+        min_length=2,
+        max_length=2,
         description="min,max grade to filter climbs by"
     ),
     include_projects: bool = Query(
@@ -88,7 +90,7 @@ async def list_climbs(
     - after: Only climbs created after this datetime
     - holds_include: Climbs must include ALL specified hold IDs
     """
-    return climb_service.get_climbs(
+    climbs, total, limit, offset = climb_service.get_climbs(
         wall_id=wall_id,
         grade_range=grade_range,
         include_projects=include_projects,
@@ -100,7 +102,14 @@ async def list_climbs(
         sort_by=sort_by,
         descending=descending,
         limit=limit,
-        offset=offset
+        offset=offset,
+    )
+
+    return ClimbListResponse(
+        climbs=climbs,
+        total=total,
+        limit=limit,
+        offset=offset,
     )
 
 

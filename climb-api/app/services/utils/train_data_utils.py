@@ -24,56 +24,56 @@ FEATURE_DIMS = {
 }
 
 
-def get_feature_dim(config: FeatureConfig) -> int:
+def get_feature_dim(feature_config: FeatureConfig) -> int:
     """Calculate total feature dimension based on config."""
     dim = 0
-    if config.position:
+    if feature_config.position:
         dim += FEATURE_DIMS["position"]
-    if config.pull_direction:
+    if feature_config.pull_direction:
         dim += FEATURE_DIMS["pull_direction"]
-    if config.difficulty:
+    if feature_config.difficulty:
         dim += FEATURE_DIMS["difficulty"]
     return dim
 
 
-def get_null_features(config: FeatureConfig) -> list[float]:
+def get_null_features(feature_config: FeatureConfig) -> list[float]:
     """Get null feature vector (for missing/off-wall limbs)."""
     features = []
-    if config.position:
+    if feature_config.position:
         features.extend([-1.0, -1.0])
-    if config.pull_direction:
+    if feature_config.pull_direction:
         features.extend([0.0, 0.0])
-    if config.difficulty:
+    if feature_config.difficulty:
         features.append(0.0)
     return features
 
 
-def extract_hold_features(hold_data: dict, config: FeatureConfig) -> list[float]:
+def extract_hold_features(hold_data: dict, feature_config: FeatureConfig) -> list[float]:
     """
-    Extract feature vector from hold data based on config.
+    Extract feature vector from hold data based on feature_config.
     
     Args:
         hold_data: Hold dict with norm_x, norm_y, pull_x, pull_y, useability
-        config: Which features to include
+        feature_config: Which features to include
         
     Returns:
-        Feature vector of length get_feature_dim(config)
+        Feature vector of length get_feature_dim(feature_config)
     """
     features = []
     
-    if config.position:
+    if feature_config.position:
         features.extend([
             float(hold_data["norm_x"]),
             float(hold_data["norm_y"]),
         ])
     
-    if config.pull_direction:
+    if feature_config.pull_direction:
         features.extend([
             float(hold_data["pull_x"]),
             float(hold_data["pull_y"]),
         ])
     
-    if config.difficulty:
+    if feature_config.difficulty:
         # Normalize useability from 0-10 to 0-1
         features.append(float(hold_data["useability"]) / 10.0)
     
@@ -82,14 +82,14 @@ def extract_hold_features(hold_data: dict, config: FeatureConfig) -> list[float]
 
 def build_hold_map(
     wall_id: str, 
-    config: FeatureConfig,
+    feature_config: FeatureConfig,
 ) -> dict[int, list[float]]:
     """
     Load holds from wall JSON and build hold_id -> feature vector map.
     
     Args:
         wall_id: The wall ID
-        config: Feature configuration
+        feature_config: Feature configuration
         
     Returns:
         Dict mapping hold_id to feature vector
@@ -102,7 +102,7 @@ def build_hold_map(
     hold_map = {}
     for hold in wall_data["holds"]:
         hold_id = hold["hold_id"]
-        hold_map[hold_id] = extract_hold_features(hold, config)
+        hold_map[hold_id] = extract_hold_features(hold, feature_config)
     
     return hold_map
 
@@ -165,7 +165,7 @@ def parse_climb_to_numpy(
 def mirror_climb(
     sequence: np.ndarray, 
     feature_dim: int,
-    config: FeatureConfig,
+    feature_config: FeatureConfig,
 ) -> np.ndarray:
     """
     Mirror a climb left-to-right by swapping limbs and flipping x-coordinates.
@@ -173,7 +173,7 @@ def mirror_climb(
     Args:
         sequence: Array of shape (T, feature_dim * 2)
         feature_dim: Features per limb
-        config: Feature config to know which indices to flip
+        feature_config: Feature config to know which indices to flip
         
     Returns:
         Mirrored sequence
@@ -188,7 +188,7 @@ def mirror_climb(
     mirrored[:, rh_slice] = sequence[:, lh_slice]
     
     # Flip x-coordinates if position features are included
-    if config.position:
+    if feature_config.position:
         # norm_x is at index 0 for each limb
         for limb_start in [0, feature_dim]:
             norm_x_idx = limb_start
@@ -196,7 +196,7 @@ def mirror_climb(
             mirrored[mask, norm_x_idx] = 1.0 - mirrored[mask, norm_x_idx]
             
             # pull_x is at index 2 if pull_direction is enabled
-            if config.pull_direction:
+            if feature_config.pull_direction:
                 pull_x_idx = limb_start + 2
                 mirrored[mask, pull_x_idx] = -mirrored[mask, pull_x_idx]
     
@@ -206,7 +206,7 @@ def mirror_climb(
 def translate_climb(
     sequence: np.ndarray,
     feature_dim: int,
-    config: FeatureConfig,
+    feature_config: FeatureConfig,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Generate max-left and max-right shifted variants.
@@ -214,12 +214,12 @@ def translate_climb(
     Args:
         sequence: Array of shape (T, feature_dim * 2)
         feature_dim: Features per limb
-        config: Feature config
+        feature_config: Feature config
         
     Returns:
         Tuple of (left_shifted, right_shifted) sequences
     """
-    if not config.position:
+    if not feature_config.position:
         # Can't translate without position features
         return sequence.copy(), sequence.copy()
     
@@ -256,7 +256,7 @@ def translate_climb(
 def augment_sequences(
     sequences: list[np.ndarray],
     feature_dim: int,
-    config: FeatureConfig,
+    feature_config: FeatureConfig,
 ) -> list[np.ndarray]:
     """
     Expand sequences 6x using mirroring and translation.
@@ -264,7 +264,7 @@ def augment_sequences(
     Args:
         sequences: List of sequence arrays
         feature_dim: Features per limb
-        config: Feature config
+        feature_config: Feature config
         
     Returns:
         Augmented list (6x original size)
@@ -273,11 +273,11 @@ def augment_sequences(
     
     for seq in sequences:
         # Original + translations
-        orig_left, orig_right = translate_climb(seq, feature_dim, config)
+        orig_left, orig_right = translate_climb(seq, feature_dim, feature_config)
         
         # Mirrored + translations
-        mirrored = mirror_climb(seq, feature_dim, config)
-        mir_left, mir_right = translate_climb(mirrored, feature_dim, config)
+        mirrored = mirror_climb(seq, feature_dim, feature_config)
+        mir_left, mir_right = translate_climb(mirrored, feature_dim, feature_config)
         
         augmented.extend([
             seq,
@@ -341,7 +341,7 @@ class ClimbSequenceDataset(Dataset):
 
 def process_training_data(
     wall_id: str,
-    config: FeatureConfig,
+    feature_config: FeatureConfig,
     sequential: bool = False,
     augment: bool = True,
     val_split: float = 0.2,
@@ -351,7 +351,7 @@ def process_training_data(
     
     Args:
         wall_id: The wall ID
-        config: Feature configuration
+        feature_config: Feature configuration
         sequential: If True, return sequence datasets for RNN/LSTM
         augment: If True, augment training data (6x)
         val_split: Fraction of data for validation
@@ -360,9 +360,9 @@ def process_training_data(
         Tuple of (train_dataset, val_dataset, hold_map, num_climbs)
     """
     # Load hold features
-    hold_map = build_hold_map(wall_id, config)
-    null_features = get_null_features(config)
-    feature_dim = get_feature_dim(config)
+    hold_map = build_hold_map(wall_id, feature_config)
+    null_features = get_null_features(feature_config)
+    feature_dim = get_feature_dim(feature_config)
     
     # Load climbs from database
     climbs = load_climbs_from_db(wall_id)
@@ -394,7 +394,7 @@ def process_training_data(
     
     # Augment training data only
     if augment:
-        train_seqs = augment_sequences(train_seqs, feature_dim, config)
+        train_seqs = augment_sequences(train_seqs, feature_dim, feature_config)
     
     # Create appropriate dataset type
     if sequential:
