@@ -231,7 +231,7 @@ class WallService:
             return None
         with get_db() as conn:
             row = conn.execute("SELECT photo_path FROM walls WHERE id = ?",(wall_id,)).fetchone()
-        return Path(row['photo_path'])
+        return settings.WALLS_DIR / wall_id / row['photo_path']
 
     async def replace_photo(self, wall_id: str, photo: UploadFile) -> bool:
         """
