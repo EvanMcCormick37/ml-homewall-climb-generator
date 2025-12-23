@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     # Paths
     DATA_DIR: Path = Path("data")
     WALLS_DIR: Path = DATA_DIR / "walls"
-    MODELS_DIR: Path = DATA_DIR / "models"
     DB_PATH: Path = DATA_DIR / "storage.db"
     
     # Pagination defaults
@@ -35,7 +34,6 @@ class Settings(BaseSettings):
     NUM_LIMBS: int = 2
     NUM_FEATURES: int = 5
     N_HIDDEN_LAYERS: int = 3
-    NULL_FEATURES: list[float] = [-1.0,-1.0,0,0,-1.0]
     HIDDEN_DIM: int = 256
 
     # Training defaults

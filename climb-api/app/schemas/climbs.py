@@ -4,7 +4,7 @@ Pydantic schemas for climb-related requests and responses.
 from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
-
+from app.schemas.base import HoldPosition
 class ClimbSortBy(str, Enum):
     """Enum for climb sorting options."""
     DATE = "date"
@@ -17,10 +17,10 @@ class ClimbSortBy(str, Enum):
 
 class ClimbCreate(BaseModel):
     """Schema for creating a climb."""
-    name: str | None = Field(None, max_length=100)
+    name: str | None = None
     grade: int | None = Field(None, ge=0, le=180)
-    setter: str | None = Field(None, max_length=50)
-    sequence: list[list[int]] = Field(
+    setter: str | None = None
+    sequence: list[HoldPosition] = Field(
         ...,
         description="List of positions, each position is [lh_hold_id, rh_hold_id]"
     )
@@ -51,10 +51,8 @@ class ClimbListResponse(BaseModel):
 class ClimbCreateResponse(BaseModel):
     """Response after creating a climb."""
     id: str
-    message: str = "Climb created successfully"
 
 
 class ClimbDeleteResponse(BaseModel):
     """Response after deleting a climb."""
     id: str
-    message: str = "Climb deleted successfully"
