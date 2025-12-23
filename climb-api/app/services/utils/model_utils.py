@@ -59,12 +59,15 @@ class ClimbMLP(nn.Module):
 #     def forward(self, x: torch.Tensor) -> torch.Tensor:
 #         return self.net(x)
 
-class ClimbRNN(nn.Module):
+class ClimbSequential(nn.Module):
     """
-    Vanilla RNN for climb sequence prediction.
+    Base class for sequential climb models (RNN, LSTM).
     
-    Compatible with existing ClimbGenerator and training loop via forward().
-    Use forward_sequence() for full sequence processing with hidden states.
+    Subclasses must:
+    1. Call super().__init__(...) 
+    2. Set self.seq_layer
+    3. Set self.fc (output projection layer)
+    4. Implement init_hidden()
     """
     
     def __init__(self,
@@ -77,101 +80,114 @@ class ClimbRNN(nn.Module):
         super().__init__()
         self.is_sequential = True
         self.num_limbs = num_limbs
+        self.hidden_dim = hidden_dim
+        self.num_layers = n_hidden_layers
+        self.dropout = dropout
+        self.feature_config = feature_config
         self.num_features = get_feature_dim(feature_config)
         self.null_features = get_null_features(feature_config)
+        self.feature_dim = self.num_limbs * self.num_features
 
-        feature_dim = self.num_limbs * self.num_features
-        
-        self.rnn = nn.RNN(
-            input_size=feature_dim,
-            hidden_size=hidden_dim,
-            num_layers=n_hidden_layers,
-            batch_first=True,
-            dropout=dropout if n_hidden_layers > 1 else 0.0,
-            nonlinearity='tanh'
-        )
-        
-        # Output projection layer
-        self.fc = nn.Linear(hidden_dim, feature_dim)
-    
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Single-step forward pass (MLP-compatible interface).
         
         Args:
-            x: Input tensor of shape (batch, input_dim)
+            x: Input tensor of shape (batch, feature_dim)
         
         Returns:
-            output: Predictions of shape (batch, output_dim)
+            output: Predictions of shape (batch, feature_dim)
         """
-        # Add sequence dimension: (batch, input_dim) -> (batch, 1, input_dim)
-        x = x.unsqueeze(1)
+        x = x.unsqueeze(1)  # (batch, 1, feature_dim)
         batch_size = x.size(0)
         
-        # Initialize fresh hidden state for each forward pass
         hidden = self.init_hidden(batch_size, x.device)
-        
-        # RNN forward
-        rnn_out, _ = self.rnn(x, hidden)  # (batch, 1, hidden_dim)
-        
-        # Project to output space
-        output = self.fc(rnn_out.squeeze(1))  # (batch, output_dim)
+        seq_out, _ = self.seq_layer(x, hidden)  # (batch, 1, hidden_dim)
+        output = self.fc(seq_out.squeeze(1))  # (batch, feature_dim)
         
         return output
     
     def forward_sequence(self, 
                          x: torch.Tensor, 
-                         hidden: torch.Tensor | None = None
-                         ) -> tuple[torch.Tensor, torch.Tensor]:
+                         hidden: torch.Tensor | tuple[torch.Tensor, torch.Tensor] | None = None
+                         ) -> tuple[torch.Tensor, torch.Tensor | tuple[torch.Tensor, torch.Tensor]]:
         """
         Full sequence forward pass with hidden state management.
         
         Args:
-            x: Input tensor of shape (batch, seq_len, input_dim)
-            hidden: Optional hidden state of shape (num_layers, batch, hidden_dim)
+            x: Input tensor of shape (batch, seq_len, feature_dim)
+            hidden: Optional initial hidden state
         
         Returns:
-            output: Predictions of shape (batch, seq_len, output_dim)
-            hidden: Final hidden state of shape (num_layers, batch, hidden_dim)
+            output: Predictions of shape (batch, seq_len, feature_dim)
+            hidden: Final hidden state
         """
         batch_size = x.size(0)
         
         if hidden is None:
             hidden = self.init_hidden(batch_size, x.device)
         
-        # RNN processes entire sequence
-        rnn_out, hidden = self.rnn(x, hidden)  # (batch, seq_len, hidden_dim)
-        
-        # Project each timestep to output space
-        output = self.fc(rnn_out)  # (batch, seq_len, output_dim)
+        seq_out, hidden = self.seq_layer(x, hidden)  # (batch, seq_len, hidden_dim)
+        output = self.fc(seq_out)  # (batch, seq_len, feature_dim)
         
         return output, hidden
     
     def forward_step(self,
                      x: torch.Tensor,
-                     hidden: torch.Tensor | None = None
-                     ) -> tuple[torch.Tensor, torch.Tensor]:
+                     hidden: torch.Tensor | tuple[torch.Tensor, torch.Tensor] | None = None
+                     ) -> tuple[torch.Tensor, torch.Tensor | tuple[torch.Tensor, torch.Tensor]]:
         """
         Single step with explicit hidden state (for autoregressive generation).
         
         Args:
-            x: Input tensor of shape (batch, input_dim)
-            hidden: Hidden state of shape (num_layers, batch, hidden_dim)
+            x: Input tensor of shape (batch, feature_dim)
+            hidden: Hidden state from previous step
         
         Returns:
-            output: Predictions of shape (batch, output_dim)
+            output: Predictions of shape (batch, feature_dim)
             hidden: Updated hidden state
         """
-        x = x.unsqueeze(1)  # (batch, 1, input_dim)
+        x = x.unsqueeze(1)  # (batch, 1, feature_dim)
         batch_size = x.size(0)
         
         if hidden is None:
             hidden = self.init_hidden(batch_size, x.device)
         
-        rnn_out, hidden = self.rnn(x, hidden)
-        output = self.fc(rnn_out.squeeze(1))
+        seq_out, hidden = self.seq_layer(x, hidden)
+        output = self.fc(seq_out.squeeze(1))
         
         return output, hidden
+    
+    def init_hidden(self, batch_size: int, device: torch.device):
+        """Initialize hidden state. Must be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement init_hidden")
+
+
+class ClimbRNN(ClimbSequential):
+    """
+    Vanilla RNN for climb sequence prediction.
+    
+    Uses a single hidden state tensor.
+    """
+    
+    def __init__(self,
+                 feature_config: FeatureConfig,
+                 num_limbs: int = settings.NUM_LIMBS,
+                 hidden_dim: int = settings.HIDDEN_DIM,
+                 n_hidden_layers: int = settings.N_HIDDEN_LAYERS,
+                 dropout: float = 0.1,
+                 ):
+        super().__init__(feature_config, num_limbs, hidden_dim, n_hidden_layers, dropout)
+        
+        self.seq_layer = nn.RNN(
+            input_size=self.feature_dim,
+            hidden_size=self.hidden_dim,
+            num_layers=self.num_layers,
+            batch_first=True,
+            dropout=self.dropout if self.num_layers > 1 else 0.0,
+            nonlinearity='tanh'
+        )
+        self.fc = nn.Linear(self.hidden_dim, self.feature_dim)
     
     def init_hidden(self, batch_size: int, device: torch.device) -> torch.Tensor:
         """Initialize hidden state with zeros."""
@@ -180,13 +196,12 @@ class ClimbRNN(nn.Module):
             device=device
         )
 
-class ClimbLSTM(nn.Module):
+
+class ClimbLSTM(ClimbSequential):
     """
     LSTM for climb sequence prediction.
     
-    Includes cell state for better long-term dependency modeling.
-    Compatible with existing ClimbGenerator and training loop via forward().
-    Use forward_sequence() for full sequence processing with hidden states.
+    Uses a tuple of (hidden_state, cell_state) tensors.
     """
     
     def __init__(self,
@@ -196,103 +211,16 @@ class ClimbLSTM(nn.Module):
                  n_hidden_layers: int = settings.N_HIDDEN_LAYERS,
                  dropout: float = 0.1,
                  ):
-        super().__init__()
-        self.is_sequential = True
-        self.num_limbs = num_limbs
-        self.num_features = get_feature_dim(feature_config)
-        self.null_features = get_null_features(feature_config)
-
-        feature_dim = self.num_limbs * self.num_features
+        super().__init__(feature_config, num_limbs, hidden_dim, n_hidden_layers, dropout)
         
-        self.lstm = nn.LSTM(
-            input_size=feature_dim,
-            hidden_size=hidden_dim,
-            num_layers=n_hidden_layers,
+        self.seq_layer = nn.LSTM(
+            input_size=self.feature_dim,
+            hidden_size=self.hidden_dim,
+            num_layers=self.num_layers,
             batch_first=True,
-            dropout=dropout if n_hidden_layers > 1 else 0.0
+            dropout=self.dropout if self.num_layers > 1 else 0.0
         )
-        
-        # Output projection layer
-        self.fc = nn.Linear(hidden_dim, feature_dim)
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Single-step forward pass (MLP-compatible interface).
-        
-        Args:
-            x: Input tensor of shape (batch, input_dim)
-        
-        Returns:
-            output: Predictions of shape (batch, output_dim)
-        """
-        x = x.unsqueeze(1)  # (batch, 1, input_dim)
-        batch_size = x.size(0)
-        
-        # Initialize fresh hidden and cell states
-        hidden = self.init_hidden(batch_size, x.device)
-        
-        # LSTM forward
-        lstm_out, _ = self.lstm(x, hidden)  # (batch, 1, hidden_dim)
-        
-        # Project to output space
-        output = self.fc(lstm_out.squeeze(1))  # (batch, output_dim)
-        
-        return output
-    
-    def forward_sequence(self,
-                         x: torch.Tensor,
-                         hidden: tuple[torch.Tensor, torch.Tensor] | None = None
-                         ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
-        """
-        Full sequence forward pass with hidden state management.
-        
-        Args:
-            x: Input tensor of shape (batch, seq_len, input_dim)
-            hidden: Optional tuple of (h_0, c_0), each of shape 
-                    (num_layers, batch, hidden_dim)
-        
-        Returns:
-            output: Predictions of shape (batch, seq_len, output_dim)
-            hidden: tuple of final (h_n, c_n) states
-        """
-        batch_size = x.size(0)
-        
-        if hidden is None:
-            hidden = self.init_hidden(batch_size, x.device)
-        
-        # LSTM processes entire sequence
-        lstm_out, hidden = self.lstm(x, hidden)  # (batch, seq_len, hidden_dim)
-        
-        # Project each timestep to output space
-        output = self.fc(lstm_out)  # (batch, seq_len, output_dim)
-        
-        return output, hidden
-    
-    def forward_step(self,
-                     x: torch.Tensor,
-                     hidden: tuple[torch.Tensor, torch.Tensor] | None = None
-                     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
-        """
-        Single step with explicit hidden state (for autoregressive generation).
-        
-        Args:
-            x: Input tensor of shape (batch, input_dim)
-            hidden: tuple of (h, c), each of shape (num_layers, batch, hidden_dim)
-        
-        Returns:
-            output: Predictions of shape (batch, output_dim)
-            hidden: Updated (h, c) tuple
-        """
-        x = x.unsqueeze(1)  # (batch, 1, input_dim)
-        batch_size = x.size(0)
-        
-        if hidden is None:
-            hidden = self.init_hidden(batch_size, x.device)
-        
-        lstm_out, hidden = self.lstm(x, hidden)
-        output = self.fc(lstm_out.squeeze(1))
-        
-        return output, hidden
+        self.fc = nn.Linear(self.hidden_dim, self.feature_dim)
     
     def init_hidden(self, 
                     batch_size: int, 
@@ -308,6 +236,7 @@ class ClimbLSTM(nn.Module):
             device=device
         )
         return (h_0, c_0)
+ 
 
 def create_model_instance(
     model_type: ModelType,
@@ -316,13 +245,14 @@ def create_model_instance(
     """Create a fresh (untrained) model according to specifications"""
     match model_type:
         case ModelType.MLP:
-            return ClimbMLP(feature_config), False
+            return ClimbMLP(feature_config)
         case ModelType.RNN:
-            return ClimbRNN(feature_config), True
+            return ClimbRNN(feature_config)
         case ModelType.LSTM:
-            return ClimbLSTM(feature_config), True
+            return ClimbLSTM(feature_config)
         case _:
             raise TypeError(f"Invalid model type: {model_type}")
+
 
 # --- Training ---
 def collate_sequences(batch: list[tuple[torch.Tensor, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor]:
@@ -336,8 +266,8 @@ def run_epoch_mlp(
     model: nn.Module,
     loader: DataLoader,
     criterion: nn.Module,
-    optimizer: optim.Optimizer | None,
-    device: str
+    optimizer: optim.Optimizer | None = None,
+    device: str = settings.DEVICE
 ) -> tuple[float, float]:
     is_train = optimizer is not None
     model.train() if is_train else model.eval()
@@ -369,8 +299,8 @@ def run_epoch_sequential(
     model: nn.Module,
     loader: DataLoader,
     criterion: nn.Module,
-    optimizer: optim.Optimizer | None,
-    device: str
+    optimizer: optim.Optimizer | None = None,
+    device: str = settings.DEVICE,
 ) -> tuple[float, float]:
     """Training loop for sequence models (RNN/LSTM)."""
     is_train = optimizer is not None
@@ -410,8 +340,8 @@ def run_epoch(
     is_sequential: bool,
     loader: DataLoader,
     criterion: nn.Module,
-    optimizer: optim.Optimizer | None,
-    device: str
+    optimizer: optim.Optimizer | None = None,
+    device: str = settings.DEVICE,
 ) -> tuple[float,float]:
     if is_sequential:
         return run_epoch_sequential(model,loader,criterion,optimizer,device)

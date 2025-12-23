@@ -48,12 +48,12 @@ class ModelSummary(BaseModel):
     model_type: ModelType
     features: FeatureConfig
     status: ModelStatus
-    val_loss: float | None
+    val_loss: float | None = None
     epochs_trained: int
     climbs_trained: int
     moves_trained: int
     created_at: datetime
-    trained_at: datetime | None
+    trained_at: datetime | None = None
 
 
 class ModelCreateResponse(BaseModel):

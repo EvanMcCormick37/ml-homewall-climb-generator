@@ -39,7 +39,7 @@ async def list_models(wall_id: str):
 @router.post(
     "",
     response_model=ModelCreateResponse,
-    status_code=status.HTTP_202_ACCEPTED,
+    status_code=202,
     summary="Create and train a model",
     description="Create a new model and start training in the background.",
 )
@@ -142,7 +142,7 @@ async def generate_climbs(
     if num_holds is None:
         raise HTTPException(status_code=404, detail="Wall not found")
     if num_holds < max(request.starting_holds+request.stop_holds):
-        raise HTTPException(status_code=501, detail="Wall doesn't include some holds listed")
+        raise HTTPException(status_code=400, detail=f"Invalid holds in climb. Hold-id {max(request.starting_holds+request.stop_holds)} not included in {wall_id}.")
     
     # 3. Load model and generate
     generated = model_service.generate_climbs(wall_id, model_id, request)

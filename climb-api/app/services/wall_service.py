@@ -19,7 +19,7 @@ from app.schemas import WallCreate, WallDetail, WallMetadata, HoldDetail
 from app.config import settings
 
 
-def _parse_dimensions(dim_str: str | None) -> tuple[int, int] | None:
+def _parse_dimensions(dim_str: str | None = None) -> tuple[int, int] | None:
     """Parse dimensions string 'width, height' into tuple."""
     if not dim_str:
         return None

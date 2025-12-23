@@ -8,9 +8,11 @@ Handles:
 import json
 import uuid
 from datetime import datetime
+from fastapi import HTTPException
 
 from app.database import get_db
 from app.schemas import Climb, ClimbCreate, ClimbSortBy
+from app.services import wall_service
 
 
 class ClimbService:
@@ -154,8 +156,14 @@ class ClimbService:
         Returns:
             The new climb ID
         """
-        climb_id = f"climb-{uuid.uuid4().hex[:12]}"
+        num_holds = wall_service.get_num_holds(wall_id)
+        holds_used = [h for pos in climb_data.sequence for h in pos]
+        if num_holds is None:
+            raise HTTPException(status_code=404, detail="Wall not found")
+        if num_holds < max(holds_used):
+            raise HTTPException(status_code=400, detail=f"Invalid hold sequence. hold_id {max(holds_used)} does not exist on wall {wall_id}.")
         
+        climb_id = f"climb-{uuid.uuid4().hex[:12]}"
         with get_db() as conn:
             conn.execute(
                 """

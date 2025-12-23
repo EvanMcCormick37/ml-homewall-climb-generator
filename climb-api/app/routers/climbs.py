@@ -116,7 +116,7 @@ async def list_climbs(
 @router.post(
     "",
     response_model=ClimbCreateResponse,
-    status_code=status.HTTP_201_CREATED,
+    status_code=201,
     summary="Create a climb",
     description="Add a new climb to the wall.",
 )
@@ -127,7 +127,7 @@ async def create_climb(wall_id: str, climb_data: ClimbCreate):
     if num_holds is None:
         raise HTTPException(status_code=404, detail="Wall not found")
     if num_holds < max(holds_used):
-        raise HTTPException(status_code=501, detail="Wall doesn't include some holds listed")
+        raise HTTPException(status_code=400, detail=f"Invalid hold sequence. hold_id {max(holds_used)} does not exist on wall {wall_id}.")
     
     climb_id = climb_service.create_climb(wall_id, climb_data)
     return ClimbCreateResponse(id=climb_id)

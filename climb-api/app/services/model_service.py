@@ -25,9 +25,11 @@ from app.schemas import (
     GenerateRequest,
     GeneratedClimb,
 )
+from fastapi import HTTPException
 from app.schemas.jobs import JobStatus
 from app.services.job_service import JobService
 from app.services.climb_service import ClimbService
+from app.services import wall_service
 from app.services.utils import ClimbGenerator, collate_sequences, create_model_instance, extract_hold_features, run_epoch, process_training_data
 from app.config import settings
 
@@ -169,20 +171,20 @@ class ModelService:
             # Update model status
             self._update_model_status(model_id, ModelStatus.TRAINING)
             # Return the nn.Module instance of a model, and a Boolean indicating whether it's sequential
-            model, is_sequential = create_model_instance(config.model_type, config.features)
+            model = create_model_instance(config.model_type, config.features)
             
             # Preprocess the training data and hold-id<->feature map.
             train_ds, val_ds, hold_map, num_climbs, num_moves = process_training_data(
                 wall_id,
                 feature_config=config.features,
-                sequential=is_sequential,
+                sequential=model.is_sequential,
                 augment=config.augment_dataset,
                 val_split=config.val_split,
             )
             
             # Collate sequential training data
-            train_loader = DataLoader(train_ds, batch_size=settings.BATCH_SIZE, shuffle=True, collate_fn=(collate_sequences if is_sequential else None))
-            val_loader = DataLoader(val_ds, batch_size=settings.BATCH_SIZE, shuffle=False, collate_fn=(collate_sequences if is_sequential else None))
+            train_loader = DataLoader(train_ds, batch_size=settings.BATCH_SIZE, shuffle=True, collate_fn=(collate_sequences if model.is_sequential else None))
+            val_loader = DataLoader(val_ds, batch_size=settings.BATCH_SIZE, shuffle=False, collate_fn=(collate_sequences if model.is_sequential else None))
 
             save_weights_path = settings.WALLS_DIR / wall_id / model_id / "best.pth"
             optimizer = optim.Adam(model.parameters(),lr=settings.LR)
@@ -190,8 +192,8 @@ class ModelService:
             best_val_loss = float('inf')
 
             for epoch in range(config.epochs):
-                run_epoch(model, is_sequential, train_loader, criterion, optimizer, settings.DEVICE)
-                val_loss, _ = run_epoch(model, is_sequential, val_loader, criterion, None, settings.DEVICE)
+                run_epoch(model, model.is_sequential, train_loader, criterion, optimizer, settings.DEVICE)
+                val_loss, _ = run_epoch(model, model.is_sequential, val_loader, criterion, None, settings.DEVICE)
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
@@ -236,7 +238,19 @@ class ModelService:
         Returns:
             List of generated climbs
         """
-        # 1. Get model parameters from models table and use them to instantiate model
+        # 1. Validate model exists and is trained, wall exists and hold choice is valid.
+        model = self.get_model(wall_id, model_id)
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+        if model.status != "trained":
+            raise HTTPException(status_code=400, detail="Model is not trained")
+        num_holds = wall_service.get_num_holds(wall_id)
+        if num_holds is None:
+            raise HTTPException(status_code=404, detail="Wall not found")
+        if num_holds < max(request.starting_holds+request.stop_holds):
+            raise HTTPException(status_code=400, detail=f"Invalid holds in climb. Hold-id {max(request.starting_holds+request.stop_holds)} not included in {wall_id}.")
+        
+        # 3. Get model parameters from models table and use them to instantiate model
         with get_db() as conn:
             query = f"SELECT model_type, features FROM models WHERE id LIKE ?"
             params = [model_id]
@@ -245,22 +259,22 @@ class ModelService:
             features = json.loads(row["features"])
         feature_config = FeatureConfig.model_validate(features)
 
-        model, _ = create_model_instance(model_type, feature_config)
+        model = create_model_instance(model_type, feature_config)
         
-        # 2. Rehydrate the model from the features and model path.
+        # 4. Rehydrate the model from the features and model path.
         model_weights_path = settings.WALLS_DIR / wall_id / model_id / "best.pth"
         model.load_state_dict(torch.load(model_weights_path))
 
-        # 2. Load hold map
+        # 5. Load hold map and generator and generate climbs
         wall_json_path = settings.WALLS_DIR / wall_id / "wall.json"
         with open(wall_json_path) as f:
             wall_data = json.load(f)
         hold_map = {h["hold_id"]: extract_hold_features(h, feature_config) for h in wall_data["holds"]}
         
-        # 3. Create generator
+
         generator = ClimbGenerator(model, hold_map, device="cpu")
         
-        # 4. Generate climbs
+
         climbs = []
         for _ in range(request.num_climbs):
             sequence = generator.generate(

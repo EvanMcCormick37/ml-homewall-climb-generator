@@ -31,11 +31,11 @@ class Climb(BaseModel):
     """Schema for climb response."""
     id: str
     wall_id: str
-    name: str | None
-    grade: int | None
-    setter: str | None
+    name: str | None = None
+    grade: int | None = None
+    setter: str | None = None
     sequence: list[list[int]]
-    tags: list[str] | None
+    tags: list[str] | None = None
     num_moves: int
     created_at: datetime
 

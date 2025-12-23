@@ -40,7 +40,7 @@ async def list_walls():
 @router.post(
     "",
     response_model=WallCreateResponse,
-    status_code=status.HTTP_201_CREATED,
+    status_code=201,
     summary="Create a new wall",
     description="Create a new wall with holdset, metadata, and photo.",
 )
@@ -107,7 +107,7 @@ async def get_wall(wall_id: str):
 
 @router.delete(
     "/{wall_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=204,
     summary="Delete a wall",
     description="Delete a wall and all associated climbs, models, and photos.",
 )
@@ -141,7 +141,7 @@ async def get_wall_photo(wall_id: str):
 
 @router.put(
     "/{wall_id}/photo",
-    status_code=status.HTTP_200_OK,
+    status_code=200,
     summary="Upload wall photo",
     description="Upload or replace the wall photo.",
 )
