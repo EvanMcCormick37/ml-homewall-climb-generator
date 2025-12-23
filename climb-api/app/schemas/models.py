@@ -106,10 +106,6 @@ class GenerateRequest(BaseModel):
         True, 
         description="Force one limb to move at a time"
     )
-    features: FeatureConfig = Field(
-        default_factory=FeatureConfig,
-        description="Which features to consider when selecting holds"
-    )
 
 
 class GeneratedClimb(BaseModel):

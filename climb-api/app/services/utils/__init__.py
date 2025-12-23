@@ -5,6 +5,7 @@ from app.services.utils.model_utils import (
     ClimbMLP,
     ClimbRNN,
     ClimbLSTM,
+    ClimbGenerator,
     create_model_instance,
     collate_sequences,
     run_epoch,
@@ -27,6 +28,7 @@ __all__ = [
     "ClimbRNN",
     "ClimbLSTM",
     "create_model_instance",
+    "ClimbGenerator",
     # Training
     "collate_sequences",
     "run_epoch",

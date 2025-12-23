@@ -1,24 +1,31 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from app.config import settings
-from app.schemas import ModelCreate, ModelType
-from app.services.utils.train_data_utils import get_feature_dim
-
+from app.schemas import ModelType, FeatureConfig
+from app.services.utils.train_data_utils import get_feature_dim, get_null_features
 
 # --- Models ---
 class ClimbMLP(nn.Module):
     """Simple multilayer perceptron"""
     def __init__(self,
-                 input_dim: int = settings.NUM_LIMBS * settings.NUM_FEATURES,
+                 feature_config: FeatureConfig,
+                 num_limbs: int = settings.NUM_LIMBS,
                  hidden_dim: int = settings.HIDDEN_DIM,
-                 output_dim = settings.NUM_LIMBS * settings.NUM_FEATURES,
                  n_hidden_layers: int = settings.N_HIDDEN_LAYERS,
                  ):
         super().__init__()
+        self.is_sequential = False
+        self.num_limbs = num_limbs
+        self.feature_config = feature_config
+        self.num_features = get_feature_dim(feature_config)
+        self.null_features = get_null_features(feature_config)
+
+        feature_dim = self.num_limbs * self.num_features
         self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
+            nn.Linear(feature_dim, hidden_dim),
             nn.ReLU(),
             )
         for _ in range(n_hidden_layers):
@@ -26,7 +33,7 @@ class ClimbMLP(nn.Module):
             self.net.append(nn.ReLU())
         
         self.net.append(
-            nn.Linear(hidden_dim, output_dim)
+            nn.Linear(hidden_dim, feature_dim)
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -60,29 +67,32 @@ class ClimbRNN(nn.Module):
     Use forward_sequence() for full sequence processing with hidden states.
     """
     
-    def __init__(self, 
-                 output_dim = settings.NUM_LIMBS * settings.NUM_FEATURES,
-                 input_dim: int = settings.NUM_LIMBS * settings.NUM_FEATURES,
+    def __init__(self,
+                 feature_config: FeatureConfig,
+                 num_limbs: int = settings.NUM_LIMBS,
                  hidden_dim: int = settings.HIDDEN_DIM,
-                 num_layers: int = 2,
-                 dropout: float = 0.1):
+                 n_hidden_layers: int = settings.N_HIDDEN_LAYERS,
+                 dropout: float = 0.1,
+                 ):
         super().__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.num_layers = num_layers
+        self.is_sequential = True
+        self.num_limbs = num_limbs
+        self.num_features = get_feature_dim(feature_config)
+        self.null_features = get_null_features(feature_config)
+
+        feature_dim = self.num_limbs * self.num_features
         
         self.rnn = nn.RNN(
-            input_size=input_dim,
+            input_size=feature_dim,
             hidden_size=hidden_dim,
-            num_layers=num_layers,
+            num_layers=n_hidden_layers,
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0.0,
+            dropout=dropout if n_hidden_layers > 1 else 0.0,
             nonlinearity='tanh'
         )
         
         # Output projection layer
-        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.fc = nn.Linear(hidden_dim, feature_dim)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -180,27 +190,30 @@ class ClimbLSTM(nn.Module):
     """
     
     def __init__(self,
-                 output_dim = settings.NUM_LIMBS * settings.NUM_FEATURES,
-                 input_dim: int = settings.NUM_LIMBS * settings.NUM_FEATURES,
+                 feature_config: FeatureConfig,
+                 num_limbs: int = settings.NUM_LIMBS,
                  hidden_dim: int = settings.HIDDEN_DIM,
-                 num_layers: int = 2,
-                 dropout: float = 0.1):
+                 n_hidden_layers: int = settings.N_HIDDEN_LAYERS,
+                 dropout: float = 0.1,
+                 ):
         super().__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.num_layers = num_layers
+        self.is_sequential = True
+        self.num_limbs = num_limbs
+        self.num_features = get_feature_dim(feature_config)
+        self.null_features = get_null_features(feature_config)
+
+        feature_dim = self.num_limbs * self.num_features
         
         self.lstm = nn.LSTM(
-            input_size=input_dim,
+            input_size=feature_dim,
             hidden_size=hidden_dim,
-            num_layers=num_layers,
+            num_layers=n_hidden_layers,
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0.0
+            dropout=dropout if n_hidden_layers > 1 else 0.0
         )
         
         # Output projection layer
-        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.fc = nn.Linear(hidden_dim, feature_dim)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -297,35 +310,19 @@ class ClimbLSTM(nn.Module):
         return (h_0, c_0)
 
 def create_model_instance(
-    config: ModelCreate
+    model_type: ModelType,
+    feature_config: FeatureConfig,
     ) -> nn.Module:
     """Create a fresh (untrained) model according to specifications"""
-    num_features = get_feature_dim(config.features)
-    input_dim = num_features * settings.NUM_LIMBS
-    output_dim = num_features * settings.NUM_LIMBS
-    if config.model_type == ModelType.MLP:
-        return ClimbMLP(
-            input_dim,
-            settings.HIDDEN_DIM,
-            output_dim,
-            settings.N_HIDDEN_LAYERS
-        ), False
-    elif config.model_type == ModelType.RNN:
-        return ClimbRNN(
-            input_dim,
-            settings.HIDDEN_DIM,
-            output_dim,
-            settings.N_HIDDEN_LAYERS
-        ), True
-    elif config.model_type == ModelType.LSTM:
-        return ClimbLSTM(
-            input_dim,
-            settings.HIDDEN_DIM,
-            output_dim,
-            settings.N_HIDDEN_LAYERS
-        ), True
-    raise TypeError(f"Invalid model type: {config.model_type}")
-
+    match model_type:
+        case ModelType.MLP:
+            return ClimbMLP(feature_config), False
+        case ModelType.RNN:
+            return ClimbRNN(feature_config), True
+        case ModelType.LSTM:
+            return ClimbLSTM(feature_config), True
+        case _:
+            raise TypeError(f"Invalid model type: {model_type}")
 
 # --- Training ---
 def collate_sequences(batch: list[tuple[torch.Tensor, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor]:
@@ -420,3 +417,89 @@ def run_epoch(
         return run_epoch_sequential(model,loader,criterion,optimizer,device)
     else:
         return run_epoch_mlp(model,loader,criterion,optimizer,device)
+
+
+# --- Autoregressive Generation ---
+class ClimbGenerator:
+    """Generate climb sequences by predicting holds in feature space."""
+    
+    def __init__(self, model: ClimbMLP, hold_map: dict[int, list[float]], device: str):
+        self.model = model.to(device).eval()
+        self.hold_map = hold_map
+        self.device = device
+
+    def _to_input(self, lh: list[float], rh: list[float]) -> torch.Tensor:
+        """Convert hand features to model input tensor."""
+        return torch.tensor(lh + rh, dtype=torch.float32).unsqueeze(0).to(self.device)
+
+    def _sample_hold(self, features: np.ndarray, temperature: float) -> tuple[int, list[float]]:
+        """Sample a hold with probability inversely proportional to distance."""
+        hold_ids = list(self.hold_map.keys())
+        distances = np.array([
+            np.linalg.norm(features - np.array(self.hold_map[hid])[:len(features)]) 
+            for hid in hold_ids
+        ])
+        
+        # Convert distances to probabilities (lower distance = higher prob)
+        # Using negative distance as logits
+        logits = -distances / temperature
+        probs = np.exp(logits - np.max(logits))  # Softmax with stability
+        probs /= probs.sum()
+        
+        chosen_idx = np.random.choice(len(hold_ids), p=probs)
+        chosen_id = hold_ids[chosen_idx]
+        
+        return chosen_id, list(self.hold_map[chosen_id])
+    
+    def generate(self, 
+             start_lh: int, 
+             start_rh: int, 
+             max_moves: int = 10,
+             temperature: float = 0.01,
+             force_alternating: bool = True) -> list[tuple[int, int]]:
+        """Generate a climb sequence from starting hold indices."""
+        assert temperature > 0
+
+        lh_id, rh_id = start_lh, start_rh
+        lh, rh = self.hold_map[start_lh], self.hold_map[start_rh]
+        sequence = []
+        if self.model.is_sequential:
+            hidden = self.model.init_hidden(batch_size=1, device=self.device)
+        
+        with torch.no_grad():
+            for _ in range(max_moves):
+                sequence.append((lh_id, rh_id))
+
+                inputs = self._to_input(lh, rh)
+                if self.model.is_sequential:
+                    predicted, hidden = self.model.forward_step(inputs, hidden)
+                else:
+                    predicted = self.model.forward(inputs)
+                predicted = predicted.cpu().numpy().flatten()
+                
+                # Sample the hold
+                new_lh_id, new_lh = self._sample_hold(predicted[:self.model.num_features],temperature)
+                new_rh_id, new_rh = self._sample_hold(predicted[self.model.num_features:],temperature)
+                
+                # Termination: both hands predict off-wall
+                if new_lh == self.model.null_features and new_rh == self.model.null_features:
+                    break
+                
+                if force_alternating:
+                    # Calculate movement distance for each hand
+                    lh_moved = np.linalg.norm(np.array(lh[:self.model.num_features]) - np.array(new_lh[:self.model.num_features]))
+                    rh_moved = np.linalg.norm(np.array(rh[:self.model.num_features]) - np.array(new_rh[:self.model.num_features]))
+                    
+                    # Only move the hand that moved MORE; snap the other back
+                    if lh_moved > rh_moved:
+                        lh_id, lh = new_lh_id, new_lh  # Move LH
+                        # RH stays as-is
+                    else:
+                        rh_id, rh = new_rh_id, new_rh  # Move RH
+                        # LH stays as-is
+                
+                # Termination: stuck in same position
+                if (lh_id, rh_id) == sequence[-1]:
+                    break       
+        sequence.append((lh_id, rh_id))
+        return sequence

@@ -183,7 +183,7 @@ class WallService:
             conn.execute(
                 """
                 INSERT INTO walls (id, name, dimensions, angle, num_holds, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (wall_id, wall_data.name, dim_str, angle, len(wall_data.holds), created_at, created_at),
             )

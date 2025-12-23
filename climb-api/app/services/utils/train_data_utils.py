@@ -11,8 +11,9 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 
-from app.database import WALLS_DIR, get_db
+from app.database import get_db
 from app.schemas import FeatureConfig
+from app.config import settings
 
 
 # Feature dimensions for each feature type
@@ -93,7 +94,7 @@ def build_hold_map(
     Returns:
         Dict mapping hold_id to feature vector
     """
-    wall_json_path = WALLS_DIR / wall_id / "wall.json"
+    wall_json_path = settings.WALLS_DIR / wall_id / "wall.json"
     
     with open(wall_json_path, "r") as f:
         wall_data = json.load(f)

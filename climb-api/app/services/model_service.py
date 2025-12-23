@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from app.database import get_db, WALLS_DIR
+from app.database import get_db
 from app.schemas import (
     ModelCreate,
     ModelDetail,
@@ -29,7 +29,7 @@ from app.schemas import (
 from app.schemas.jobs import JobStatus
 from app.services.job_service import JobService
 from app.services.climb_service import ClimbService
-from app.services.utils import collate_sequences, create_model_instance, run_epoch, process_training_data
+from app.services.utils import ClimbGenerator, collate_sequences, create_model_instance, extract_hold_features, run_epoch, process_training_data
 from app.config import settings
 
 
@@ -39,14 +39,6 @@ class ModelService:
     def __init__(self):
         self.job_service = JobService()
         self.climb_service = ClimbService()
-    
-    def _get_models_dir(self, wall_id: str) -> Path:
-        """Get directory for a wall's models."""
-        return WALLS_DIR / wall_id / "models"
-    
-    def _get_model_path(self, wall_id: str, model_id: str) -> Path:
-        """Get path to a model's weights file."""
-        return self._get_models_dir(wall_id) / f"{model_id}.pth"
     
     def get_models_for_wall(self, wall_id: str) -> list[ModelSummary]:
         """Get all models for a wall."""
@@ -106,7 +98,8 @@ class ModelService:
         model_id = f"model-{uuid.uuid4().hex[:12]}"
         
         # Ensure models directory exists
-        self._get_models_dir(wall_id).mkdir(parents=True, exist_ok=True)
+        model_dir = settings.WALLS_DIR / wall_id / model_id
+        model_dir.mkdir(parents=True, exist_ok=True)
         
         with get_db() as conn:
             conn.execute(
@@ -138,7 +131,7 @@ class ModelService:
             return False
         
         # Delete weights file if exists
-        model_path = self._get_model_path(wall_id, model_id)
+        model_path = settings.WALLS_DIR / wall_id / model_id
         if model_path.exists():
             model_path.unlink()
         
@@ -172,15 +165,16 @@ class ModelService:
             # Update model status
             self._update_model_status(model_id, ModelStatus.TRAINING)
             # Return the nn.Module instance of a model, and a Boolean indicating whether it's sequential
-            model, is_sequential = create_model_instance(config)
+            model, is_sequential = create_model_instance(config.model_type, config.features)
             
             # Preprocess the training data and hold-id<->feature map.
             train_ds, val_ds, hold_map, num_climbs, num_moves = process_training_data(wall_id,config)
+            
             # Collate sequential training data
             train_loader = DataLoader(train_ds, batch_size=settings.BATCH_SIZE, shuffle=True, collate_fn=(collate_sequences if is_sequential else None))
             val_loader = DataLoader(val_ds, batch_size=settings.BATCH_SIZE, shuffle=False, collate_fn=(collate_sequences if is_sequential else None))
 
-            save_path = f"{settings.WALLS_DIR}/{wall_id}/{model_id}.pth"
+            save_weights_path = settings.WALLS_DIR / wall_id / model_id / "best.pth"
             optimizer = optim.Adam(model.parameters(),lr=settings.LR)
             criterion = nn.MSELoss()
             best_val_loss = float('inf')
@@ -191,7 +185,7 @@ class ModelService:
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
-                    torch.save(model.state_dict(), save_path)
+                    torch.save(model.state_dict(), save_weights_path)
                 
                 if epoch > 0 and (epoch % max(1,config.epochs//10) == 0):
                     progress = float(epoch/config.epochs)
@@ -232,16 +226,26 @@ class ModelService:
         Returns:
             List of generated climbs
         """
-        # 1. Load model weights
-        model_path = self._get_model_path(wall_id, model_id)
-        model = ClimbMLP()  # or ClimbLSTM based on model_type
-        model.load_state_dict(torch.load(model_path))
+        # 1. Get model parameters from models table and use them to instantiate model
+        with get_db() as conn:
+            query = f"SELECT model_type, features FROM models WHERE model_id LIKE ?"
+            params = [model_id]
+            row = conn.execute(query, params).fetchone()
+            model_type = row["type"]
+            features = json.loads(row["features"])
+        feature_config = FeatureConfig.model_validate(features)
+
+        model, _ = create_model_instance(model_type, feature_config)
         
+        # 2. Rehydrate the model from the features and model path.
+        model_path = settings.WALLS_DIR / wall_id / "f{model_id}.pth"
+        model.load_state_dict(torch.load(model_path))
+
         # 2. Load hold map
-        wall_json_path = WALLS_DIR / wall_id / "wall.json"
+        wall_json_path = settings.WALLS_DIR / wall_id / "wall.json"
         with open(wall_json_path) as f:
             wall_data = json.load(f)
-        hold_map = {h["hold_id"]: extract_hold_features(h) for h in wall_data["holds"]}
+        hold_map = {h["hold_id"]: extract_hold_features(h, feature_config) for h in wall_data["holds"]}
         
         # 3. Create generator
         generator = ClimbGenerator(model, hold_map, device="cpu")
@@ -254,6 +258,7 @@ class ModelService:
                 start_rh=request.starting_holds[1],
                 max_moves=request.max_moves,
                 temperature=request.temperature,
+                force_alternating=request.force_alternating,
             )
             climbs.append(GeneratedClimb(sequence=sequence, num_moves=len(sequence)))
         

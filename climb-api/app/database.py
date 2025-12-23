@@ -3,19 +3,16 @@ Database setup and connection management.
 Uses SQLite for simplicity - stores climbs and job queue.
 """
 import sqlite3
-from pathlib import Path
 from contextlib import contextmanager
 from typing import Generator
+from app.config import settings
 
 # Database paths
-DATA_DIR = Path("data")
-DB_PATH = DATA_DIR / "storage.db"
-WALLS_DIR = DATA_DIR / "walls"
 
 
 def get_db_connection() -> sqlite3.Connection:
     """Get a database connection with row factory."""
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(settings.DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -36,8 +33,8 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
 
 def init_db():
     """Initialize database tables."""
-    DATA_DIR.mkdir(exist_ok=True)
-    WALLS_DIR.mkdir(exist_ok=True)
+    settings.DATA_DIR.mkdir(exist_ok=True)
+    settings.WALLS_DIR.mkdir(exist_ok=True)
     
     with get_db() as conn:
         cursor = conn.cursor()
