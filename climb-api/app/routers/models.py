@@ -30,7 +30,7 @@ router = APIRouter()
     summary="List models",
     description="Get all models for a wall.",
 )
-async def list_models(wall_id: str):
+def list_models(wall_id: str):
     """List all models for a wall."""
     models = model_service.get_models_for_wall(wall_id)
     return ModelListResponse(models=models, total=len(models))
@@ -43,7 +43,7 @@ async def list_models(wall_id: str):
     summary="Create and train a model",
     description="Create a new model and start training in the background.",
 )
-async def create_model(
+def create_model(
     wall_id: str,
     model_config: ModelCreate,
     background_tasks: BackgroundTasks,
@@ -86,7 +86,7 @@ async def create_model(
     summary="Get model details",
     description="Get detailed information about a model.",
 )
-async def get_model(wall_id: str, model_id: str):
+def get_model(wall_id: str, model_id: str):
     """Get model details including training stats."""
 
     model = model_service.get_model(wall_id, model_id)
@@ -101,7 +101,7 @@ async def get_model(wall_id: str, model_id: str):
     summary="Delete a model",
     description="Delete a model and its trained weights.",
 )
-async def delete_model(wall_id: str, model_id: str):
+def delete_model(wall_id: str, model_id: str):
     """Delete a model."""
     success = model_service.delete_model(wall_id, model_id)
     if not success:
@@ -115,7 +115,7 @@ async def delete_model(wall_id: str, model_id: str):
     summary="Generate climbs",
     description="Use a trained model to generate climb sequences.",
 )
-async def generate_climbs(
+def generate_climbs(
     wall_id: str,
     model_id: str,
     request: GenerateRequest,
@@ -130,20 +130,7 @@ async def generate_climbs(
     - temperature: Sampling temperature (higher = more random)
     - force_alternating: Require alternating limb movement
     - features: Which features to consider for hold selection
-    """
-    # 1. Validate model exists and is trained
-    model = model_service.get_model(wall_id, model_id)
-    if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-    if model.status != "trained":
-        raise HTTPException(status_code=400, detail="Model is not trained")
-    # 2. Validate wall exists and hold choices are valid.
-    num_holds = wall_service.get_num_holds(wall_id)
-    if num_holds is None:
-        raise HTTPException(status_code=404, detail="Wall not found")
-    if num_holds < max(request.starting_holds+request.stop_holds):
-        raise HTTPException(status_code=400, detail=f"Invalid holds in climb. Hold-id {max(request.starting_holds+request.stop_holds)} not included in {wall_id}.")
-    
+    """ 
     # 3. Load model and generate
     generated = model_service.generate_climbs(wall_id, model_id, request)
     

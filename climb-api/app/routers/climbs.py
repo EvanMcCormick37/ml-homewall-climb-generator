@@ -28,7 +28,7 @@ router = APIRouter()
     summary="List climbs",
     description="Get climbs for a wall with optional filtering and sorting.",
 )
-async def list_climbs(
+def list_climbs(
     wall_id: str,
     grade_range: list[int] = Query(
         [0,180],
@@ -120,7 +120,7 @@ async def list_climbs(
     summary="Create a climb",
     description="Add a new climb to the wall.",
 )
-async def create_climb(wall_id: str, climb_data: ClimbCreate):
+def create_climb(wall_id: str, climb_data: ClimbCreate):
     """Create a new climb for a wall."""
     climb_id = climb_service.create_climb(wall_id, climb_data)
     return ClimbCreateResponse(id=climb_id)
@@ -132,7 +132,7 @@ async def create_climb(wall_id: str, climb_data: ClimbCreate):
     summary="Delete a climb",
     description="Delete a climb by ID.",
 )
-async def delete_climb(wall_id: str, climb_id: str):
+def delete_climb(wall_id: str, climb_id: str):
     """Delete a climb."""
     success = climb_service.delete_climb(wall_id, climb_id)
     if not success:
