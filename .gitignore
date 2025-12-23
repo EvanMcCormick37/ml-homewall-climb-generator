@@ -8,3 +8,6 @@ data/
 # Caches
 __pycache__
 .ipynb_checkpoints
+
+# Photo Assets
+test_assets/
