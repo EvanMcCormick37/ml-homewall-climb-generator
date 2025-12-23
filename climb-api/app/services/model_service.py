@@ -25,10 +25,7 @@ from app.schemas import (
     GenerateRequest,
     GeneratedClimb,
 )
-from fastapi import HTTPException
 from app.schemas.jobs import JobStatus
-from app.services.job_service import JobService
-from app.services.climb_service import ClimbService
 from app.services.utils import ClimbGenerator, collate_sequences, create_model_instance, extract_hold_features, run_epoch, process_training_data
 from app.config import settings
 

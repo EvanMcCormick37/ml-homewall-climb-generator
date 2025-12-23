@@ -2,10 +2,7 @@
 Service layer initialization with dependency injection.
 """
 from app.services.container import ServiceContainer
-from app.services import job_service
-from app.services import wall_service
-from app.services import climb_service
-from app.services import model_service
+from app.services import job_service, wall_service, climb_service, model_service
 
 
 # Build the container with all dependencies wired up
