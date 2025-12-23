@@ -29,7 +29,7 @@ from app.schemas.jobs import JobStatus
 from app.services.utils import ClimbGenerator, collate_sequences, create_model_instance, extract_hold_features, run_epoch, process_training_data
 from app.config import settings
 
-from typing import Callable, Any, Protocol
+from typing import Callable, Any
 
 # Type aliases for the JobService dependencies
 UpdateJobStatus = Callable[[str, JobStatus, float], None]
