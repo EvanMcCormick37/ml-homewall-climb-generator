@@ -45,9 +45,9 @@ class Settings(BaseSettings):
     MAX_EPOCHS: int = 1000
     LR: float = 0.001
     DEVICE: str = "cpu"
-    
-    # File upload limits
-    MAX_PHOTO_SIZE: int = 10
+
+    # Test settings
+    TEST_ASSETS_DIR: Path = Path("test_assets")
 
 
 @lru_cache

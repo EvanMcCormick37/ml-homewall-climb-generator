@@ -1,9 +1,12 @@
 """
 Pydantic schemas for request/response validation.
 """
+from app.schemas.base import (
+    PositiveInt,
+    HoldPosition,
+    HoldDetail,
+)
 from app.schemas.walls import (
-    Hold,
-    HoldCreate,
     WallCreate,
     WallDetail,
     WallMetadata,
@@ -24,7 +27,6 @@ from app.schemas.models import (
     FeatureConfig,
     ModelCreate,
     ModelSummary,
-    ModelDetail,
     ModelCreateResponse,
     ModelListResponse,
     ModelDeleteResponse,
@@ -39,9 +41,11 @@ from app.schemas.jobs import (
 )
 
 __all__ = [
+    # Base
+    "PositiveInt",
+    "HoldPosition",
+    "HoldDetail",
     # Walls
-    "Hold",
-    "HoldCreate", 
     "WallCreate",
     "WallDetail",
     "WallMetadata",
@@ -60,7 +64,6 @@ __all__ = [
     "FeatureConfig",
     "ModelCreate",
     "ModelSummary",
-    "ModelDetail",
     "ModelCreateResponse",
     "ModelListResponse",
     "ModelDeleteResponse",

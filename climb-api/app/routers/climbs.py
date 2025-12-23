@@ -114,9 +114,10 @@ async def list_climbs(
 async def create_climb(wall_id: str, climb_data: ClimbCreate):
     """Create a new climb for a wall."""
     num_holds = wall_service.get_num_holds(wall_id)
+    holds_used = [h for pos in climb_data.sequence for h in pos]
     if num_holds is None:
         raise HTTPException(status_code=404, detail="Wall not found")
-    if num_holds < max(climb_data.sequence):
+    if num_holds < max(holds_used):
         raise HTTPException(status_code=501, detail="Wall doesn't include some holds listed")
     
     climb_id = climb_service.create_climb(wall_id, climb_data)

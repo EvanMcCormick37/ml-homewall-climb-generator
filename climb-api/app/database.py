@@ -44,9 +44,10 @@ def init_db():
             CREATE TABLE IF NOT EXISTS walls (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
+                photo_path TEXT NOT NULL,
+                num_holds INTEGER DEFAULT 0,
                 dimensions TEXT,
                 angle INTEGER,
-                num_holds INTEGER DEFAULT 0,
                 created_at TIMESTAMP,
                 updated_at TIMESTAMP
             )

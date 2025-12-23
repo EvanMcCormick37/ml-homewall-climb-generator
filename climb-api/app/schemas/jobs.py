@@ -2,7 +2,7 @@
 Pydantic schemas for background job tracking.
 """
 from pydantic import BaseModel, Field
-from typing import Optional, Any
+from typing import Any
 from datetime import datetime
 from enum import Enum
 

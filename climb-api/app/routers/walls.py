@@ -14,7 +14,7 @@ import json
 from fastapi.responses import FileResponse
 
 from app.schemas import (
-    HoldCreate,
+    HoldDetail,
     WallCreate,
     WallDetail,
     WallListResponse,
@@ -63,7 +63,7 @@ async def create_wall(
     # Parse holds JSON
     try:
         holds_data = json.loads(holds)
-        holds_list = [HoldCreate(**hold) for hold in holds_data]
+        holds_list = [HoldDetail(**hold) for hold in holds_data]
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid holds data: {str(e)}")
     
@@ -100,7 +100,7 @@ async def create_wall(
 async def get_wall(wall_id: str):
     """Get detailed wall info including holds."""
     wall = wall_service.get_wall(wall_id)
-    if not wall:
+    if wall is None:
         raise HTTPException(status_code=404, detail="Wall not found")
     return wall
 
@@ -132,9 +132,11 @@ async def delete_wall(wall_id: str):
 async def get_wall_photo(wall_id: str):
     """Get wall photo."""
     photo_path = wall_service.get_photo_path(wall_id)
-    if not photo_path or not photo_path.exists():
+    if photo_path is None:
         raise HTTPException(status_code=404, detail="Photo not found")
-    return FileResponse(photo_path, media_type="image/jpeg")
+    ext = photo_path.suffix
+    media_type = "image/jpeg" if ext == ".jpg" else "image/png"
+    return FileResponse(photo_path, media_type=media_type)
 
 
 @router.put(
@@ -155,8 +157,7 @@ async def upload_wall_photo(
             detail="Invalid file type. Only JPEG and PNG are supported.",
         )
 
-    success = wall_service.save_photo(wall_id, photo)
+    success = wall_service.replace_photo(wall_id, photo)
     if not success:
         raise HTTPException(status_code=404, detail="Wall not found")
     return {"message": "Photo uploaded successfully"}
-    raise HTTPException(status_code=501, detail="Not implemented")

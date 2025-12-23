@@ -2,10 +2,8 @@
 Pydantic schemas for climb-related requests and responses.
 """
 from pydantic import BaseModel, Field
-from typing import Tuple
 from datetime import datetime
 from enum import Enum
-
 
 class ClimbSortBy(str, Enum):
     """Enum for climb sorting options."""
@@ -20,10 +18,10 @@ class ClimbSortBy(str, Enum):
 class ClimbCreate(BaseModel):
     """Schema for creating a climb."""
     name: str | None = Field(None, max_length=100)
-    grade: int | None = Field(None, max_length=10)
+    grade: int | None = Field(None, ge=0, le=180)
     setter: str | None = Field(None, max_length=50)
-    sequence: list[tuple[int]] = Field(
-        ..., 
+    sequence: list[list[int]] = Field(
+        ...,
         description="List of positions, each position is [lh_hold_id, rh_hold_id]"
     )
     tags: list[str] | None = None
@@ -36,7 +34,7 @@ class Climb(BaseModel):
     name: str | None
     grade: int | None
     setter: str | None
-    sequence: list[Tuple[int]]
+    sequence: list[list[int]]
     tags: list[str] | None
     num_moves: int
     created_at: datetime

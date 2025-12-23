@@ -4,7 +4,7 @@ Pydantic schemas for ML model-related requests and responses.
 from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
-from typing import Annotated
+from app.schemas.base import PositiveInt, HoldPosition
 
 class ModelType(str, Enum):
     """Available model architectures."""
@@ -36,23 +36,11 @@ class ModelCreate(BaseModel):
     """Schema for creating and training a model."""
     model_type: ModelType = ModelType.MLP
     features: FeatureConfig = Field(default_factory=FeatureConfig)
-    epochs: int = Field(100, ge=1, le=1000)
+    epochs: int = Field(100, ge=1, le=10000)
     augment_dataset: bool = True
 
 
 class ModelSummary(BaseModel):
-    """Brief model info for listing."""
-    id: str
-    model_type: ModelType
-    status: ModelStatus
-    moves_trained: float
-    climbs_trained: float
-    val_loss: float | None
-    created_at: datetime
-    trained_at: datetime | None
-
-
-class ModelDetail(BaseModel):
     """Detailed model info."""
     id: str
     wall_id: str
@@ -61,6 +49,8 @@ class ModelDetail(BaseModel):
     status: ModelStatus
     val_loss: float | None
     epochs_trained: int
+    climbs_trained: int
+    moves_trained: int
     created_at: datetime
     trained_at: datetime | None
 
@@ -85,16 +75,10 @@ class ModelDeleteResponse(BaseModel):
 
 
 # --- Generation Schemas ---
-PositiveInt = Annotated[int,Field(ge=0)]
 
 class GenerateRequest(BaseModel):
     """Request schema for generating climbs."""
-    starting_holds: list[PositiveInt] = Field(
-        ..., 
-        min_length=2, 
-        max_length=2,
-        description="[left_hand_hold_id, right_hand_hold_id]"
-    )
+    starting_holds: HoldPosition
     stop_holds: list[PositiveInt] = Field(
         default_factory=list,
         description="Optional List of 'stop holds' on which to force stop the climb"
@@ -103,14 +87,14 @@ class GenerateRequest(BaseModel):
     num_climbs: int = Field(5, ge=1, le=20)
     temperature: float = Field(0.01, ge=0.001, le=1.0)
     force_alternating: bool = Field(
-        True, 
+        True,
         description="Force one limb to move at a time"
     )
 
 
 class GeneratedClimb(BaseModel):
     """A single generated climb."""
-    sequence: list[list[int]]
+    sequence: list[HoldPosition]
     num_moves: int
 
 

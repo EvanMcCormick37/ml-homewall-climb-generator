@@ -19,7 +19,6 @@ from torch.utils.data import DataLoader
 from app.database import get_db
 from app.schemas import (
     ModelCreate,
-    ModelDetail,
     ModelSummary,
     ModelStatus,
     FeatureConfig,
@@ -61,7 +60,7 @@ class ModelService:
             for row in rows
         ]
     
-    def get_model(self, wall_id: str, model_id: str) -> ModelDetail | None:
+    def get_model(self, wall_id: str, model_id: str) -> ModelSummary | None:
         """Get detailed model info."""
         with get_db() as conn:
             row = conn.execute(
@@ -72,7 +71,7 @@ class ModelService:
         if not row:
             return None
         
-        return ModelDetail(
+        return ModelSummary(
             id=row["id"],
             wall_id=row["wall_id"],
             model_type=row["model_type"],

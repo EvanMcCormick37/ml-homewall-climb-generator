@@ -3,7 +3,7 @@ Service for managing walls.
 
 Handles:
 - Wall CRUD operations
-- Hold data storage (JSON files)
+- HoldDetail data storage (JSON files)
 - Photo storage
 """
 import json
@@ -15,7 +15,7 @@ from datetime import datetime
 from fastapi import UploadFile
 
 from app.database import get_db
-from app.schemas import WallCreate, WallDetail, WallMetadata, Hold
+from app.schemas import WallCreate, WallDetail, WallMetadata, HoldDetail
 from app.config import settings
 
 
@@ -57,11 +57,12 @@ class WallService:
                 SELECT 
                     w.id,
                     w.name,
-                    w.num_holds,
+                    w.photo_path,
                     w.dimensions,
                     w.angle,
-                    w.photo,
+                    w.num_holds,
                     w.created_at,
+                    w.updated_at,
                     COUNT(DISTINCT c.id) AS num_climbs,
                     COUNT(DISTINCT m.id) AS num_models
                 FROM walls w
@@ -76,14 +77,16 @@ class WallService:
             walls.append(WallMetadata(
                 id=row["id"],
                 name=row["name"],
+                photo_url=row["photo_path"],
                 num_holds=row["num_holds"] or 0,
                 num_climbs=row["num_climbs"],
                 num_models=row["num_models"],
                 dimensions=_parse_dimensions(row["dimensions"]),
                 angle=row["angle"],
-                photo_url=row["photo"],
                 created_at=datetime.fromisoformat(row["created_at"]) 
                     if isinstance(row["created_at"], str) else row["created_at"],
+                updated_at=datetime.fromisoformat(row["updated_at"]) 
+                    if isinstance(row["updated_at"], str) else row["updated_at"],
             ))
         
         return walls
@@ -96,10 +99,10 @@ class WallService:
                 SELECT 
                     w.id,
                     w.name,
+                    w.photo_path,
                     w.num_holds,
                     w.dimensions,
                     w.angle,
-                    w.photo,
                     w.created_at,
                     w.updated_at,
                     COUNT(DISTINCT c.id) AS num_climbs,
@@ -120,22 +123,26 @@ class WallService:
         if json_path.exists():
             with open(json_path, "r") as f:
                 wall_json = json.load(f)
-                holds = [Hold(**hold_data) for hold_data in wall_json.get("holds", [])]
+                holds = [HoldDetail(**hold_data) for hold_data in wall_json.get("holds", [])]
         
-        return WallDetail(
+        metadata = WallMetadata(
             id=row["id"],
             name=row["name"],
+            photo_url=row["photo_path"],
             num_holds=row["num_holds"] or 0,
             num_climbs=row["num_climbs"],
             num_models=row["num_models"],
             dimensions=_parse_dimensions(row["dimensions"]),
             angle=row["angle"],
-            holds=holds,
-            photo_url=row["photo"],
             created_at=datetime.fromisoformat(row["created_at"]) 
                 if isinstance(row["created_at"], str) else row["created_at"],
             updated_at=datetime.fromisoformat(row["updated_at"]) 
                 if isinstance(row["updated_at"], str) else row["updated_at"],
+        )
+
+        return WallDetail(
+            metadata=metadata,
+            holds=holds
         )
     
     async def create_wall(
@@ -153,14 +160,20 @@ class WallService:
         Returns:
             The new wall ID
         """
+        # Create wall-id and wall-id subdirectory
         wall_id = f"wall-{uuid.uuid4().hex[:12]}"
         wall_dir = settings.WALLS_DIR / wall_id
         wall_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save photo in wall_dir and remember photo path for later
+        ext = Path(photo.filename).suffix
+        photo_path = wall_dir / f"photo{ext}"
+
+        contents = await photo.read()
+        with open(photo_path, "wb") as f:
+            f.write(contents)
         
-        # Save photo
-        self.save_photo(wall_id, photo)
-        
-        # Save holds to JSON
+        # Save holds to JSON in wall_dir
         holds_data = [hold.model_dump() for hold in wall_data.holds]
         created_at = datetime.now()
         wall_json = {
@@ -182,10 +195,10 @@ class WallService:
         with get_db() as conn:
             conn.execute(
                 """
-                INSERT INTO walls (id, name, dimensions, angle, num_holds, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO walls (id, name, photo_path, dimensions, angle, num_holds, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (wall_id, wall_data.name, dim_str, angle, len(wall_data.holds), created_at, created_at),
+                (wall_id, wall_data.name, photo_path.name, dim_str, angle, len(wall_data.holds), created_at, created_at),
             )
         
         return wall_id
@@ -209,36 +222,43 @@ class WallService:
         wall_dir = settings.WALLS_DIR / wall_id
         if wall_dir.exists():
             shutil.rmtree(wall_dir)
-        
-        return True
+            return True
+        return False
     
-    async def save_photo(self, wall_id: str, photo: UploadFile) -> bool:
+    def get_photo_path(self, wall_id: str) -> Path | None:
+        """Get photo path for wall_id from the walls table"""
+        if not self.wall_exists(wall_id):
+            return None
+        with get_db() as conn:
+            row = conn.execute("SELECT photo_path FROM walls WHERE id = ?",(wall_id,)).fetchone()
+        return Path(row['photo_path'])
+
+    async def replace_photo(self, wall_id: str, photo: UploadFile) -> bool:
         """
-        Save or replace wall photo by removing old versions and saving the new one.
+        Replace wall photo by removing old versions and saving the new one.
         """
         if not self.wall_exists(wall_id):
             return False
 
-        wall_dir = settings.WALLS_DIR / wall_id
-        
-        # 1. Delete any existing "photo.*" files to avoid extension mismatches
-        for existing_file in wall_dir.glob("photo.*"):
-            try:
-                existing_file.unlink()
-            except OSError:
-                # Handle cases where file might be locked or already gone
-                pass
+        # Get the existing photo path and delete the current photo
+        photo_path = self.get_photo_path(wall_id)
+        shutil.rmtree(photo_path)
 
-        # 2. Get the extension from the incoming file
-        ext = Path(photo.filename).suffix
-        
-        # 3. Create the new destination path
-        new_photo_path = wall_dir / f"photo{ext}"
-
-        # 4. Save the new file
-        contents = await photo.read()
-        with open(new_photo_path, "wb") as f:
-            f.write(contents)
+        # Upload the image to the new photo path and save the new photo path to the database
+        self.save_photo(wall_id, photo)
 
         return True
     
+    async def save_photo(self, wall_id: str, photo: UploadFile):
+        # Get the extension from the incoming file and create the new photo path
+        ext = Path(photo.filename).suffix
+        photo_path = settings.WALLS_DIR / wall_id / f"photo{ext}"
+
+        # Save the new file
+        contents = await photo.read()
+        with open(photo_path, "wb") as f:
+            f.write(contents)
+        
+        # Add the new photo path to the database
+        with get_db() as conn:
+            conn.execute("UPDATE walls SET photo_path = ? WHERE id = ?",(photo_path,wall_id))

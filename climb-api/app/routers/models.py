@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, status
 
 from app.schemas import (
     ModelCreate,
-    ModelDetail,
+    ModelSummary,
     ModelListResponse,
     ModelCreateResponse,
     ModelDeleteResponse,
@@ -82,7 +82,7 @@ async def create_model(
 
 @router.get(
     "/{model_id}",
-    response_model=ModelDetail,
+    response_model=ModelSummary,
     summary="Get model details",
     description="Get detailed information about a model.",
 )

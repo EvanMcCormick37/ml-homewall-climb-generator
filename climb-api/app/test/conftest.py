@@ -34,6 +34,7 @@ def setup_test_db():
     # Cleanup after all tests - remove entire data directory
     if data_dir.exists():
         shutil.rmtree(data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
 
 
 @pytest.fixture
