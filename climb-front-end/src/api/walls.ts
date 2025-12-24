@@ -3,7 +3,7 @@ import type {
   WallListResponse,
   WallDetail,
   WallCreateResponse,
-  WallCreateData,
+  WallCreateFormData,
 } from "@/types";
 
 /**
@@ -26,7 +26,7 @@ export async function getWall(wallId: string): Promise<WallDetail> {
  * Create a new wall (metadata + photo, no holds)
  */
 export async function createWall(
-  data: WallCreateData
+  data: WallCreateFormData
 ): Promise<WallCreateResponse> {
   const formData = new FormData();
   formData.append("name", data.name);
