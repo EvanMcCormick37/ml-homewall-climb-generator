@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Lengthy hold JSON from original data upload
+*wall*.json
+*hold*.json
+*climb*.json
