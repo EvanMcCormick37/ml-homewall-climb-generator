@@ -6,6 +6,7 @@
 *.pth
 *.db
 data/
+assets/
 
 
 # Caches
