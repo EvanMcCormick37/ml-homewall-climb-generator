@@ -1,4 +1,7 @@
 # File storage
+*holds*.json
+*wall*.json
+*climb*.json
 *-data.json
 *.pth
 *.db
