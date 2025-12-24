@@ -1,4 +1,4 @@
-# Welcome to Beta-Zero
+# Welcome to BetaZero
 
 ### Using machine-learning to set climbs on spray walls and system boards.
 
