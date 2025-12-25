@@ -1,5 +1,4 @@
-# Claude Sonnet 4.5 overview
-
+## Claude Opus 4.5 Overview
 # Climb Generator API
 
 A REST API for managing climbing walls, climbs, and ML-based climb generation using PyTorch models (MLP, RNN, LSTM).
@@ -14,57 +13,37 @@ climb-api/
 │   ├── config.py            # Application settings and configuration
 │   ├── database.py          # SQLite setup and connection management
 │   ├── routers/             # API endpoint definitions
-│   │   ├── walls.py         # Wall CRUD endpoints (needs router connection)
-│   │   ├── climbs.py        # Climb CRUD endpoints (✓ functional)
-│   │   ├── models.py        # Model training/generation endpoints (needs router connection)
-│   │   └── jobs.py          # Background job tracking (needs router connection)
+│   │   ├── walls.py         # Wall CRUD endpoints
+│   │   ├── climbs.py        # Climb CRUD endpoints
+│   │   ├── models.py        # Model training/generation endpoints
+│   │   └── jobs.py          # Background job tracking
 │   ├── schemas/             # Pydantic request/response models
+│   │   ├── base.py          # Shared types (HoldPosition, HoldDetail)
 │   │   ├── walls.py         # Wall and hold schemas
 │   │   ├── climbs.py        # Climb schemas with filtering/sorting
 │   │   ├── models.py        # Model configs, generation requests
 │   │   └── jobs.py          # Job status tracking
-│   └── services/            # Business logic (✓ fully implemented)
-│       ├── wall_service.py      # Wall CRUD, photo handling
-│       ├── climb_service.py     # Climb CRUD with advanced filtering
-│       ├── model_service.py     # Model training & generation (✓ training complete)
-│       ├── job_service.py       # Background job queue
-│       └── utils/               # ML utilities
-│           ├── model_utils.py       # PyTorch models (MLP, RNN, LSTM)
-│           └── train_data_utils.py  # Data preprocessing, augmentation
+│   ├── services/            # Business logic layer
+│   │   ├── container.py         # Dependency injection container
+│   │   ├── wall_service.py      # Wall CRUD, photo handling
+│   │   ├── climb_service.py     # Climb CRUD with advanced filtering
+│   │   ├── model_service.py     # Model training & generation
+│   │   ├── job_service.py       # Background job queue
+│   │   └── utils/               # ML utilities
+│   │       ├── model_utils.py       # PyTorch models (MLP, RNN, LSTM)
+│   │       └── train_data_utils.py  # Data preprocessing, augmentation
+│   └── test/
+│       └── test_api.py      # API endpoint tests
 ├── data/                    # Created at runtime
-│   ├── storage.db          # SQLite database
-│   └── walls/              # Wall data directories
+│   ├── storage.db           # SQLite database
+│   └── walls/               # Wall data directories
 │       └── {wall-id}/
-│           ├── wall.json   # Hold definitions with features
-│           ├── photo.jpg   # Wall photo
-│           └── models/     # Trained model weights (.pth files)
+│           ├── holds.json   # Hold definitions with features
+│           ├── photo.jpg    # Wall photo
+│           └── models/      # Trained model weights (.pth files)
 ├── requirements.txt
 └── README.md
 ```
-
-## Features
-
-### ✅ Fully Implemented
-- **Database Schema**: SQLite with tables for walls, climbs, models, and jobs
-- **Climb Management**: Full CRUD with advanced filtering (by grade, setter, holds, tags, date)
-- **Service Layer**: Complete business logic for all entities
-- **ML Training Pipeline**: 
-  - Three model architectures (MLP, RNN, LSTM)
-  - Feature extraction (position, pull direction, difficulty)
-  - Data augmentation (mirroring, translation, 6x expansion)
-  - Sequential and non-sequential training loops
-  - Validation tracking and model checkpointing
-- **Background Job System**: SQLite-based job queue with status tracking
-
-### 🚧 Partially Implemented
-- **Climb Endpoints**: Functional but DELETE has a minor bug (returns 501 after successful deletion)
-- **Model Generation**: Service returns placeholder data; needs full autoregressive generation
-
-### ⏳ Needs Router Connection
-The following services are fully implemented but need to be connected in their routers:
-- **Wall Endpoints**: All return 501, need to call wall_service methods
-- **Model Endpoints**: All return 501, need to call model_service methods
-- **Job Endpoints**: Returns 501, need to call job_service methods
 
 ## Setup
 
@@ -85,76 +64,93 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 Once running, visit:
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+- Health Check: http://localhost:8000/health
 
 ## API Endpoints
 
 ### Walls
 
-| Method | Endpoint | Description | Status |
-|--------|----------|-------------|--------|
-| GET | `/walls` | List all walls | ⏳ Service ready |
-| POST | `/walls` | Create a new wall | ⏳ Service ready |
-| GET | `/walls/{wall_id}` | Get wall details with holds | ⏳ Service ready |
-| DELETE | `/walls/{wall_id}` | Delete wall and all data | ⏳ Service ready |
-| GET | `/walls/{wall_id}/photo` | Get wall photo | ⏳ Service ready |
-| PUT | `/walls/{wall_id}/photo` | Upload wall photo | ⏳ Service ready |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/walls` | List all walls |
+| POST | `/api/v1/walls` | Create a new wall |
+| GET | `/api/v1/walls/{wall_id}` | Get wall details with holds |
+| DELETE | `/api/v1/walls/{wall_id}` | Delete wall and all data |
+| PUT | `/api/v1/walls/{wall_id}/holds` | Add or replace wall holdset |
+| GET | `/api/v1/walls/{wall_id}/photo` | Get wall photo |
+| PUT | `/api/v1/walls/{wall_id}/photo` | Upload/replace wall photo |
+
+**Create Wall (multipart/form-data):**
+- `name` (required): Wall name (1-100 characters)
+- `photo` (required): Wall photo (JPEG or PNG)
+- `dimensions` (optional): Comma-separated "width,height" in cm
+- `angle` (optional): Wall angle in degrees from vertical
 
 ### Climbs
 
-| Method | Endpoint | Description | Status |
-|--------|----------|-------------|--------|
-| GET | `/walls/{wall_id}/climbs` | List climbs (with filters) | ✅ Working |
-| POST | `/walls/{wall_id}/climbs` | Create a climb | ✅ Working |
-| DELETE | `/walls/{wall_id}/climbs/{climb_id}` | Delete a climb | 🐛 Minor bug |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/walls/{wall_id}/climbs` | List climbs with filters |
+| POST | `/api/v1/walls/{wall_id}/climbs` | Create a climb |
+| DELETE | `/api/v1/walls/{wall_id}/climbs/{climb_id}` | Delete a climb |
 
 **Climb Query Parameters:**
-- `grade_range` - Filter by V-grade range (e.g., "0,180" for all grades)
-- `include_projects` - Include ungraded climbs (default: true)
-- `setter` - Filter by setter ID
-- `name_includes` - Filter by name (partial match)
-- `holds_include` - Comma-separated hold IDs that must ALL be in the climb
-- `tags_include` - Comma-separated tags that must ALL be in the climb
-- `after` - Climbs created after this datetime
-- `sort_by` - Sort by: date, name, grade, ticks, num_moves
-- `descending` - Sort descending (default: true)
-- `limit` / `offset` - Pagination (default limit: 50)
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `grade_range` | int[] | [0, 180] | Min/max V-grade range |
+| `include_projects` | bool | true | Include ungraded climbs |
+| `setter` | string | - | Filter by setter ID |
+| `name_includes` | string | - | Filter by name (partial match) |
+| `holds_include` | int[] | - | Hold IDs that must ALL be in climb |
+| `tags_include` | string[] | - | Tags that must ALL be present |
+| `after` | datetime | - | Climbs created after this date |
+| `sort_by` | enum | date | Sort by: date, name, grade, ticks, num_moves |
+| `descending` | bool | true | Sort descending |
+| `limit` | int | 50 | Max results (1-200) |
+| `offset` | int | 0 | Pagination offset |
 
 ### Models
 
-| Method | Endpoint | Description | Status |
-|--------|----------|-------------|--------|
-| GET | `/walls/{wall_id}/models` | List models | ⏳ Service ready |
-| POST | `/walls/{wall_id}/models` | Create and train model | ⏳ Service ready |
-| GET | `/walls/{wall_id}/models/{model_id}` | Get model details | ⏳ Service ready |
-| DELETE | `/walls/{wall_id}/models/{model_id}` | Delete model | ⏳ Service ready |
-| POST | `/walls/{wall_id}/models/{model_id}/generate` | Generate climbs | 🚧 Returns placeholders |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/walls/{wall_id}/models` | List models |
+| POST | `/api/v1/walls/{wall_id}/models` | Create and train model |
+| GET | `/api/v1/walls/{wall_id}/models/{model_id}` | Get model details |
+| DELETE | `/api/v1/walls/{wall_id}/models/{model_id}` | Delete model |
+| POST | `/api/v1/walls/{wall_id}/models/{model_id}/generate` | Generate climbs |
 
 ### Jobs
 
-| Method | Endpoint | Description | Status |
-|--------|----------|-------------|--------|
-| GET | `/jobs/{job_id}` | Get background job status | ⏳ Service ready |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/jobs/{job_id}` | Get background job status |
+
+**Job Status Values:** `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`
 
 ## Data Model
 
 ### Hold Features
-Each hold has the following features:
-- `hold_id`: Unique identifier (int)
-- `norm_x`, `norm_y`: Normalized position (0-1)
-- `pull_x`, `pull_y`: Pull direction vector (-1 to 1)
-- `useability`: Difficulty rating (0-10)
+Each hold has the following properties:
+| Property | Type | Description |
+|----------|------|-------------|
+| `hold_id` | int | Unique identifier |
+| `norm_x`, `norm_y` | float | Normalized position (0-1) |
+| `pull_x`, `pull_y` | float | Pull direction vector (-1 to 1) |
+| `useability` | float | Difficulty rating (0-10) |
 
 ### Climb Sequence
-Climbs are stored as sequences of positions:
+Climbs are stored as sequences of hand positions:
 ```json
 [[lh_hold_id, rh_hold_id], [lh_hold_id, rh_hold_id], ...]
 ```
 Where `-1` indicates a limb is off the wall.
 
 ### Model Architecture Options
-- **MLP**: Simple feedforward network for next-move prediction
-- **RNN**: Vanilla RNN with hidden state for sequence modeling
-- **LSTM**: LSTM with cell state for better long-term dependencies
+| Type | Description |
+|------|-------------|
+| `mlp` | Simple feedforward network for next-move prediction |
+| `rnn` | Vanilla RNN with hidden state for sequence modeling |
+| `lstm` | LSTM with cell state for better long-term dependencies |
 
 ### Feature Configuration
 Models can be trained with different feature subsets:
@@ -167,8 +163,6 @@ Models can be trained with different feature subsets:
 ```
 
 ## Training Pipeline
-
-The training system is fully implemented:
 
 1. **Data Loading**: Climbs fetched from database for specified wall
 2. **Feature Extraction**: Holds mapped to feature vectors based on config
@@ -211,10 +205,27 @@ AUGMENT_DATA = True     # Enable data augmentation
 
 ## Example Usage
 
-### Working: Add a Climb
+### Create a Wall
 
 ```bash
-curl -X POST http://localhost:8000/walls/{wall_id}/climbs \
+curl -X POST http://localhost:8000/api/v1/walls \
+  -F "name=Home Wall" \
+  -F "photo=@wall_photo.jpg" \
+  -F "dimensions=244,300" \
+  -F "angle=15"
+```
+
+### Add Holds to a Wall
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/walls/{wall_id}/holds \
+  -F 'holds=[{"hold_id":0,"norm_x":0.2,"norm_y":0.1,"pull_x":0,"pull_y":1,"useability":8}]'
+```
+
+### Create a Climb
+
+```bash
+curl -X POST http://localhost:8000/api/v1/walls/{wall_id}/climbs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My First V3",
@@ -225,11 +236,11 @@ curl -X POST http://localhost:8000/walls/{wall_id}/climbs \
   }'
 ```
 
-### Working: List Climbs with Filters
+### List Climbs with Filters
 
 ```bash
 # Get all V4-V6 climbs by a specific setter, sorted by date
-curl "http://localhost:8000/walls/{wall_id}/climbs?\
+curl "http://localhost:8000/api/v1/walls/{wall_id}/climbs?\
 grade_range=40,60&\
 setter=user123&\
 sort_by=date&\
@@ -237,13 +248,11 @@ descending=true&\
 limit=20"
 ```
 
-### Needs Connection: Train a Model
-
-Once routers are connected, this will work:
+### Train a Model
 
 ```bash
-# Start training
-curl -X POST http://localhost:8000/walls/{wall_id}/models \
+# Start training (returns job_id for polling)
+curl -X POST http://localhost:8000/api/v1/walls/{wall_id}/models \
   -H "Content-Type: application/json" \
   -d '{
     "model_type": "lstm",
@@ -256,37 +265,44 @@ curl -X POST http://localhost:8000/walls/{wall_id}/models \
     "augment_dataset": true
   }'
 # Returns: {"model_id": "...", "job_id": "..."}
+```
 
-# Poll for training progress
-curl http://localhost:8000/jobs/{job_id}
+### Poll Training Progress
+
+```bash
+curl http://localhost:8000/api/v1/jobs/{job_id}
 # Returns: {"status": "PROCESSING", "progress": 0.45, ...}
 ```
 
-## Development Status & Next Steps
+### Generate Climbs
 
-### Immediate Priorities
-1. **Fix Climb Delete Bug**: Remove the `raise HTTPException(status_code=501)` after successful deletion in `routers/climbs.py`
-2. **Connect Wall Router**: Uncomment service calls in `routers/walls.py`
-3. **Connect Model Router**: Uncomment service calls in `routers/models.py`
-4. **Connect Jobs Router**: Uncomment service call in `routers/jobs.py`
+```bash
+curl -X POST http://localhost:8000/api/v1/walls/{wall_id}/models/{model_id}/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "starting_holds": [0, 1],
+    "max_moves": 10,
+    "num_climbs": 5,
+    "temperature": 0.01,
+    "force_alternating": true
+  }'
+```
 
-### Feature Enhancements
-- [ ] Implement full autoregressive climb generation in `ModelService.generate_climbs()`
-- [ ] Add model evaluation metrics beyond val_loss
-- [ ] Implement climb difficulty prediction
-- [ ] Add support for foothold tracking (currently only tracks hands)
-- [ ] Add authentication and user management
-- [ ] Add rate limiting for API endpoints
-- [ ] Add model versioning and A/B testing support
+## Architecture
 
-### Known Issues
-- Climb DELETE endpoint returns 501 after successful deletion
-- Wall router endpoints all return 501 (service is ready)
-- Model router endpoints all return 501 (service is ready)  
-- Job router endpoint returns 501 (service is ready)
-- Generation returns placeholder sequences instead of model predictions
+### Service Layer Design
+The application uses a dependency injection pattern via `ServiceContainer`:
 
-## Architecture Notes
+```python
+services = ServiceContainer(
+    create_job=job_service.create_job,
+    get_climbs=climb_service.get_climbs,
+    train_model_task=model_service.make_train_model_task(...),
+    # ... all service functions wired up
+)
+```
+
+This allows easy testing and swapping of implementations.
 
 ### Why SQLite?
 - Simple setup for prototype/development
@@ -298,14 +314,43 @@ curl http://localhost:8000/jobs/{job_id}
 - Hold data is read-heavy, rarely updated
 - Easier to visualize and manually edit if needed
 - Keeps database queries fast (only metadata in DB)
-- Wall JSON includes full schema for external tools
 
-### Job Queue Design
-- Simple SQLite-based queue for background tasks
+### Background Job Queue
+- SQLite-based queue for background tasks
 - Runs in same process (no external workers needed)
 - Progress tracking via periodic status updates
 - For production, consider Celery + Redis
 
+## Testing
+
+```bash
+# Run all tests
+pytest app/test/test_api.py -v
+
+# Run specific test class
+pytest app/test/test_api.py::TestClimbEndpoints -v
+```
+
+## Development Status
+
+### Implemented Features
+- ✅ Wall CRUD with photo management
+- ✅ Hold management (set/replace holdsets)
+- ✅ Climb CRUD with advanced filtering and sorting
+- ✅ Model training with MLP, RNN, LSTM architectures
+- ✅ Background job system with progress tracking
+- ✅ Data augmentation (mirroring, translation)
+- ✅ Model checkpointing and validation tracking
+
+### Planned Enhancements
+- [ ] Implement full autoregressive climb generation
+- [ ] Add model evaluation metrics beyond val_loss
+- [ ] Implement climb difficulty prediction
+- [ ] Add support for foothold tracking (currently only tracks hands)
+- [ ] Add authentication and user management
+- [ ] Add rate limiting for API endpoints
+- [ ] Add model versioning and A/B testing support
+
 ## License
 
-[Add your license here]
+MIT License
