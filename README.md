@@ -13,7 +13,7 @@ This is an open-source application which leverages ML models to set custom climb
 
 ## Making Climbs for the Sideways Wall
 
-The original project was completed within `feature-generation` and `model-training`, for handling the creation of the training data, and the training of the LSTM models, respectively.
+The original project was completed within `feature-generation` and `model-training`. `feature-generation` involved creating the training data (holds and climbs) using a custom React-Vite UI. `model-training` consisted of processing the holds and climbs data into useable training data, and training the ML models.
 
 ### Feature-Generation (React Vite -> JSON output)
 
