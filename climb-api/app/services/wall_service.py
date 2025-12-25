@@ -208,12 +208,25 @@ def delete_wall( wall_id: str) -> bool:
     return False
 
 def set_holds( wall_id: str, holds: list[HoldDetail]) -> bool:
+    if not wall_exists(wall_id):
+        return False
+    
     holds_json_path = settings.WALLS_DIR / wall_id / "holds.json"
     holds_json = {
-        holds: [hold.model_dump() for hold in holds],
+        "holds": [hold.model_dump() for hold in holds],
     }
     with open(holds_json_path, "w") as f:
         json.dump(holds_json, f, indent=2)
+    
+    # Update the wall info in the database
+    with get_db() as conn:
+        conn.execute(
+            """
+            UPDATE walls
+            SET num_holds = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (len(holds),datetime.now(),wall_id))
     
     return True
     

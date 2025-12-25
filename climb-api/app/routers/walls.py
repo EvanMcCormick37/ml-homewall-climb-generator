@@ -113,7 +113,7 @@ def delete_wall(wall_id: str):
 
 @router.put(
         "/{wall_id}/holds",
-        status_code=202,
+        status_code=201,
         summary="Add or replace a wall's holdset",
         description="Add or replace the holdset of a wall with a new list of holds. Hold data includes pixel_x, pixel_y, norm_x, norm_y, pull_x, pull_y, useability"
 )
@@ -121,19 +121,16 @@ def set_holds(
     wall_id: str,
     holds: str = Form(..., description="JSON array of hold objects"),
     ) -> SetHoldsResponse :
-    wall = services.get_wall(wall_id)
-    if wall is None:
-        raise HTTPException(status_code=404, detail="Wall not found")
     # Parse holds JSON
     holds_data = json.loads(holds)
     holds_list = [HoldDetail(**hold) for hold in holds_data]
     try:
         success = services.set_holds(wall_id, holds_list)
         if not success:
-            raise HTTPException(status_code=400, detail=f"Setting holds unsuccessful.")
+            raise HTTPException(status_code=404, detail="Wall not found")
         return SetHoldsResponse(id=wall_id)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Setting holds ran into exception: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Attempting to set holds on {wall_id} resulted in Exception: {str(e)}")
 
 
 @router.get(
