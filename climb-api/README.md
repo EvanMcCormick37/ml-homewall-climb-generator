@@ -24,12 +24,12 @@ climb-api/
 │   │   ├── models.py        # Model configs, generation requests
 │   │   └── jobs.py          # Job status tracking
 │   ├── services/            # Business logic layer
-│   │   ├── container.py         # Dependency injection container
+│   │   ├── container.py         # Service function container
 │   │   ├── wall_service.py      # Wall CRUD, photo handling
 │   │   ├── climb_service.py     # Climb CRUD with advanced filtering
 │   │   ├── model_service.py     # Model training & generation
 │   │   ├── job_service.py       # Background job queue
-│   │   └── utils/               # ML utilities
+│   │   └── utils/               # Model training utilities
 │   │       ├── model_utils.py       # PyTorch models (MLP, RNN, LSTM)
 │   │       └── train_data_utils.py  # Data preprocessing, augmentation
 │   └── test/
