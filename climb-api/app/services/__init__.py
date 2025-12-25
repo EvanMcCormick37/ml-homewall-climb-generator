@@ -21,6 +21,7 @@ services = ServiceContainer(
     get_wall=wall_service.get_wall,
     create_wall=wall_service.create_wall,
     delete_wall=wall_service.delete_wall,
+    set_holds=wall_service.set_holds,
     get_photo_path=wall_service.get_photo_path,
     replace_photo=wall_service.replace_photo,
     

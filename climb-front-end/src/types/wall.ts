@@ -43,18 +43,14 @@ export interface WallCreateResponse {
   name: string;
 }
 
-// From schemas/walls.py - the actual API request body
 export interface WallCreate {
-  name: string;
-  holds: HoldDetail[];
-  dimensions?: [number, number] | null;
-  angle?: number | null;
-}
-
-// Frontend-only type for the create wall form (photo is a File, not sent as JSON)
-export interface WallCreateFormData {
   name: string;
   photo: File;
   dimensions?: [number, number];
   angle?: number;
+}
+
+export interface WallSetHolds {
+  id: string;
+  holds: HoldDetail[];
 }

@@ -25,6 +25,7 @@ class ServiceContainer:
     get_wall: Callable
     create_wall: Callable
     delete_wall: Callable
+    set_holds: Callable
     get_photo_path: Callable
     replace_photo: Callable
     

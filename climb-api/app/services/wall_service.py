@@ -158,6 +158,7 @@ def create_wall(
     wall_id = f"wall-{uuid.uuid4().hex[:12]}"
     wall_dir = settings.WALLS_DIR / wall_id
     wall_dir.mkdir(parents=True, exist_ok=True)
+
     # Save photo in wall_dir and remember photo path for later
     ext = Path(photo.filename).suffix
     photo_path = wall_dir / f"photo{ext}"
@@ -165,32 +166,21 @@ def create_wall(
     with open(photo_path, "wb") as f:
         f.write(contents)
     
-    # Save holds to JSON in wall_dir
-    holds_data = [hold.model_dump() for hold in wall_data.holds]
-    created_at = datetime.now()
-    wall_json = {
-        "id": wall_id,
-        "name": wall_data.name,
-        "holds": holds_data,
-    }
-    
-    with open(wall_dir / "wall.json", "w") as f:
-        json.dump(wall_json, f, indent=2)
-    
-    # Serialize dimensions
+    # Create variables for storage in DB
     dims = wall_data.dimensions
     dim_str = f"{dims[0]}, {dims[1]}" if dims else None
-    # Add wall angle if present
+
     angle = wall_data.angle if wall_data.angle else None
+    created_at = datetime.now()
     
     # Insert into database
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO walls (id, name, photo_path, dimensions, angle, num_holds, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO walls (id, name, photo_path, dimensions, angle, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (wall_id, wall_data.name, photo_path.name, dim_str, angle, len(wall_data.holds), created_at, created_at),
+            (wall_id, wall_data.name, photo_path.name, dim_str, angle, created_at, created_at),
         )
     
     return wall_id
@@ -217,6 +207,16 @@ def delete_wall( wall_id: str) -> bool:
         return True
     return False
 
+def set_holds( wall_id: str, holds: list[HoldDetail]) -> bool:
+    holds_json_path = settings.WALLS_DIR / wall_id / "holds.json"
+    holds_json = {
+        holds: [hold.model_dump() for hold in holds],
+    }
+    with open(holds_json_path, "w") as f:
+        json.dump(holds_json, f, indent=2)
+    
+    return True
+    
 def get_photo_path( wall_id: str) -> Path | None:
     """Get photo path for wall_id from the walls table"""
     if not wall_exists(wall_id):
@@ -224,6 +224,7 @@ def get_photo_path( wall_id: str) -> Path | None:
     with get_db() as conn:
         row = conn.execute("SELECT photo_path FROM walls WHERE id = ?",(wall_id,)).fetchone()
     return settings.WALLS_DIR / wall_id / row['photo_path']
+
 def replace_photo( wall_id: str, photo: UploadFile) -> bool:
     """
     Replace wall photo by removing old versions and saving the new one.

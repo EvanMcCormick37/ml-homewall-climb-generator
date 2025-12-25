@@ -25,7 +25,6 @@ class WallMetadata(BaseModel):
 class WallCreate(BaseModel):
     """Schema for creating a wall."""
     name: str = Field(..., min_length=1, max_length=100)
-    holds: list[HoldDetail]
     dimensions: tuple[int, int] | None = None
     angle: int | None = None
 
@@ -46,3 +45,12 @@ class WallCreateResponse(BaseModel):
     """Response after creating a wall."""
     id: str
     name: str
+
+class SetHolds(BaseModel):
+    """Schema for setting holds on an existing wall."""
+    id: str
+    holds: list[HoldDetail]
+
+class SetHoldsResponse(BaseModel):
+    """Response after setting holds on a wall."""
+    id: str

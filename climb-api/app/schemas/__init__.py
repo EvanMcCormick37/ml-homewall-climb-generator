@@ -12,6 +12,8 @@ from app.schemas.walls import (
     WallMetadata,
     WallListResponse,
     WallCreateResponse,
+    SetHolds,
+    SetHoldsResponse,
 )
 from app.schemas.climbs import (
     Climb,

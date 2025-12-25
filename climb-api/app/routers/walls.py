@@ -19,6 +19,8 @@ from app.schemas import (
     WallDetail,
     WallListResponse,
     WallCreateResponse,
+    SetHolds,
+    SetHoldsResponse,
 )
 from app.services import services
 
@@ -46,7 +48,6 @@ def list_walls():
 )
 def create_wall(
     name: str = Form(..., min_length=1, max_length=100),
-    holds: str = Form(..., description="JSON array of hold objects"),
     photo: UploadFile = File(..., description="Wall photo (JPEG or PNG)"),
     dimensions: str = Form(None, description="Comma-separated 'width,height' in cm"),
     angle: int = Form(None, description="Wall angle in degrees from vertical"),
@@ -60,13 +61,6 @@ def create_wall(
             detail="Invalid file type. Only JPEG and PNG are supported.",
         )
     
-    # Parse holds JSON
-    try:
-        holds_data = json.loads(holds)
-        holds_list = [HoldDetail(**hold) for hold in holds_data]
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid holds data: {str(e)}")
-    
     # Parse dimensions
     dims = None
     if dimensions:
@@ -79,7 +73,6 @@ def create_wall(
     # Create wall data object
     wall_data = WallCreate(
         name=name,
-        holds=holds_list,
         dimensions=dims,
         angle=angle,
     )
@@ -117,6 +110,30 @@ def delete_wall(wall_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Wall not found")
     return None
+
+@router.put(
+        "/{wall_id}/holds",
+        status_code=202,
+        summary="Add or replace a wall's holdset",
+        description="Add or replace the holdset of a wall with a new list of holds. Hold data includes pixel_x, pixel_y, norm_x, norm_y, pull_x, pull_y, useability"
+)
+def set_holds(
+    wall_id: str,
+    holds: str = Form(..., description="JSON array of hold objects"),
+    ) -> SetHoldsResponse :
+    wall = services.get_wall(wall_id)
+    if wall is None:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    # Parse holds JSON
+    holds_data = json.loads(holds)
+    holds_list = [HoldDetail(**hold) for hold in holds_data]
+    try:
+        success = services.set_holds(wall_id, holds_list)
+        if not success:
+            raise HTTPException(status_code=400, detail=f"Setting holds unsuccessful.")
+        return SetHoldsResponse(id=wall_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Setting holds ran into exception: {str(e)}")
 
 
 @router.get(

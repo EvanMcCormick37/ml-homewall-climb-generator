@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef } from "react";
 import { useImageCrop } from "@/hooks/useImageCrop";
-import { ImageCropper } from "@/components/ImageCropper";
+import { ImageCropper } from "@/components";
 import { createWall } from "@/api/walls";
 
 export const Route = createFileRoute("/walls/new")({
@@ -113,7 +113,9 @@ function NewWallPage() {
 
         // Parse dimensions if provided
         const dimensions: [number, number] | undefined =
-          width && height ? [parseInt(width, 10), parseInt(height, 10)] : undefined;
+          width && height
+            ? [parseInt(width, 10), parseInt(height, 10)]
+            : undefined;
 
         // Parse angle if provided
         const angleValue = angle ? parseInt(angle, 10) : undefined;
@@ -128,7 +130,8 @@ function NewWallPage() {
         // Navigate to holds page for the new wall
         navigate({ to: `/walls/${response.id}/holds` });
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to create wall";
+        const message =
+          err instanceof Error ? err.message : "Failed to create wall";
         setError(message);
         setIsSubmitting(false);
       }
@@ -164,8 +167,8 @@ function NewWallPage() {
                   step === s
                     ? "bg-purple-600 text-white"
                     : ["upload", "crop", "details"].indexOf(step) > i
-                    ? "bg-purple-900 text-purple-300"
-                    : "bg-zinc-800 text-zinc-500"
+                      ? "bg-purple-900 text-purple-300"
+                      : "bg-zinc-800 text-zinc-500"
                 }`}
               >
                 {i + 1}
@@ -260,7 +263,9 @@ function NewWallPage() {
           <form onSubmit={handleSubmit}>
             {/* Preview */}
             <div className="mb-6">
-              <label className="block text-sm text-zinc-400 mb-2">Preview</label>
+              <label className="block text-sm text-zinc-400 mb-2">
+                Preview
+              </label>
               <div className="relative rounded-lg overflow-hidden bg-zinc-900">
                 <img
                   src={URL.createObjectURL(croppedBlob)}
@@ -279,7 +284,10 @@ function NewWallPage() {
 
             {/* Name field */}
             <div className="mb-4">
-              <label htmlFor="name" className="block text-sm text-zinc-400 mb-2">
+              <label
+                htmlFor="name"
+                className="block text-sm text-zinc-400 mb-2"
+              >
                 Wall Name <span className="text-red-400">*</span>
               </label>
               <input
@@ -325,7 +333,10 @@ function NewWallPage() {
 
             {/* Angle field */}
             <div className="mb-8">
-              <label htmlFor="angle" className="block text-sm text-zinc-400 mb-2">
+              <label
+                htmlFor="angle"
+                className="block text-sm text-zinc-400 mb-2"
+              >
                 Angle from vertical (optional)
               </label>
               <div className="flex items-center gap-2">
