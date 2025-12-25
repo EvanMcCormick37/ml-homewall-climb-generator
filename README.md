@@ -13,6 +13,8 @@ This is an open-source application which leverages ML models to set custom climb
 
 ## Making Climbs for the Sideways Wall
 
+See my write-up about this stage of the project here: https://evmojo37.substack.com/p/beta-zero-alpha-can-ai-set-climbs
+
 The original project was completed within `feature-generation` and `model-training`. `feature-generation` involved creating the training data (holds and climbs) using a custom React-Vite UI. `model-training` consisted of processing the holds and climbs data into useable training data, and training the ML models.
 
 ### Feature-Generation (React Vite -> JSON output)
