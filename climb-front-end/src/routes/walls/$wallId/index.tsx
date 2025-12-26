@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useWalls } from "@/hooks/useWalls";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/walls/$wallId/")({
   component: HomePage,
 });
 
