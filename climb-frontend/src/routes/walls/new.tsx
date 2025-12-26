@@ -312,7 +312,7 @@ function NewWallPage() {
                     type="number"
                     value={width}
                     onChange={(e) => setWidth(e.target.value)}
-                    placeholder="Width (cm)"
+                    placeholder="Width (ft)"
                     min="1"
                     className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded focus:border-purple-500 focus:outline-none text-zinc-100 placeholder-zinc-600"
                   />
@@ -323,7 +323,7 @@ function NewWallPage() {
                     type="number"
                     value={height}
                     onChange={(e) => setHeight(e.target.value)}
-                    placeholder="Height (cm)"
+                    placeholder="Height (ft)"
                     min="1"
                     className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded focus:border-purple-500 focus:outline-none text-zinc-100 placeholder-zinc-600"
                   />

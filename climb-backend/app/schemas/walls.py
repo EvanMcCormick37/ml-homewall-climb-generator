@@ -46,11 +46,6 @@ class WallCreateResponse(BaseModel):
     id: str
     name: str
 
-class SetHolds(BaseModel):
-    """Schema for setting holds on an existing wall."""
-    id: str
-    holds: list[HoldDetail]
-
 class SetHoldsResponse(BaseModel):
     """Response after setting holds on a wall."""
     id: str

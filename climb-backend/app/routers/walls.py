@@ -19,7 +19,6 @@ from app.schemas import (
     WallDetail,
     WallListResponse,
     WallCreateResponse,
-    SetHolds,
     SetHoldsResponse,
 )
 from app.services import services
@@ -49,7 +48,7 @@ def list_walls():
 def create_wall(
     name: str = Form(..., min_length=1, max_length=100),
     photo: UploadFile = File(..., description="Wall photo (JPEG or PNG)"),
-    dimensions: str = Form(None, description="Comma-separated 'width,height' in cm"),
+    dimensions: str = Form(None, description="Comma-separated 'width,height' in feet"),
     angle: int = Form(None, description="Wall angle in degrees from vertical"),
 ):
     """Create a new wall from holdset, metadata, and photo."""
@@ -121,6 +120,7 @@ def set_holds(
     wall_id: str,
     holds: str = Form(..., description="JSON array of hold objects"),
     ) -> SetHoldsResponse :
+    """Set or replace virtual holds on an existing wall."""
     # Parse holds JSON
     holds_data = json.loads(holds)
     holds_list = [HoldDetail(**hold) for hold in holds_data]

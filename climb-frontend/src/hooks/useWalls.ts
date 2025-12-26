@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { getWalls, createWall, deleteWall } from "@/api";
-import type { WallMetadata, WallCreateData, WallCreateResponse } from "@/types";
+import type { WallMetadata, WallCreate, WallCreateResponse } from "@/types";
 
 interface UseWallsReturn {
   walls: WallMetadata[];
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-  createNewWall: (data: WallCreateData) => Promise<WallCreateResponse>;
+  createNewWall: (data: WallCreate) => Promise<WallCreateResponse>;
   removeWall: (wallId: string) => Promise<void>;
 }
 
@@ -37,7 +37,7 @@ export function useWalls(): UseWallsReturn {
   }, [fetchWalls]);
 
   const createNewWall = useCallback(
-    async (data: WallCreateData): Promise<WallCreateResponse> => {
+    async (data: WallCreate): Promise<WallCreateResponse> => {
       const response = await createWall(data);
       // Refetch walls after creation
       await fetchWalls();
