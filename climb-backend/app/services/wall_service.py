@@ -115,11 +115,11 @@ def get_wall( wall_id: str) -> WallDetail | None:
     
     # Load holds from JSON file
     holds = []
-    json_path = settings.WALLS_DIR / wall_id / "wall.json"
+    json_path = settings.WALLS_DIR / wall_id / "holds.json"
     if json_path.exists():
         with open(json_path, "r") as f:
-            wall_json = json.load(f)
-            holds = [HoldDetail(**hold_data) for hold_data in wall_json.get("holds", [])]
+            holds_json = json.load(f)
+            holds = [HoldDetail(**hold_data) for hold_data in holds_json.get("holds", [])]
     
     metadata = WallMetadata(
         id=row["id"],

@@ -4,6 +4,7 @@ import type {
   WallDetail,
   WallCreateResponse,
   WallCreate,
+  HoldDetail,
 } from "@/types";
 
 /**
@@ -67,4 +68,26 @@ export function getWallPhotoUrl(wallId: string): string {
   const baseUrl =
     import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
   return `${baseUrl}/walls/${wallId}/photo`;
+}
+
+/**
+ * Set or replace holds on an existing wall
+ */
+export async function setHolds(
+  wallId: string,
+  holds: Array<HoldDetail>
+): Promise<{ id: string }> {
+  const formData = new FormData();
+  formData.append("holds", JSON.stringify(holds));
+
+  const response = await apiClient.put<{ id: string }>(
+    `/walls/${wallId}/holds`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+  return response.data;
 }

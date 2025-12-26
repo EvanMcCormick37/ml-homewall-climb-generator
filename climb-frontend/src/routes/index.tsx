@@ -16,8 +16,14 @@ const COMING_SOON_WALLS = [
 // External links
 const LINKS = [
   { label: "About me", href: "https://www.evmojo.dev" },
-  { label: "Github Repo", href: "https://github.com/EvanMcCormick37/ml-homewall-climb-generator" },
-  { label: "Write-up (Substack)", href: "https://evmojo37.substack.com/p/beta-zero-alpha-can-ai-set-climbs" },
+  {
+    label: "Github Repo",
+    href: "https://github.com/EvanMcCormick37/ml-homewall-climb-generator",
+  },
+  {
+    label: "Write-up (Substack)",
+    href: "https://evmojo37.substack.com/p/beta-zero-alpha-can-ai-set-climbs",
+  },
 ];
 
 function HomePage() {
@@ -43,7 +49,8 @@ function HomePage() {
         <div className="w-full max-w-4xl flex items-start justify-between mb-24">
           {/* Welcome text */}
           <p className="text-zinc-400 max-w-md">
-            Welcome to BetaZero, a public resource for generating board climbs using ML techniques.
+            Welcome to BetaZero, a public resource for generating board climbs
+            using ML techniques.
           </p>
 
           {/* External links */}
@@ -64,16 +71,8 @@ function HomePage() {
 
         {/* Center section with Select Wall button */}
         <div className="relative">
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="px-8 py-3 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 transition-colors border border-zinc-700"
-          >
-            Select Wall
-          </button>
-
-          {/* Wall selection dropdown */}
-          {isMenuOpen && (
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-zinc-900 border border-zinc-700 rounded shadow-xl z-10">
+          {isMenuOpen ? (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-zinc-900 border border-zinc-700 z-10">
               {/* Loading state */}
               {loading && (
                 <div className="px-4 py-3 text-center text-zinc-500 text-sm">
@@ -89,25 +88,27 @@ function HomePage() {
               )}
 
               {/* Available walls */}
-              {!loading && walls.map((wall) => (
-                <button
-                  key={wall.id}
-                  onClick={() => handleWallSelect(wall.id)}
-                  className="w-full px-4 py-2 text-center text-zinc-100 hover:bg-zinc-800 transition-colors border-b border-zinc-700 last:border-b-0"
-                >
-                  {wall.name}
-                </button>
-              ))}
+              {!loading &&
+                walls.map((wall) => (
+                  <button
+                    key={wall.id}
+                    onClick={() => handleWallSelect(wall.id)}
+                    className="w-full px-4 py-2 text-center text-zinc-100 hover:bg-zinc-800 transition-colors border-b border-zinc-700 last:border-b-0"
+                  >
+                    {wall.name}
+                  </button>
+                ))}
 
               {/* Coming soon walls */}
-              {!loading && COMING_SOON_WALLS.map((wall) => (
-                <div
-                  key={wall.id}
-                  className="w-full px-4 py-2 text-center text-zinc-500 border-b border-zinc-700 cursor-not-allowed"
-                >
-                  (Coming soon) {wall.name}
-                </div>
-              ))}
+              {!loading &&
+                COMING_SOON_WALLS.map((wall) => (
+                  <div
+                    key={wall.id}
+                    className="w-full px-4 py-2 text-center text-zinc-500 border-b border-zinc-700"
+                  >
+                    (Coming soon) {wall.name}
+                  </div>
+                ))}
 
               {/* Create new wall option */}
               {!loading && (
@@ -119,6 +120,13 @@ function HomePage() {
                 </button>
               )}
             </div>
+          ) : (
+            <button
+              onClick={() => setIsMenuOpen(true)}
+              className="px-8 py-3 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 transition-colors border border-zinc-700"
+            >
+              Select Wall
+            </button>
           )}
         </div>
       </div>

@@ -37,7 +37,6 @@ def list_walls():
     walls = services.get_all_walls()
     return WallListResponse(walls=walls, total=len(walls))
 
-
 @router.post(
     "",
     response_model=WallCreateResponse,
@@ -84,6 +83,33 @@ def create_wall(
         raise HTTPException(status_code=500, detail=f"Failed to create wall: {str(e)}")
 
 @router.get(
+    "/{wall_id}/photo",
+    response_class=FileResponse,
+    summary="Get wall photo",
+    description="Returns the wall photo as a binary image.",
+    responses={
+        200: {"content": {"image/jpeg": {}, "image/png": {}}},
+        404: {"description": "Wall or photo not found"},
+    },
+)
+def get_wall_photo(wall_id: str):
+    """Get wall photo."""
+    photo_path = services.get_photo_path(wall_id)
+    if photo_path is None:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    ext = photo_path.suffix
+    media_type = "image/jpeg" if ext == ".jpg" else "image/png"
+    return FileResponse(
+        photo_path, 
+        media_type=media_type,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+@router.get(
     "/{wall_id}",
     response_model=WallDetail,
     summary="Get wall details",
@@ -95,7 +121,6 @@ def get_wall(wall_id: str):
     if wall is None:
         raise HTTPException(status_code=404, detail="Wall not found")
     return wall
-
 
 @router.delete(
     "/{wall_id}",
@@ -131,27 +156,6 @@ def set_holds(
         return SetHoldsResponse(id=wall_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Attempting to set holds on {wall_id} resulted in Exception: {str(e)}")
-
-
-@router.get(
-    "/{wall_id}/photo",
-    response_class=FileResponse,
-    summary="Get wall photo",
-    description="Returns the wall photo as a binary image.",
-    responses={
-        200: {"content": {"image/jpeg": {}, "image/png": {}}},
-        404: {"description": "Wall or photo not found"},
-    },
-)
-def get_wall_photo(wall_id: str):
-    """Get wall photo."""
-    photo_path = services.get_photo_path(wall_id)
-    if photo_path is None:
-        raise HTTPException(status_code=404, detail="Photo not found")
-    ext = photo_path.suffix
-    media_type = "image/jpeg" if ext == ".jpg" else "image/png"
-    return FileResponse(photo_path, media_type=media_type)
-
 
 @router.put(
     "/{wall_id}/photo",

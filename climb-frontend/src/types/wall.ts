@@ -15,6 +15,13 @@ export interface HoldDetail {
   useability: number | null; // 0-10 or null
 }
 
+export type HoldMode = "add" | "remove" | "select";
+
+export interface HoldWithPixels extends HoldDetail {
+  pixel_x?: number;
+  pixel_y?: number;
+}
+
 export interface WallMetadata {
   id: string;
   name: string;

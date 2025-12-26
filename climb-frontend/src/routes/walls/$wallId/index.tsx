@@ -18,7 +18,7 @@ function WallDetailPage() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+      <header className="flex items-center justify-between px-6 py-4 bg-zinc-800 border-b border-zinc-800">
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate({ to: "/" })}
@@ -57,13 +57,15 @@ function WallDetailPage() {
                   </div>
                   <div>
                     <dt className="text-zinc-500">Climbs</dt>
-                    <dd className="text-zinc-100">{metadata.num_climbs ?? 0}</dd>
+                    <dd className="text-zinc-100">
+                      {metadata.num_climbs ?? 0}
+                    </dd>
                   </div>
                   {metadata.dimensions && (
                     <div>
                       <dt className="text-zinc-500">Dimensions</dt>
                       <dd className="text-zinc-100">
-                        {metadata.dimensions[0]} × {metadata.dimensions[1]} cm
+                        {metadata.dimensions[0]} × {metadata.dimensions[1]} ft
                       </dd>
                     </div>
                   )}

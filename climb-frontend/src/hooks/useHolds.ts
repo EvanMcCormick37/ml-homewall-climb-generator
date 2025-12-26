@@ -21,6 +21,8 @@ interface UseHoldsReturn {
     useability: number
   ) => void;
   removeHold: (x: number, y: number, radius?: number) => void;
+  removeHoldById: (holdId: number) => void;
+  removeLastHold: () => HoldWithPixels | null;
   findHoldAt: (x: number, y: number, radius?: number) => HoldWithPixels | null;
   clearHolds: () => void;
   loadHolds: (data: { holds: HoldDetail[] }) => void;
@@ -104,6 +106,22 @@ export function useHolds(imageDimensions: ImageDimensions): UseHoldsReturn {
     });
   }, [imageDimensions]);
 
+  // Remove hold by ID
+  const removeHoldById = useCallback((holdId: number) => {
+    setHolds((prev) => prev.filter((hold) => hold.hold_id !== holdId));
+  }, []);
+
+  // Remove the most recently added hold and return it
+  const removeLastHold = useCallback((): HoldWithPixels | null => {
+    let removedHold: HoldWithPixels | null = null;
+    setHolds((prev) => {
+      if (prev.length === 0) return prev;
+      removedHold = prev[prev.length - 1];
+      return prev.slice(0, -1);
+    });
+    return removedHold;
+  }, []);
+
   // Find hold at pixel position
   const findHoldAt = useCallback(
     (x: number, y: number, radius: number = 40): HoldWithPixels | null => {
@@ -135,6 +153,8 @@ export function useHolds(imageDimensions: ImageDimensions): UseHoldsReturn {
     holds,
     addHold,
     removeHold,
+    removeHoldById,
+    removeLastHold,
     findHoldAt,
     clearHolds,
     loadHolds,
