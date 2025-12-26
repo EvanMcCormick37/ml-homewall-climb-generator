@@ -31,9 +31,6 @@ export async function createWall(
   const formData = new FormData();
   formData.append("name", data.name);
   formData.append("photo", data.photo);
-  // Send empty holds array - holds will be added separately
-  formData.append("holds", JSON.stringify([]));
-
   if (data.dimensions) {
     formData.append(
       "dimensions",
