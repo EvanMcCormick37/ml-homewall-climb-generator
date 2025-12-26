@@ -1,11 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  useMemo,
-} from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { getWall, getWallPhotoUrl } from "@/api/walls";
 import { useHolds } from "@/hooks/useHolds";
 import { apiClient } from "@/api/client";
@@ -87,7 +81,10 @@ function HoldsEditorPage() {
 
   // Image state
   const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [imageDimensions, setImageDimensions] = useState({
+    width: 0,
+    height: 0,
+  });
 
   // Mode state
   const [mode, setMode] = useState<Mode>("add");
@@ -104,14 +101,8 @@ function HoldsEditorPage() {
   });
 
   // Holds state from hook
-  const {
-    holds,
-    addHold,
-    removeHold,
-    findHoldAt,
-    clearHolds,
-    loadHolds,
-  } = useHolds(imageDimensions);
+  const { holds, addHold, removeHold, findHoldAt, clearHolds, loadHolds } =
+    useHolds(imageDimensions);
 
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -336,7 +327,11 @@ function HoldsEditorPage() {
       ctx.font = "bold 14px sans-serif";
       ctx.fillStyle = dragColor;
       ctx.textAlign = "left";
-      ctx.fillText(`Useability: ${(useability * 100).toFixed(0)}%`, dragX + 10, dragY - 10);
+      ctx.fillText(
+        `Useability: ${(useability * 100).toFixed(0)}%`,
+        dragX + 10,
+        dragY - 10
+      );
     }
   }, [
     image,
@@ -442,30 +437,27 @@ function HoldsEditorPage() {
   );
 
   // Wheel zoom handler
-  const handleWheel = useCallback(
-    (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      const wrapper = wrapperRef.current;
-      if (!wrapper) return;
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
 
-      const rect = wrapper.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+    const rect = wrapper.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
-      setViewTransform((prev) => {
-        const newZoom = Math.max(0.1, Math.min(5, prev.zoom * delta));
-        const beforeX = (mouseX - prev.x) / prev.zoom;
-        const beforeY = (mouseY - prev.y) / prev.zoom;
-        return {
-          zoom: newZoom,
-          x: mouseX - beforeX * newZoom,
-          y: mouseY - beforeY * newZoom,
-        };
-      });
-    },
-    []
-  );
+    setViewTransform((prev) => {
+      const newZoom = Math.max(0.1, Math.min(5, prev.zoom * delta));
+      const beforeX = (mouseX - prev.x) / prev.zoom;
+      const beforeY = (mouseY - prev.y) / prev.zoom;
+      return {
+        zoom: newZoom,
+        x: mouseX - beforeX * newZoom,
+        y: mouseY - beforeY * newZoom,
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -622,10 +614,7 @@ function HoldsEditorPage() {
       )}
 
       {/* Canvas area */}
-      <div
-        className="flex-1 overflow-hidden bg-zinc-900"
-        ref={wrapperRef}
-      >
+      <div className="flex-1 overflow-hidden bg-zinc-900" ref={wrapperRef}>
         <div
           className="relative"
           style={{
@@ -657,10 +646,12 @@ function HoldsEditorPage() {
 
       {/* Help text */}
       <div className="px-6 py-3 border-t border-zinc-800 bg-zinc-900 text-zinc-500 text-xs">
-        <span className="font-medium text-zinc-400">Add:</span> Click and drag to place hold with pull direction (drag length = useability) •{" "}
-        <span className="font-medium text-zinc-400">Remove:</span> Click on hold to delete •{" "}
-        <span className="font-medium text-zinc-400">Pan:</span> Drag to move view •{" "}
-        <span className="font-medium text-zinc-400">Zoom:</span> Scroll wheel
+        <span className="font-medium text-zinc-400">Add:</span> Click and drag
+        to place hold with pull direction (drag length = useability) •{" "}
+        <span className="font-medium text-zinc-400">Remove:</span> Click on hold
+        to delete • <span className="font-medium text-zinc-400">Pan:</span> Drag
+        to move view • <span className="font-medium text-zinc-400">Zoom:</span>{" "}
+        Scroll wheel
       </div>
     </div>
   );

@@ -1,114 +1,93 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useWalls } from "@/hooks/useWalls";
+import { getWall, getWallPhotoUrl } from "@/api/walls";
+import type { WallDetail } from "@/types";
 
 export const Route = createFileRoute("/walls/$wallId/")({
-  component: HomePage,
+  component: WallDetailPage,
+  loader: async ({ params }) => {
+    const wall = await getWall(params.wallId);
+    return { wall };
+  },
 });
 
-// Coming soon walls (hardcoded for now)
-const COMING_SOON_WALLS = [
-  { name: "Kilter Board", id: "kilter" },
-  { name: "Tension Board 2", id: "tension" },
-  { name: "Decoy Board", id: "decoy" },
-];
-
-function HomePage() {
-  const { walls, loading, error } = useWalls();
+function WallDetailPage() {
   const navigate = useNavigate();
+  const { wall } = Route.useLoaderData() as { wall: WallDetail };
+  const { metadata, holds } = wall;
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex flex-col">
-      {/* Welcome section */}
-      <section className="px-6 py-12 text-center">
-        <p className="text-zinc-400 max-w-2xl mx-auto">
-          Welcome to BetaZero, a public resource for generating board climbs using ML techniques.
-        </p>
-      </section>
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate({ to: "/" })}
+            className="text-zinc-400 hover:text-zinc-100 transition-colors"
+          >
+            ← Back
+          </button>
+          <h1 className="text-xl font-medium text-zinc-100">{metadata.name}</h1>
+        </div>
+      </header>
 
-      {/* Main content area */}
-      <div className="flex-1 flex items-start justify-center px-6 pb-24">
-        <div className="flex gap-24 items-start">
-          {/* Wall selection menu */}
-          <div className="min-w-[280px]">
-            <div className="border border-zinc-700 rounded overflow-hidden">
-              {/* Loading state */}
-              {loading && (
-                <div className="px-4 py-3 text-center text-zinc-500 text-sm">
-                  Loading walls...
-                </div>
-              )}
+      {/* Main content */}
+      <div className="flex-1 p-6">
+        <div className="max-w-4xl mx-auto">
+          {/* Wall info card */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mb-6">
+            <div className="flex gap-6">
+              {/* Wall photo */}
+              <div className="w-48 h-48 bg-zinc-800 rounded overflow-hidden flex-shrink-0">
+                <img
+                  src={getWallPhotoUrl(metadata.id)}
+                  alt={metadata.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
 
-              {/* Error state */}
-              {error && (
-                <div className="px-4 py-3 text-center text-red-400 text-sm">
-                  {error}
-                </div>
-              )}
-
-              {/* Existing walls */}
-              {!loading && walls.map((wall) => (
-                <button
-                  key={wall.id}
-                  onClick={() => navigate({ to: `/walls/${wall.id}` })}
-                  className="w-full px-4 py-3 text-left text-zinc-100 hover:bg-zinc-800 transition-colors border-b border-zinc-700 last:border-b-0"
-                >
-                  {wall.name}
-                </button>
-              ))}
-
-              {/* Show placeholder if no walls exist */}
-              {!loading && walls.length === 0 && (
-                <button
-                  disabled
-                  className="w-full px-4 py-3 text-left text-zinc-500 border-b border-zinc-700"
-                >
-                  No walls yet
-                </button>
-              )}
-
-              {/* Coming soon walls */}
-              {COMING_SOON_WALLS.map((wall) => (
-                <button
-                  key={wall.id}
-                  disabled
-                  className="w-full px-4 py-3 text-left text-zinc-600 border-b border-zinc-700 cursor-not-allowed"
-                >
-                  <span className="text-zinc-700">(Coming soon)</span> {wall.name}
-                </button>
-              ))}
-
-              {/* Create new wall link */}
-              <Link
-                to="/walls/new"
-                className="block w-full px-4 py-3 text-left text-purple-400 hover:bg-zinc-800/50 transition-colors"
-              >
-                Create new wall
-              </Link>
+              {/* Wall details */}
+              <div className="flex-1">
+                <h2 className="text-lg font-medium text-zinc-100 mb-4">
+                  Wall Details
+                </h2>
+                <dl className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <dt className="text-zinc-500">Holds</dt>
+                    <dd className="text-zinc-100">{holds?.length ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-zinc-500">Climbs</dt>
+                    <dd className="text-zinc-100">{metadata.num_climbs ?? 0}</dd>
+                  </div>
+                  {metadata.dimensions && (
+                    <div>
+                      <dt className="text-zinc-500">Dimensions</dt>
+                      <dd className="text-zinc-100">
+                        {metadata.dimensions[0]} × {metadata.dimensions[1]} cm
+                      </dd>
+                    </div>
+                  )}
+                  {metadata.angle !== undefined && metadata.angle !== null && (
+                    <div>
+                      <dt className="text-zinc-500">Angle</dt>
+                      <dd className="text-zinc-100">{metadata.angle}°</dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
             </div>
           </div>
 
-          {/* Side links */}
-          <div className="flex flex-col gap-3 min-w-[160px]">
-            <a
-              href="#"
-              className="block px-4 py-2 border border-zinc-700 rounded text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 transition-colors text-sm"
+          {/* Actions */}
+          <div className="flex gap-4">
+            <Link
+              to="/walls/$wallId/holds"
+              params={{ wallId: metadata.id }}
+              className="px-4 py-2 bg-zinc-800 text-zinc-100 hover:bg-zinc-700 transition-colors rounded"
             >
-              About me
-            </a>
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-4 py-2 border border-zinc-700 rounded text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 transition-colors text-sm"
-            >
-              Github Repo
-            </a>
-            <a
-              href="#"
-              className="block px-4 py-2 border border-zinc-700 rounded text-zinc-300 hover:border-zinc-500 hover:text-zinc-100 transition-colors text-sm"
-            >
-              Write-up (Substack)
-            </a>
+              Edit Holds
+            </Link>
+            {/* Add more actions here as needed */}
           </div>
         </div>
       </div>
