@@ -1,0 +1,103 @@
+import { apiClient } from "./client";
+import type {
+  Climb,
+  ClimbListResponse,
+  ClimbCreate,
+  ClimbCreateResponse,
+  ClimbDeleteResponse,
+  ClimbFilters,
+} from "@/types";
+
+/**
+ * Fetch climbs for a wall with optional filters
+ */
+export async function getClimbs(
+  wallId: string,
+  filters: ClimbFilters = {}
+): Promise<ClimbListResponse> {
+  const params = new URLSearchParams();
+
+  if (filters.grade_range) {
+    params.append("grade_range", filters.grade_range[0].toString());
+    params.append("grade_range", filters.grade_range[1].toString());
+  }
+  if (filters.include_projects !== undefined) {
+    params.append("include_projects", String(filters.include_projects));
+  }
+  if (filters.setter) {
+    params.append("setter", filters.setter);
+  }
+  if (filters.name_includes) {
+    params.append("name_includes", filters.name_includes);
+  }
+  if (filters.holds_include) {
+    filters.holds_include.forEach((h) =>
+      params.append("holds_include", h.toString())
+    );
+  }
+  if (filters.tags_include) {
+    filters.tags_include.forEach((t) => params.append("tags_include", t));
+  }
+  if (filters.after) {
+    params.append("after", filters.after);
+  }
+  if (filters.sort_by) {
+    params.append("sort_by", filters.sort_by);
+  }
+  if (filters.descending !== undefined) {
+    params.append("descending", String(filters.descending));
+  }
+  if (filters.limit !== undefined) {
+    params.append("limit", filters.limit.toString());
+  }
+  if (filters.offset !== undefined) {
+    params.append("offset", filters.offset.toString());
+  }
+
+  const queryString = params.toString();
+  const url = `/walls/${wallId}/climbs${queryString ? `?${queryString}` : ""}`;
+
+  const response = await apiClient.get<ClimbListResponse>(url);
+  return response.data;
+}
+
+/**
+ * Fetch a single climb by ID
+ */
+export async function getClimb(wallId: string, climbId: string): Promise<Climb> {
+  // Note: The backend doesn't have a single climb endpoint,
+  // so we fetch all and filter. This could be optimized with a backend endpoint.
+  const response = await getClimbs(wallId, { limit: 200 });
+  const climb = response.climbs.find((c) => c.id === climbId);
+  if (!climb) {
+    throw new Error(`Climb ${climbId} not found`);
+  }
+  return climb;
+}
+
+/**
+ * Create a new climb
+ */
+export async function createClimb(
+  wallId: string,
+  data: ClimbCreate
+): Promise<ClimbCreateResponse> {
+  const response = await apiClient.post<ClimbCreateResponse>(
+    `/walls/${wallId}/climbs`,
+    data
+  );
+  return response.data;
+}
+
+/**
+ * Delete a climb
+ */
+export async function deleteClimb(
+  wallId: string,
+  climbId: string
+): Promise<ClimbDeleteResponse> {
+  const response = await apiClient.delete<ClimbDeleteResponse>(
+    `/walls/${wallId}/climbs/${climbId}`
+  );
+  return response.data;
+}
