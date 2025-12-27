@@ -18,11 +18,18 @@ export interface Climb {
   created_at: string;
 }
 
+export interface Holdset {
+  start: number[];
+  finish: number[];
+  hand: number[];
+  foot: number[];
+}
+
 export interface ClimbCreate {
-  name?: string | null;
+  name: string;
+  holds: Holdset;
   grade?: number | null;
   setter?: string | null;
-  sequence: number[][];
   tags?: string[] | null;
 }
 
