@@ -29,16 +29,16 @@ def client():
 def sample_holds():
     """Sample hold data for creating a wall."""
     return [
-        {"hold_id": 0, "norm_x": 0.2, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 8.0},
-        {"hold_id": 1, "norm_x": 0.5, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 7.0},
-        {"hold_id": 2, "norm_x": 0.8, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 6.0},
-        {"hold_id": 3, "norm_x": 0.3, "norm_y": 0.3, "pull_x": -0.5, "pull_y": 0.5, "useability": 5.0},
-        {"hold_id": 4, "norm_x": 0.6, "norm_y": 0.3, "pull_x": 0.5, "pull_y": 0.5, "useability": 5.0},
-        {"hold_id": 5, "norm_x": 0.2, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 4.0},
-        {"hold_id": 6, "norm_x": 0.5, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 3.0},
-        {"hold_id": 7, "norm_x": 0.8, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 4.0},
-        {"hold_id": 8, "norm_x": 0.4, "norm_y": 0.8, "pull_x": 0.0, "pull_y": 1.0, "useability": 6.0},
-        {"hold_id": 9, "norm_x": 0.6, "norm_y": 0.8, "pull_x": 0.0, "pull_y": 1.0, "useability": 6.0},
+        {"hold_id": 0, "norm_x": 0.2, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.8},
+        {"hold_id": 1, "norm_x": 0.5, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.7},
+        {"hold_id": 2, "norm_x": 0.8, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
+        {"hold_id": 3, "norm_x": 0.3, "norm_y": 0.3, "pull_x": -0.5, "pull_y": 0.5, "useability": 0.5},
+        {"hold_id": 4, "norm_x": 0.6, "norm_y": 0.3, "pull_x": 0.5, "pull_y": 0.5, "useability": 0.5},
+        {"hold_id": 5, "norm_x": 0.2, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.4},
+        {"hold_id": 6, "norm_x": 0.5, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.3},
+        {"hold_id": 7, "norm_x": 0.8, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.4},
+        {"hold_id": 8, "norm_x": 0.4, "norm_y": 0.8, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
+        {"hold_id": 9, "norm_x": 0.6, "norm_y": 0.8, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
     ]
 
 
