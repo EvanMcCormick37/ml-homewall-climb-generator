@@ -121,9 +121,3 @@ def init_db():
                 completed_at TIMESTAMP
             )
         """)
-        
-        # Indexes for common queries
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_climbs_wall ON climbs(wall_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_climbs_setter ON climbs(setter)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_models_wall ON models(wall_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)")

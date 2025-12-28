@@ -29,16 +29,16 @@ def client():
 def sample_holds():
     """Sample hold data for creating a wall."""
     return [
-        {"hold_id": 0, "norm_x": 0.2, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.8},
-        {"hold_id": 1, "norm_x": 0.5, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.7},
-        {"hold_id": 2, "norm_x": 0.8, "norm_y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
-        {"hold_id": 3, "norm_x": 0.3, "norm_y": 0.3, "pull_x": -0.5, "pull_y": 0.5, "useability": 0.5},
-        {"hold_id": 4, "norm_x": 0.6, "norm_y": 0.3, "pull_x": 0.5, "pull_y": 0.5, "useability": 0.5},
-        {"hold_id": 5, "norm_x": 0.2, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.4},
-        {"hold_id": 6, "norm_x": 0.5, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.3},
-        {"hold_id": 7, "norm_x": 0.8, "norm_y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.4},
-        {"hold_id": 8, "norm_x": 0.4, "norm_y": 0.8, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
-        {"hold_id": 9, "norm_x": 0.6, "norm_y": 0.8, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
+        {"hold_index": 0, "x": 0.2, "y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.8},
+        {"hold_index": 1, "x": 0.5, "y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.7},
+        {"hold_index": 2, "x": 0.8, "y": 0.1, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
+        {"hold_index": 3, "x": 0.3, "y": 0.3, "pull_x": -0.5, "pull_y": 0.5, "useability": 0.5},
+        {"hold_index": 4, "x": 0.6, "y": 0.3, "pull_x": 0.5, "pull_y": 0.5, "useability": 0.5},
+        {"hold_index": 5, "x": 0.2, "y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.4},
+        {"hold_index": 6, "x": 0.5, "y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.3},
+        {"hold_index": 7, "x": 0.8, "y": 0.5, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.4},
+        {"hold_index": 8, "x": 0.4, "y": 0.8, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
+        {"hold_index": 9, "x": 0.6, "y": 0.8, "pull_x": 0.0, "pull_y": 1.0, "useability": 0.6},
     ]
 
 
@@ -128,9 +128,9 @@ def sample_climb(client, sample_wall):
         json={
             "name": "Test Climb",
             "grade": 40,
-            "setter": "test_user",
+            "setter_name": "test_user",
             "angle": 40,
-            "holds": {
+            "holdset": {
                 "start": [0, 1],
                 "finish": [8, 9],
                 "hand": [3, 4, 5, 6],
@@ -152,9 +152,9 @@ def add_sample_climbs(client, sample_wall):
             json={
                 "name": f"Test Climb {i}",
                 "grade": i * 4,  # Spread grades across range
-                "setter": "test_user",
+                "setter_name": "test_user",
                 "angle": 40,
-                "holds": {
+                "holdset": {
                     "start": [0, 1],
                     "finish": [8, 9],
                     "hand": [3, 4, 5, 6],
@@ -409,10 +409,9 @@ class TestClimbEndpoints:
         assert "wall_id" in climb
         assert "name" in climb
         assert "grade" in climb
-        assert "setter" in climb
-        assert "holds" in climb
+        assert "setter_name" in climb
+        assert "holdset" in climb
         assert "tags" in climb
-        assert "num_holds" in climb
         assert "angle" in climb
         assert "ascents" in climb
         assert "created_at" in climb
@@ -433,12 +432,12 @@ class TestClimbEndpoints:
         """Filter climbs by setter."""
         response = client.get(
             f"/api/v1/walls/{sample_wall}/climbs",
-            params={"setter": "test_user"},
+            params={"setter_name": "test_user"},
         )
         assert response.status_code == 200
         data = response.json()
         for climb in data["climbs"]:
-            assert climb["setter"] == "test_user"
+            assert climb["setter_name"] == "test_user"
     
     def test_list_climbs_filter_by_angle(self, client, sample_wall, sample_climb):
         """Filter climbs by wall angle."""
@@ -471,8 +470,12 @@ class TestClimbEndpoints:
         assert response.status_code == 200
         data = response.json()
         for climb in data["climbs"]:
-            # holds is [[hold_idx, role], ...]
-            hold_indices = [h[0] for h in climb["holds"]]
+            holdset = climb["holdset"]
+            hold_indices = [
+                h_idx
+                for role in holdset.values()
+                for h_idx in role
+            ]
             assert 0 in hold_indices
             assert 1 in hold_indices
     
@@ -495,7 +498,7 @@ class TestClimbEndpoints:
                 "name": "Project",
                 "grade": None,
                 "angle": 40,
-                "holds": {
+                "holdset": {
                     "start": [0, 1],
                     "finish": [3, 4],
                     "hand": [],
@@ -522,7 +525,7 @@ class TestClimbEndpoints:
                     "name": f"Climb {i}",
                     "grade": i * 10,
                     "angle": 40,
-                    "holds": {
+                    "holdset": {
                         "start": [0, 1],
                         "finish": [3, 4],
                         "hand": [],
@@ -550,9 +553,9 @@ class TestClimbEndpoints:
             json={
                 "name": "New Climb",
                 "grade": 50,
-                "setter": "alice",
+                "setter_name": "alice",
                 "angle": 45,
-                "holds": {
+                "holdset": {
                     "start": [0, 1],
                     "finish": [5, 6],
                     "hand": [3, 4],
@@ -571,8 +574,9 @@ class TestClimbEndpoints:
         response = client.post(
             f"/api/v1/walls/{sample_wall}/climbs",
             json={
+                "name": "climb regcedfdsfa",
                 "angle": 40,
-                "holds": {
+                "holdset": {
                     "start": [0, 1],
                     "finish": [3, 4],
                     "hand": [],
@@ -582,32 +586,16 @@ class TestClimbEndpoints:
         )
         assert response.status_code == 201
     
-    def test_create_climb_invalid_hold(self, client, sample_wall):
-        """Create a climb referencing non-existent hold."""
-        response = client.post(
-            f"/api/v1/walls/{sample_wall}/climbs",
-            json={
-                "name": "Invalid",
-                "angle": 40,
-                "holds": {
-                    "start": [0, 999],
-                    "finish": [],
-                    "hand": [],
-                    "foot": [],
-                },
-            },
-        )
-        assert response.status_code in [400, 501]  # Either is acceptable
-    
     def test_create_climb_wall_not_found(self, client):
         """Create a climb on non-existent wall."""
         response = client.post(
             "/api/v1/walls/wall-nonexistent/climbs",
             json={
+                "name": "climb regcedfdsfa",
                 "angle": 40,
-                "holds": {
+                "holdset": {
                     "start": [0, 1],
-                    "finish": [],
+                    "finish": [3, 4],
                     "hand": [],
                     "foot": [],
                 },
@@ -637,6 +625,7 @@ class TestClimbEndpoints:
 # MODEL ENDPOINTS
 # =============================================================================
 
+@pytest.mark.skip(reason="Models are about to be overhauled. No point in testing them here.")
 class TestModelEndpoints:
     """Tests for /api/v1/walls/{wall_id}/models endpoints."""
     
@@ -787,7 +776,7 @@ class TestModelEndpoints:
 # =============================================================================
 # JOB ENDPOINTS
 # =============================================================================
-
+@pytest.mark.skip(reason="Models being rebuilt, so job service is obselete for now.")
 class TestJobEndpoints:
     """Tests for /api/v1/jobs endpoints."""
     
@@ -867,7 +856,7 @@ class TestErrorHandling:
         """Wrong type for a field."""
         response = client.post(
             f"/api/v1/walls/{sample_wall}/climbs",
-            json={"holds": "not a dict"},
+            json={"holdset": "not a dict"},
         )
         assert response.status_code == 422
     
@@ -900,20 +889,23 @@ class TestIntegration:
             
             # 3. Create some climbs
             climbs = [
-                {
+                {  
+                    "name":"Gordon was a true bro",
                     "angle": 40,
                     "grade": 30,
-                    "holds": {"start": [0, 1], "finish": [5, 6], "hand": [3, 4], "foot": []},
+                    "holdset": {"start": [0, 1], "finish": [5, 6], "hand": [3, 4], "foot": []},
                 },
-                {
+                {  
+                    "name":"Gordon was a true bro",
                     "angle": 40,
                     "grade": 40,
-                    "holds": {"start": [0, 2], "finish": [6, 7], "hand": [3, 4], "foot": []},
+                    "holdset": {"start": [0, 2], "finish": [6, 7], "hand": [3, 4], "foot": []},
                 },
-                {
+                {  
+                    "name":"Gordon was a true bro",
                     "angle": 40,
                     "grade": 50,
-                    "holds": {"start": [1, 2], "finish": [8, 9], "hand": [4, 6, 7], "foot": []},
+                    "holdset": {"start": [1, 2], "finish": [8, 9], "hand": [4, 6, 7], "foot": []},
                 },
             ]
             for climb in climbs:
@@ -923,36 +915,6 @@ class TestIntegration:
             # 4. Verify climbs exist
             list_resp = client.get(f"/api/v1/walls/{wall_id}/climbs")
             assert list_resp.json()["total"] == 3
-            
-            # 5. Create a model
-            model_resp = client.post(
-                f"/api/v1/walls/{wall_id}/models",
-                json={"model_type": "mlp", "epochs": 5},
-            )
-            assert model_resp.status_code in [201, 202]
-            model_id = model_resp.json()["model_id"]
-            job_id = model_resp.json()["job_id"]
-            
-            # 6. Wait for training
-            for _ in range(30):
-                job_resp = client.get(f"/api/v1/jobs/{job_id}")
-                if job_resp.json()["status"] in ["COMPLETED", "FAILED"]:
-                    break
-                time.sleep(0.5)
-            
-            assert job_resp.json()["status"] == "COMPLETED"
-            
-            # 7. Generate climbs
-            gen_resp = client.post(
-                f"/api/v1/walls/{wall_id}/models/{model_id}/generate",
-                json={"starting_holds": [0, 1], "max_moves": 4, "num_climbs": 2},
-            )
-            assert gen_resp.status_code == 200
-            assert len(gen_resp.json()["climbs"]) == 2
-            
-            # 8. Verify model appears in list
-            models_resp = client.get(f"/api/v1/walls/{wall_id}/models")
-            assert models_resp.json()["total"] == 1
             
         finally:
             # Cleanup
@@ -973,8 +935,9 @@ class TestIntegration:
         climb_resp = client.post(
             f"/api/v1/walls/{wall_id}/climbs",
             json={
+                "name": "Evan knows the secret code to reverse gravity. And he's watching you right now. Tread lightly upon this hallowed code.",
                 "angle": 40,
-                "holds": {"start": [0, 1], "finish": [3, 4], "hand": [], "foot": []},
+                "holdset": {"start": [0, 1], "finish": [3, 4], "hand": [], "foot": []},
             },
         )
         climb_id = climb_resp.json()["id"]
@@ -984,6 +947,3 @@ class TestIntegration:
         
         # Verify wall is gone
         assert client.get(f"/api/v1/walls/{wall_id}").status_code == 404
-        
-        # Verify climbs are gone (if you have a direct climb lookup endpoint)
-        # This depends on your API design

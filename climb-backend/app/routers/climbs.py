@@ -44,7 +44,7 @@ def list_climbs(
         True,
         description="Whether to include ungraded climbs."
     ),
-    setter: str | None = Query(
+    setter_name: str | None = Query(
         None, 
         description="Filter by setter name"
     ),
@@ -92,7 +92,7 @@ def list_climbs(
     Filters:
     - angle: Exact match on wall angle
     - name_includes: Partial match on climb name
-    - setter: Exact match on setter name
+    - setter_name: Exact match on setter name
     - after: Only climbs created after this datetime
     - holds_include: Climbs must include ALL specified hold indices
     - tags_include: Climbs must have ALL specified tags
@@ -102,7 +102,7 @@ def list_climbs(
         angle=angle,
         grade_range=grade_range,
         include_projects=include_projects,
-        setter=setter,
+        setter_name=setter_name,
         name_includes=name_includes,
         holds_include=holds_include,
         tags_include=tags_include,
@@ -130,6 +130,8 @@ def list_climbs(
 )
 def create_climb(wall_id: str, climb_data: ClimbCreate):
     """Create a new climb for a wall."""
+    if not services.wall_exists(wall_id):
+        raise HTTPException(status_code=404, detail="Wall not found")
     climb_id = services.create_climb(wall_id, climb_data)
     return ClimbCreateResponse(id=climb_id)
 

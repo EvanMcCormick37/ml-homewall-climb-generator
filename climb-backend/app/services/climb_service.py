@@ -19,7 +19,7 @@ def get_climbs(
     angle: int | None = None,
     grade_range: list[int] = [0,180],
     include_projects: bool = True,
-    setter: str | None = None,        
+    setter_name: str | None = None,        
     name_includes: str | None = None,
     holds_include: list[int] | None = None,
     tags_include: list[str] | None = None,
@@ -37,7 +37,7 @@ def get_climbs(
         angle: Filter by wall angle (optional)
         grade_range: Range of grade (converted to decimal V-grade; v9 = 90, v3- = 27)
         include_projects: Whether to include ungraded climbs
-        setter: Filter by setter name
+        setter_name: Filter by setter name
         name_includes: Filter by name (partial match)
         holds_include: Hold indices that must be in the climb
         tags_include: Tags that the climb must have
@@ -66,9 +66,9 @@ def get_climbs(
         conditions.append("(grade IS NOT NULL AND grade >= ? AND grade <= ?)")
     params.extend([grade_range[0], grade_range[1]])
     
-    if setter:
+    if setter_name:
         conditions.append("setter_name = ?")
-        params.append(setter)
+        params.append(setter_name)
     
     if name_includes:
         conditions.append("name LIKE ?")
@@ -139,7 +139,7 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
         The new climb ID
     """
     climb_id = f"climb-{uuid.uuid4().hex[:12]}"
-    holds = json.dumps(_holdset_to_holds(climb_data.holds))
+    holds = json.dumps(_holdset_to_holds(climb_data.holdset))
     with get_db() as conn:
         conn.execute(
             """
@@ -154,7 +154,7 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
                 holds,
                 json.dumps(climb_data.tags) if climb_data.tags else None,
                 climb_data.grade,
-                climb_data.setter,
+                climb_data.setter_name,
             ),
         )
     
@@ -221,17 +221,17 @@ def get_climbs_for_training(
 
 def _row_to_climb(row) -> Climb:
     """Convert a database row to a Climb object."""
-    holds = json.loads(row["holds"]) if row["holds"] else []
+    holds = json.loads(row["holds"])
+    holdset = _holds_to_holdset(holds)
     return Climb(
         id=row["id"],
         wall_id=row["wall_id"],
         angle=row["angle"],
         name=row["name"],
         grade=row["grade"],
-        setter=row["setter_name"],
-        holds=holds,
+        setter_name=row["setter_name"],
+        holdset=holdset,
         tags=json.loads(row["tags"]) if row["tags"] else None,
-        num_holds=len(holds),
         ascents=row["ascents"],
         created_at=row["created_at"],
     )
@@ -247,15 +247,13 @@ def _get_sort_column(sort_by: ClimbSortBy) -> str:
             return "grade"
         case ClimbSortBy.ASCENTS:
             return "ascents"
-        case ClimbSortBy.NUM_HOLDS:
-            return "json_array_length(holds)"
         case _:
             return "created_at"
 
 def _holdset_to_holds(holdset: Holdset) -> list[list[int,int]]:
     """Converts a Holdset object into a list of [idx, role] for each hold within the holdset."""
     holds = []
-    for role, hold_list in enumerate(holdset.values()):
+    for role, hold_list in enumerate([holdset.start, holdset.finish, holdset.hand, holdset.foot]):
         holds.extend([[h_idx,role] for h_idx in hold_list])
     return holds
 

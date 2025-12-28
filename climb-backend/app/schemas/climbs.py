@@ -17,9 +17,10 @@ class ClimbSortBy(str, Enum):
 class ClimbCreate(BaseModel):
     """Schema for creating a climb."""
     name: str
-    holds: Holdset
+    holdset: Holdset
+    angle: int
     grade: int | None = Field(None, ge=0, le=180)
-    setter: str | None = None
+    setter_name: str | None = None
     tags: list[str] | None = None
 
 
@@ -27,12 +28,13 @@ class Climb(BaseModel):
     """Schema for climb response."""
     id: str
     wall_id: str
-    name: str | None = None
+    angle: int
+    name: str
     grade: int | None = None
-    setter: str | None = None
-    sequence: list[list[int]]
+    setter_name: str | None = None
+    holdset: Holdset
     tags: list[str] | None = None
-    num_moves: int
+    ascents: int
     created_at: datetime
 
 

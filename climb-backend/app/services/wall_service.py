@@ -6,7 +6,6 @@ Handles:
 - Hold data storage (SQLite holds table)
 - Photo storage
 """
-import json
 import uuid
 import shutil
 from pathlib import Path
@@ -33,9 +32,9 @@ def _parse_dimensions(dim_str: str | None = None) -> tuple[int, int] | None:
 def _row_to_hold_detail(row) -> HoldDetail:
     """Convert a database row to a HoldDetail object."""
     return HoldDetail(
-        hold_id=row["hold_index"],
-        norm_x=row["x"],
-        norm_y=row["y"],
+        hold_index=row["hold_index"],
+        x=row["x"],
+        y=row["y"],
         pull_x=row["pull_x"],
         pull_y=row["pull_y"],
         useability=row["useability"],
@@ -44,13 +43,13 @@ def _row_to_hold_detail(row) -> HoldDetail:
 
 def _hold_detail_to_row(wall_id: str, hold: HoldDetail) -> tuple:
     """Convert a HoldDetail object to database row values."""
-    hold_id = f"{wall_id}-hold-{hold.hold_id}"
+    hold_id = f"{wall_id}-hold-{hold.hold_index}"
     return (
         hold_id,
         wall_id,
-        hold.hold_id,
-        hold.norm_x,
-        hold.norm_y,
+        hold.hold_index,
+        hold.x,
+        hold.y,
         hold.pull_x,
         hold.pull_y,
         hold.useability,
