@@ -1,6 +1,5 @@
 import { apiClient } from "./client";
 import type {
-  Climb,
   ClimbListResponse,
   ClimbCreate,
   ClimbCreateResponse,
@@ -62,30 +61,38 @@ export async function getClimbs(
 }
 
 /**
- * Fetch a single climb by ID
- */
-export async function getClimb(wallId: string, climbId: string): Promise<Climb> {
-  // Note: The backend doesn't have a single climb endpoint,
-  // so we fetch all and filter. This could be optimized with a backend endpoint.
-  const response = await getClimbs(wallId, { limit: 200 });
-  const climb = response.climbs.find((c) => c.id === climbId);
-  if (!climb) {
-    throw new Error(`Climb ${climbId} not found`);
-  }
-  return climb;
-}
-
-/**
  * Create a new climb
  */
 export async function createClimb(
   wallId: string,
   data: ClimbCreate
 ): Promise<ClimbCreateResponse> {
+  // Validate holds before sending
+  if (data.holds.start.length === 0) {
+    throw new Error("At least one start hold is required");
+  }
+  if (data.holds.start.length > 2) {
+    throw new Error("Maximum of 2 start holds allowed");
+  }
+  if (data.holds.finish.length === 0) {
+    throw new Error("At least one finish hold is required");
+  }
+  if (data.holds.finish.length > 2) {
+    throw new Error("Maximum of 2 finish holds allowed");
+  }
+
   const response = await apiClient.post<ClimbCreateResponse>(
     `/walls/${wallId}/climbs`,
-    data
+    {
+      name: data.name,
+      grade: data.grade,
+      setter: data.setter,
+      tags: data.tags,
+      // Send holds in the new format
+      holds: data.holds,
+    }
   );
+
   return response.data;
 }
 

@@ -47,6 +47,7 @@ def init_db():
                 name TEXT NOT NULL,
                 photo_path TEXT NOT NULL,
                 num_holds INTEGER DEFAULT 0,
+                num_climbs INTEGER DEFAULT 0,
                 dimensions TEXT,
                 angle INTEGER,
                 created_at TIMESTAMP,
@@ -59,13 +60,30 @@ def init_db():
             CREATE TABLE IF NOT EXISTS climbs (
                 id TEXT PRIMARY KEY,
                 wall_id TEXT NOT NULL,
-                name TEXT,
-                grade INTEGER,
-                setter TEXT,
-                sequence TEXT NOT NULL,  -- serialized list of positions
+                angle INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                holds TEXT NOT NULL,  -- serialized list of holds
                 tags TEXT,               -- serialized list of tags
+                grade INTEGER,
+                ascents INTEGER DEFAULT 0,
+                setter_name TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (wall_id) REFERENCES walls(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Holds table. Contains essential information on holds for every wall used in training.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS holds (
+                id TEXT PRIMARY KEY,
+                wall_id TEXT NOT_NULL,
+                hold_index INTEGER NOT NULL
+                x REAL NOT NULL,
+                y REAL NOT NULL,
+                pull_x REAL DEFAULT 0.0,
+                pull_y REAL DEFAULT 0.0,
+                useability REAL DEFAULT 0.5,
+                tags TEXT -- serialized list of hold tags (e.g. sloper, crimp, slot, etc.)
             )
         """)
         

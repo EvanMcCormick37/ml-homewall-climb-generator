@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { getWall, getWallPhotoUrl } from "@/api/walls";
-import { createClimbWithHolds } from "@/api/createClimbWithHolds";
+import { createClimb } from "@/api/climbs";
 import { ArrowLeft, Plus, X, ChevronDown } from "lucide-react";
 import type { WallDetail, HoldDetail } from "@/types";
 
@@ -23,10 +23,10 @@ export type HoldCategory = "hand" | "foot" | "start" | "finish";
 const CATEGORY_ORDER: HoldCategory[] = ["hand", "foot", "start", "finish"];
 
 const CATEGORY_COLORS: Record<HoldCategory, string> = {
-  hand: "#3b82f6",   // blue-500
-  foot: "#a855f7",   // purple-500
-  start: "#22c55e",  // green-500
-  finish: "#ef4444", // red-500
+  hand: "#3b82f6",
+  foot: "#a855f7",
+  start: "#22c55e",
+  finish: "#ffea00ff",
 };
 
 const CATEGORY_LABELS: Record<HoldCategory, string> = {
@@ -202,8 +202,10 @@ function ClimbForm({
               />
             </button>
             {isGradeOpen && (
-              <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto 
-                              bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl">
+              <div
+                className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto 
+                              bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl"
+              >
                 {GRADE_OPTIONS.map((option) => (
                   <button
                     key={option.value ?? "null"}
@@ -660,7 +662,9 @@ function Canvas({
     >
       {/* Legend */}
       <div className="absolute top-4 right-4 bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-3 z-10">
-        <p className="text-xs text-zinc-400 mb-2 font-medium">Hold Categories</p>
+        <p className="text-xs text-zinc-400 mb-2 font-medium">
+          Hold Categories
+        </p>
         <div className="space-y-1.5">
           {CATEGORY_ORDER.map((category) => (
             <div key={category} className="flex items-center gap-2">
@@ -732,61 +736,60 @@ function CreateClimbPage() {
   }, []);
 
   // Handle hold click - cycle through categories
-  const handleHoldClick = useCallback(
-    (holdId: number) => {
-      setSelectedHolds((prev) => {
-        const existing = prev.find((h) => h.holdId === holdId);
+  const handleHoldClick = useCallback((holdId: number) => {
+    setSelectedHolds((prev) => {
+      const existing = prev.find((h) => h.holdId === holdId);
 
-        if (!existing) {
-          // Not selected - add as "hand"
-          return [...prev, { holdId, category: "hand" as HoldCategory }];
-        }
+      if (!existing) {
+        // Not selected - add as "hand"
+        return [...prev, { holdId, category: "hand" as HoldCategory }];
+      }
 
-        // Get current category index
-        const currentIndex = CATEGORY_ORDER.indexOf(existing.category);
-        const nextIndex = (currentIndex + 1) % (CATEGORY_ORDER.length + 1);
+      // Get current category index
+      const currentIndex = CATEGORY_ORDER.indexOf(existing.category);
+      const nextIndex = (currentIndex + 1) % (CATEGORY_ORDER.length + 1);
 
-        // If we've cycled through all, remove the hold
-        if (nextIndex === CATEGORY_ORDER.length) {
-          return prev.filter((h) => h.holdId !== holdId);
-        }
+      // If we've cycled through all, remove the hold
+      if (nextIndex === CATEGORY_ORDER.length) {
+        return prev.filter((h) => h.holdId !== holdId);
+      }
 
-        const nextCategory = CATEGORY_ORDER[nextIndex];
+      const nextCategory = CATEGORY_ORDER[nextIndex];
 
-        // Check limits for start/finish
-        if (nextCategory === "start") {
-          const startCount = prev.filter((h) => h.category === "start").length;
-          if (startCount >= 2 && existing.category !== "start") {
-            // Skip to finish if start is full
-            const finishCount = prev.filter(
-              (h) => h.category === "finish"
-            ).length;
-            if (finishCount >= 2) {
-              // Both full, remove the hold
-              return prev.filter((h) => h.holdId !== holdId);
-            }
-            return prev.map((h) =>
-              h.holdId === holdId ? { ...h, category: "finish" as HoldCategory } : h
-            );
-          }
-        }
-
-        if (nextCategory === "finish") {
-          const finishCount = prev.filter((h) => h.category === "finish").length;
-          if (finishCount >= 2 && existing.category !== "finish") {
-            // Finish is full, remove the hold
+      // Check limits for start/finish
+      if (nextCategory === "start") {
+        const startCount = prev.filter((h) => h.category === "start").length;
+        if (startCount >= 2 && existing.category !== "start") {
+          // Skip to finish if start is full
+          const finishCount = prev.filter(
+            (h) => h.category === "finish"
+          ).length;
+          if (finishCount >= 2) {
+            // Both full, remove the hold
             return prev.filter((h) => h.holdId !== holdId);
           }
+          return prev.map((h) =>
+            h.holdId === holdId
+              ? { ...h, category: "finish" as HoldCategory }
+              : h
+          );
         }
+      }
 
-        // Update to next category
-        return prev.map((h) =>
-          h.holdId === holdId ? { ...h, category: nextCategory } : h
-        );
-      });
-    },
-    []
-  );
+      if (nextCategory === "finish") {
+        const finishCount = prev.filter((h) => h.category === "finish").length;
+        if (finishCount >= 2 && existing.category !== "finish") {
+          // Finish is full, remove the hold
+          return prev.filter((h) => h.holdId !== holdId);
+        }
+      }
+
+      // Update to next category
+      return prev.map((h) =>
+        h.holdId === holdId ? { ...h, category: nextCategory } : h
+      );
+    });
+  }, []);
 
   // Check if form can be submitted
   const canSubmit = useMemo(() => {
@@ -820,7 +823,7 @@ function CreateClimbPage() {
           .map((h) => h.holdId),
       };
 
-      await createClimbWithHolds(wallId, {
+      await createClimb(wallId, {
         name: formData.name.trim(),
         grade: formData.grade,
         setter: formData.setter.trim() || null,

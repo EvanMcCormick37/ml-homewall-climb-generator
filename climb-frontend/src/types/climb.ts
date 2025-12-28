@@ -50,6 +50,7 @@ export interface ClimbDeleteResponse {
 
 export interface ClimbFilters {
   grade_range?: [number, number];
+  angle?: number;
   include_projects?: boolean;
   setter?: string;
   name_includes?: string;
@@ -84,22 +85,30 @@ export function gradeToString(grade: number | null): string {
  * Get a color for a given grade
  */
 export function gradeToColor(grade: number | null): string {
-  if (grade === null) return "#6b7280"; // gray for projects
+  if (grade === null) return "#0e0e0eff"; // dark for projects
 
   const vGrade = Math.floor(grade / 10);
 
-  // Color gradient from green (easy) to red (hard)
+  // Color gradient from green (easy) to purple (hard)
   const colors = [
-    "#22c55e", // V0 - green
-    "#84cc16", // V1 - lime
-    "#eab308", // V2 - yellow
-    "#f97316", // V3 - orange
-    "#ef4444", // V4 - red
-    "#dc2626", // V5 - red-600
-    "#b91c1c", // V6 - red-700
-    "#991b1b", // V7 - red-800
-    "#7f1d1d", // V8 - red-900
-    "#581c87", // V9+ - purple
+    "#22c55e", // V0
+    "#00c717ff", // V1
+    "#4acc16ff", // V2
+    "#68cc16ff", // V3
+    "#b9ea08ff", // V4
+    "#d9ff00ff", // V5
+    "#e8dc00ff", // V6
+    "#ffee00ff", // V7
+    "#e6b000ff", // V8
+    "#dc6f26ff", // V9
+    "#dc3826ff", // V10
+    "#b91c1c", // V11
+    "#991b2cff", // V12
+    "#8a042cff", // V13
+    "#8b0071ff", // V14
+    "#79007dff", // V15
+    "#6c007cff", // V16
+    "#3e0075ff", // V17
   ];
 
   return colors[Math.min(vGrade, colors.length - 1)];
