@@ -4,7 +4,7 @@ import { getWall, getWallPhotoUrl, setHolds } from "@/api/walls";
 import { useHolds } from "@/hooks/useHolds";
 import { HelpOverlay, HoldFeaturesSidebar } from "@/components";
 import { Eraser, PlusCircle, Hand } from "lucide-react";
-import type { HoldWithPixels, WallDetail, HoldMode } from "@/types";
+import type { HoldDetail, WallDetail, HoldMode } from "@/types";
 
 // --- Main Page ---
 
@@ -20,6 +20,10 @@ function HoldsEditorPage() {
   const navigate = useNavigate();
   const { wall } = Route.useLoaderData() as { wall: WallDetail };
   const wallId = wall.metadata.id;
+  const wallDimensions = {
+    width: wall.metadata.dimensions[0],
+    height: wall.metadata.dimensions[1],
+  };
 
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageDimensions, setImageDimensions] = useState({
@@ -27,7 +31,7 @@ function HoldsEditorPage() {
     height: 0,
   });
   const [mode, setHoldMode] = useState<HoldMode>("add");
-  const [selectedHold, setSelectedHold] = useState<HoldWithPixels | null>(null);
+  const [selectedHold, setSelectedHold] = useState<HoldDetail | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewTransform, setViewTransform] = useState({ zoom: 1, x: 0, y: 0 });
@@ -36,12 +40,14 @@ function HoldsEditorPage() {
     holds,
     addHold,
     removeHold,
-    removeHoldById,
+    removeHoldByIndex,
     removeLastHold,
     findHoldAt,
     clearHolds,
     loadHolds,
-  } = useHolds(imageDimensions);
+    toPixelCoords,
+    toFeetCoords,
+  } = useHolds(imageDimensions, wallDimensions);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -83,10 +89,12 @@ function HoldsEditorPage() {
   }, [wallId]);
 
   useEffect(() => {
-    if (wall.holds) loadHolds({ holds: wall.holds });
-  }, [wall.holds, loadHolds]);
+    if (wall.holds && imageDimensions.width > 0) {
+      loadHolds(wall.holds);
+    }
+  }, [wall.holds, loadHolds, imageDimensions.width]);
 
-  // Canvas Utility
+  // Canvas Utility - get image coordinates from mouse event
   const getImageCoords = useCallback(
     (e: React.MouseEvent | MouseEvent) => {
       const canvas = canvasRef.current;
@@ -104,20 +112,22 @@ function HoldsEditorPage() {
     [imageDimensions]
   );
 
+  // Calculate hold params from drag gesture (in pixels, then convert to feet for display)
   const calculateHoldParams = useCallback(
     (holdX: number, holdY: number, dragX: number, dragY: number) => {
       const dx = holdX - dragX;
       const dy = holdY - dragY;
       const magnitude = Math.sqrt(dx * dx + dy * dy);
+      const feetCoords = toFeetCoords(holdX, holdY);
       return {
         pull_x: magnitude === 0 ? 0 : dx / magnitude,
         pull_y: magnitude === 0 ? -1 : dy / magnitude,
         useability: Math.min(1, magnitude / 250),
-        norm_x: holdX / imageDimensions.width,
-        norm_y: 1 - holdY / imageDimensions.height,
+        x: feetCoords.x,
+        y: feetCoords.y,
       };
     },
-    [imageDimensions]
+    [toFeetCoords]
   );
 
   const getUseabilityColor = useCallback((u: number) => {
@@ -139,7 +149,7 @@ function HoldsEditorPage() {
       };
       return;
     }
-    if (mode === "add")
+    if (mode === "add") {
       setAddHoldState({
         isDragging: true,
         holdX: x,
@@ -147,6 +157,12 @@ function HoldsEditorPage() {
         dragX: x,
         dragY: y,
       });
+    } else if (mode === "remove") {
+      removeHold(x, y);
+    } else if (mode === "select") {
+      const hold = findHoldAt(x, y);
+      setSelectedHold(hold);
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -190,78 +206,109 @@ function HoldsEditorPage() {
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    // Zoom toward cursor position
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    setViewTransform((prev) => {
-      const newZoom = Math.min(Math.max(prev.zoom * zoomFactor, 0.1), 5);
-      const scale = newZoom / prev.zoom;
-      return {
-        zoom: newZoom,
-        x: mouseX - (mouseX - prev.x) * scale,
-        y: mouseY - (mouseY - prev.y) * scale,
-      };
-    });
+    setViewTransform((prev) => ({
+      ...prev,
+      zoom: Math.max(0.1, Math.min(10, prev.zoom * zoomFactor)),
+    }));
   };
 
-  const handleKeydown = useCallback((e: KeyboardEvent) => {
-    const key = e.key;
-    switch (key) {
-      case "1":
-        setHoldMode("add");
-        break;
-      case "2":
-        setHoldMode("remove");
-        break;
-      case "3":
-        setHoldMode("select");
-        break;
-      case "Backspace":
-        removeLastHold();
-        break;
-    }
-  }, []);
-
+  // Keyboard shortcuts
   useEffect(() => {
-    const globalHandleKeydown = (e: KeyboardEvent) => handleKeydown(e);
-    window.addEventListener("keydown", globalHandleKeydown);
-    return () => {
-      window.removeEventListener("keydown", globalHandleKeydown);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        removeLastHold();
+      }
     };
-  }, []);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [removeLastHold]);
 
-  // Rendering logic (Canvas effect omitted for brevity, same as previous but using calculateHoldParams)
+  // Draw canvas
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx || !image) return;
-    canvas.width = imageDimensions.width;
-    canvas.height = imageDimensions.height;
+    if (!canvas || !image) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const { width, height } = imageDimensions;
+    canvas.width = width || 800;
+    canvas.height = height || 600;
+
+    ctx.fillStyle = "#18181b";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(image, 0, 0);
 
+    // Hold Display Constants - TODO: Make these adjustable settings.
+    const circleSize = 6;
+    const arrowSize = 4;
+
+    // Draw holds
     holds.forEach((hold) => {
-      const x = hold.norm_x * imageDimensions.width;
-      const y = (1 - hold.norm_y) * imageDimensions.height;
+      const { x, y } = toPixelCoords(hold);
       const color = getUseabilityColor(hold.useability ?? 0.5);
-      if (mode === "select" && selectedHold?.hold_id === hold.hold_id) {
+
+      // Selection highlight
+      if (mode === "select" && selectedHold?.hold_index === hold.hold_index) {
         ctx.beginPath();
         ctx.arc(x, y, 20, 0, Math.PI * 2);
         ctx.strokeStyle = "white";
         ctx.lineWidth = 4;
         ctx.stroke();
       }
+
+      // Hold circle
       ctx.beginPath();
-      ctx.arc(x, y, 12, 0, Math.PI * 2);
+      ctx.arc(x, y, circleSize * 4, 0, Math.PI * 2);
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = circleSize;
       ctx.stroke();
-      // Draw arrow... (logic from original code)
+
+      // Pull direction arrow
+      if (hold.pull_x !== null && hold.pull_y !== null) {
+        const arrowLength = 10 + 30 * arrowSize * (hold.useability ?? 0.5);
+        const endX = x + hold.pull_x * arrowLength;
+        const endY = y + hold.pull_y * arrowLength;
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = getUseabilityColor(hold.useability ?? 0.5);
+        ctx.lineWidth = arrowSize;
+        ctx.stroke();
+
+        const headLength = arrowLength / 5.0;
+        const angle = Math.atan2(hold.pull_y, hold.pull_x);
+        ctx.beginPath();
+        ctx.moveTo(
+          endX + (arrowSize / 2.0) * Math.cos(angle - Math.PI / 4),
+          endY + (arrowSize / 2.0) * Math.sin(angle - Math.PI / 4)
+        );
+        ctx.lineTo(
+          endX - headLength * Math.cos(angle - Math.PI / 4),
+          endY - headLength * Math.sin(angle - Math.PI / 4)
+        );
+        ctx.moveTo(
+          endX + (arrowSize / 2.0) * Math.cos(angle + Math.PI / 4),
+          endY + (arrowSize / 2.0) * Math.sin(angle + Math.PI / 4)
+        );
+        ctx.lineTo(
+          endX - headLength * Math.cos(angle + Math.PI / 4),
+          endY - headLength * Math.sin(angle + Math.PI / 4)
+        );
+        ctx.stroke();
+      }
+
+      // Hold index label
+      ctx.fillStyle = "white";
+      ctx.font = "bold 10px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(hold.hold_index.toString(), x, y);
     });
 
+    // Draw preview while dragging
     if (addHoldState.isDragging) {
       const { holdX, holdY, dragX, dragY } = addHoldState;
       const { pull_x, pull_y, useability } = calculateHoldParams(
@@ -271,16 +318,20 @@ function HoldsEditorPage() {
         dragY
       );
       const color = getUseabilityColor(useability);
+
       ctx.beginPath();
-      ctx.arc(holdX, holdY, 15, 0, Math.PI * 2);
+      ctx.arc(holdX, holdY, circleSize * 4, 0, Math.PI * 2);
       ctx.strokeStyle = color;
       ctx.setLineDash([5, 5]);
+      ctx.lineWidth = circleSize;
       ctx.stroke();
       ctx.setLineDash([]);
+
       ctx.beginPath();
       ctx.moveTo(dragX, dragY);
       ctx.lineTo(holdX, holdY);
       ctx.strokeStyle = color;
+      ctx.lineWidth = arrowSize;
       ctx.stroke();
     }
   }, [
@@ -292,7 +343,47 @@ function HoldsEditorPage() {
     getUseabilityColor,
     mode,
     selectedHold,
+    toPixelCoords,
   ]);
+  // Scroll wheel
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!element) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      const rect = element.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      setViewTransform((prev) => {
+        const newZoom = Math.max(0.1, Math.min(10, prev.zoom * zoomFactor));
+        const scale = newZoom / prev.zoom;
+        return {
+          zoom: newZoom,
+          x: mouseX - (mouseX - prev.x) * scale,
+          y: mouseY - (mouseY - prev.y) * scale,
+        };
+      });
+    };
+
+    element.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      element.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
+  // Drag params for sidebar
+  const dragParams = addHoldState.isDragging
+    ? calculateHoldParams(
+        addHoldState.holdX,
+        addHoldState.holdY,
+        addHoldState.dragX,
+        addHoldState.dragY
+      )
+    : { pull_x: 0, pull_y: -1, useability: 0, x: 0, y: 0 };
 
   return (
     <div className="relative h-[calc(100vh-4rem)] flex flex-col bg-zinc-950 overflow-hidden">
@@ -347,24 +438,15 @@ function HoldsEditorPage() {
               setIsSubmitting(true);
               setError(null);
               try {
-                // Strip pixel coordinates, only send normalized data
-                const holdsToSubmit = holds.map(
-                  ({
-                    hold_id,
-                    norm_x,
-                    norm_y,
-                    pull_x,
-                    pull_y,
-                    useability,
-                  }) => ({
-                    hold_id,
-                    norm_x,
-                    norm_y,
-                    pull_x: pull_x ?? 0,
-                    pull_y: pull_y ?? -1,
-                    useability: useability ?? 0.5,
-                  })
-                );
+                // Submit holds with x/y in feet
+                const holdsToSubmit: HoldDetail[] = holds.map((hold) => ({
+                  hold_index: hold.hold_index,
+                  x: hold.x,
+                  y: hold.y,
+                  pull_x: hold.pull_x ?? 0,
+                  pull_y: hold.pull_y ?? -1,
+                  useability: hold.useability ?? 0.5,
+                }));
                 await setHolds(wallId, holdsToSubmit);
                 navigate({ to: `/walls/${wallId}` });
               } catch (err) {
@@ -375,19 +457,26 @@ function HoldsEditorPage() {
                 setIsSubmitting(false);
               }
             }}
-            className="px-6 py-2 hover:bg-indigo-500 text-white text-xs font-black rounded-lg transition-all"
+            disabled={isSubmitting}
+            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-all disabled:opacity-50"
           >
-            SUBMIT HOLDS
+            {isSubmitting ? "SAVING..." : "SAVE HOLDS"}
           </button>
         </div>
       </header>
 
-      {/* Editor Body */}
-      <div className="flex-1 flex overflow-hidden">
-        <main
-          className="flex-1 bg-zinc-950 relative overflow-hidden"
+      {error && (
+        <div className="px-6 py-2 bg-red-900/50 text-red-300 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="flex-1 flex min-h-0">
+        {/* Canvas area */}
+        <div
           ref={wrapperRef}
-          onWheel={handleWheel}
+          className="flex-1 overflow-hidden bg-zinc-950 cursor-crosshair"
         >
           <div
             style={{
@@ -396,37 +485,28 @@ function HoldsEditorPage() {
           >
             <canvas
               ref={canvasRef}
-              style={{
-                width: imageDimensions.width * viewTransform.zoom,
-                height: imageDimensions.height * viewTransform.zoom,
-                cursor: mode === "add" ? "crosshair" : "pointer",
-              }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
-              onClick={(e) => {
-                const { x, y } = getImageCoords(e);
-                if (mode === "remove") removeHold(x, y);
-                if (mode === "select") setSelectedHold(findHoldAt(x, y));
+              onMouseLeave={handleMouseUp}
+              style={{
+                width: (imageDimensions.width || 800) * viewTransform.zoom,
+                height: (imageDimensions.height || 600) * viewTransform.zoom,
               }}
             />
           </div>
-        </main>
+        </div>
 
+        {/* Sidebar */}
         <HoldFeaturesSidebar
           mode={mode}
           selectedHold={selectedHold}
           isDragging={addHoldState.isDragging}
-          dragParams={calculateHoldParams(
-            addHoldState.holdX,
-            addHoldState.holdY,
-            addHoldState.dragX,
-            addHoldState.dragY
-          )}
+          dragParams={dragParams}
           getColor={getUseabilityColor}
           onDeleteHold={() => {
             if (selectedHold) {
-              removeHoldById(selectedHold.hold_id);
+              removeHoldByIndex(selectedHold.hold_index);
               setSelectedHold(null);
             }
           }}

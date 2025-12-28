@@ -72,10 +72,11 @@ export function getWallPhotoUrl(wallId: string): string {
 
 /**
  * Set or replace holds on an existing wall
+ * Holds use x/y in feet (absolute position on wall)
  */
 export async function setHolds(
   wallId: string,
-  holds: Array<HoldDetail>
+  holds: HoldDetail[]
 ): Promise<{ id: string }> {
   const formData = new FormData();
   formData.append("holds", JSON.stringify(holds));

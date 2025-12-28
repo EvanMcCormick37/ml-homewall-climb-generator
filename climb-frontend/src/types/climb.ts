@@ -16,21 +16,22 @@ export interface Holdset {
 export interface Climb {
   id: string;
   wall_id: string;
-  angle: string | null;
-  name: string | null;
+  angle: number;
+  name: string;
   grade: number | null;
-  setter: string | null;
-  holds: Holdset;
+  setter_name: string | null;
+  holdset: Holdset;
   tags: string[] | null;
-  num_moves: number;
-  created_at: string;
+  ascents: number;
+  created_at: Date;
 }
 
 export interface ClimbCreate {
   name: string;
-  holds: Holdset;
+  holdset: Holdset;
+  angle: number;
   grade: number | null;
-  setter: string | null;
+  setter_name: string | null;
   tags: string[] | null;
 }
 
@@ -50,10 +51,10 @@ export interface ClimbDeleteResponse {
 }
 
 export interface ClimbFilters {
-  grade_range?: [number, number];
   angle?: number;
+  grade_range?: [number, number];
   include_projects?: boolean;
-  setter?: string;
+  setter_name?: string;
   name_includes?: string;
   holds_include?: number[];
   tags_include?: string[];

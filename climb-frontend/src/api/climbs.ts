@@ -23,8 +23,8 @@ export async function getClimbs(
   if (filters.include_projects !== undefined) {
     params.append("include_projects", String(filters.include_projects));
   }
-  if (filters.setter) {
-    params.append("setter", filters.setter);
+  if (filters.setter_name) {
+    params.append("setter", filters.setter_name);
   }
   if (filters.name_includes) {
     params.append("name_includes", filters.name_includes);
@@ -68,16 +68,16 @@ export async function createClimb(
   data: ClimbCreate
 ): Promise<ClimbCreateResponse> {
   // Validate holds before sending
-  if (data.holds.start.length === 0) {
+  if (data.holdset.start.length === 0) {
     throw new Error("At least one start hold is required");
   }
-  if (data.holds.start.length > 2) {
+  if (data.holdset.start.length > 2) {
     throw new Error("Maximum of 2 start holds allowed");
   }
-  if (data.holds.finish.length === 0) {
+  if (data.holdset.finish.length === 0) {
     throw new Error("At least one finish hold is required");
   }
-  if (data.holds.finish.length > 2) {
+  if (data.holdset.finish.length > 2) {
     throw new Error("Maximum of 2 finish holds allowed");
   }
 

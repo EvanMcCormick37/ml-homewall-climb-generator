@@ -5,7 +5,6 @@ from app.schemas.base import (
     PositiveInt,
     HoldPosition,
     HoldDetail,
-    Holdset,
 )
 from app.schemas.walls import (
     WallCreate,
@@ -22,6 +21,7 @@ from app.schemas.climbs import (
     ClimbListResponse,
     ClimbCreateResponse,
     ClimbDeleteResponse,
+    Holdset,
 )
 from app.schemas.models import (
     ModelType,

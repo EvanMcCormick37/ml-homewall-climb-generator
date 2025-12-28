@@ -1,64 +1,28 @@
-import type { HoldWithPixels, HoldMode } from "@/types";
-import { Trash, Eraser, PlusCircle, Hand } from "lucide-react";
+import { Trash } from "lucide-react";
+import type { HoldMode, HoldDetail } from "@/types";
 
-// --- Sub-Components for add holds page---
+// --- Help Overlay Component ---
 
-/**
- * Floating Help Overlay component fixed to bottom-left
- */
 export function HelpOverlay() {
   return (
-    <div className="fixed bottom-20 left-6 z-50 bg-zinc-900/90 backdrop-blur-md border border-zinc-800 p-4 rounded-xl shadow-2xl max-w-xs pointer-events-none">
-      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">
-        Hotkeys
-      </h3>
-      <div className="space-y-2 text-[11px] leading-relaxed">
-        <p className="flex items-center gap-1.5">
-          <span className="text-emerald-400 font-mono font-bold border px-1">
-            1
-          </span>
-          <PlusCircle size={14} className="text-emerald-400" />
-          <span className="text-zinc-400">
-            Click & drag to create a new hold
-          </span>
-        </p>
-        <p className="flex items-center gap-1.5">
-          <span className="text-red-400 font-mono font-bold border px-1">
-            2
-          </span>
-          <Eraser size={14} className="text-red-400" />
-          <span className="text-zinc-400">Click on a hold to delete it</span>
-        </p>
-        <p className="flex items-center gap-1.5">
-          <span className="text-blue-400 font-mono font-bold border px-1">
-            3
-          </span>
-          <Hand size={14} className="text-blue-400" />
-          <span className="text-zinc-400">
-            Click on a hold to view hold features
-          </span>
-        </p>
-        <div className="pt-2 border-t border-zinc-800 text-zinc-500 space-y-1">
-          <p className="flex items-center gap-1.5">
-            <span>•</span>
-            <span className="text-zinc-400 border px-1">Shift + Drag:</span>
-            <span>Pan camera</span>
-          </p>
-          <p className="flex items-center gap-1.5">
-            <span>•</span>
-            <span className="text-zinc-400 border px-1">Scroll:</span>
-            <span>Zoom in/out</span>
-          </p>
-          <p className="flex items-center gap-1.5">
-            <span>•</span>
-            <span className="text-zinc-400 border px-1">Backspace:</span>
-            <span>Undo last created hold</span>
-          </p>
-        </div>
+    <div className="absolute bottom-4 left-4 text-xs text-zinc-600 bg-zinc-900/80 px-3 py-2 rounded-lg z-10">
+      <div className="flex items-center gap-4">
+        <span>
+          <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded">Scroll</kbd> Zoom
+        </span>
+        <span>
+          <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded">Shift+Drag</kbd>{" "}
+          Pan
+        </span>
+        <span>
+          <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded">Ctrl+Z</kbd> Undo
+        </span>
       </div>
     </div>
   );
 }
+
+// --- Pull Direction Arrow Component ---
 
 function PullDirectionArrow({
   pullX,
@@ -115,6 +79,8 @@ function PullDirectionArrow({
   );
 }
 
+// --- Hold Features Sidebar Component ---
+
 export function HoldFeaturesSidebar({
   mode,
   selectedHold,
@@ -124,14 +90,14 @@ export function HoldFeaturesSidebar({
   onDeleteHold,
 }: {
   mode: HoldMode;
-  selectedHold: HoldWithPixels | null;
+  selectedHold: HoldDetail | null;
   isDragging: boolean;
   dragParams: {
     pull_x: number;
     pull_y: number;
     useability: number;
-    norm_x: number;
-    norm_y: number;
+    x: number; // in feet
+    y: number; // in feet
   };
   getColor: (useability: number) => string;
   onDeleteHold: () => void;
@@ -150,15 +116,11 @@ export function HoldFeaturesSidebar({
   const pullY = showDragPreview
     ? dragParams.pull_y
     : (selectedHold?.pull_y ?? -1);
-  const normX = showDragPreview
-    ? dragParams.norm_x
-    : (selectedHold?.norm_x ?? 0);
-  const normY = showDragPreview
-    ? dragParams.norm_y
-    : (selectedHold?.norm_y ?? 0);
+  const coordX = showDragPreview ? dragParams.x : (selectedHold?.x ?? 0);
+  const coordY = showDragPreview ? dragParams.y : (selectedHold?.y ?? 0);
 
-  const percentage = Math.round(useability * 100);
-  const barColor = isActive ? getColor(useability) : "transparent";
+  const percentage = Math.round((useability ?? 0) * 100);
+  const barColor = isActive ? getColor(useability ?? 0) : "transparent";
   const bgColor = isActive ? "bg-zinc-700" : "bg-zinc-800";
 
   return (
@@ -175,13 +137,13 @@ export function HoldFeaturesSidebar({
       {/* ID or Status */}
       <div className="flex items-center justify-between">
         <span className="text-xs text-zinc-500">
-          {showDragPreview ? "Status" : "Hold ID"}
+          {showDragPreview ? "Status" : "Hold Index"}
         </span>
         <span className="text-sm font-bold text-zinc-200">
           {showDragPreview
             ? "New Hold"
             : showSelectedHold
-              ? `#${selectedHold?.hold_id}`
+              ? `#${selectedHold?.hold_index}`
               : "—"}
         </span>
       </div>
@@ -222,57 +184,38 @@ export function HoldFeaturesSidebar({
         <div className="py-2">
           {isActive ? (
             <PullDirectionArrow
-              pullX={pullX}
-              pullY={pullY}
+              pullX={pullX ?? 0}
+              pullY={pullY ?? 0}
               color={barColor}
-              size={110}
             />
           ) : (
-            <div className="w-[110px] h-[110px] mx-auto rounded-full border-2 border-dashed border-zinc-800 flex items-center justify-center">
-              <span className="text-zinc-800 text-3xl">—</span>
+            <div className="w-20 h-20 mx-auto rounded-full border-2 border-zinc-800 flex items-center justify-center text-zinc-600 text-xs">
+              N/A
             </div>
           )}
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-center">
-          <div className="bg-zinc-950/50 border border-zinc-800 rounded p-2">
-            <span className="text-[9px] text-zinc-600 block uppercase font-bold">
-              Vector X
-            </span>
-            <span className="text-sm font-mono text-zinc-300">
-              {isActive ? pullX.toFixed(3) : "—"}
-            </span>
-          </div>
-          <div className="bg-zinc-950/50 border border-zinc-800 rounded p-2">
-            <span className="text-[9px] text-zinc-600 block uppercase font-bold">
-              Vector Y
-            </span>
-            <span className="text-sm font-mono text-zinc-300">
-              {isActive ? pullY.toFixed(3) : "—"}
-            </span>
-          </div>
         </div>
       </div>
 
       <div className="border-t border-zinc-800/50" />
 
-      {/* Position */}
-      <div className="flex flex-col gap-2">
-        <span className="text-xs text-zinc-500">Normalized Position</span>
-        <div className="grid grid-cols-2 gap-2 text-center">
+      {/* Coordinates (in feet) */}
+      <div className="flex flex-col gap-3">
+        <span className="text-xs text-zinc-500">Position (feet)</span>
+        <div className="grid grid-cols-2 gap-2">
           <div className="bg-zinc-950/50 border border-zinc-800 rounded p-2">
             <span className="text-[9px] text-zinc-600 block uppercase font-bold">
-              X Coord
+              X (horizontal)
             </span>
             <span className="text-sm font-mono text-zinc-300">
-              {isActive ? normX.toFixed(4) : "—"}
+              {isActive ? `${coordX.toFixed(2)} ft` : "—"}
             </span>
           </div>
           <div className="bg-zinc-950/50 border border-zinc-800 rounded p-2">
             <span className="text-[9px] text-zinc-600 block uppercase font-bold">
-              Y Coord
+              Y (vertical)
             </span>
             <span className="text-sm font-mono text-zinc-300">
-              {isActive ? normY.toFixed(4) : "—"}
+              {isActive ? `${coordY.toFixed(2)} ft` : "—"}
             </span>
           </div>
         </div>

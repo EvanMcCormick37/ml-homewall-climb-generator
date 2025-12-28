@@ -17,7 +17,7 @@ export const Route = createFileRoute("/walls/$wallId/create")({
 
 // --- Constants ---
 
-// Hold categories for the new refactored data model
+// Hold categories for the data model
 export type HoldCategory = "hand" | "foot" | "start" | "finish";
 
 const CATEGORY_ORDER: HoldCategory[] = ["hand", "foot", "start", "finish"];
@@ -47,6 +47,11 @@ const GRADE_OPTIONS = [
   })),
 ];
 
+const ANGLES = [
+  -15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75,
+  80, 85, 90,
+];
+
 // Common climbing tags
 const SUGGESTED_TAGS = [
   "crimps",
@@ -69,14 +74,15 @@ const SUGGESTED_TAGS = [
 // --- Types ---
 
 interface HoldSelection {
-  holdId: number;
+  holdIndex: number;
   category: HoldCategory;
 }
 
 interface ClimbFormData {
   name: string;
+  angle: number | null;
   grade: number | null;
-  setter: string;
+  setter_name: string;
   tags: string[];
 }
 
@@ -84,6 +90,7 @@ interface ClimbFormData {
 
 interface ClimbFormProps {
   formData: ClimbFormData;
+  wallAngle: number | null;
   onFormChange: (data: Partial<ClimbFormData>) => void;
   selectedHolds: HoldSelection[];
   onSubmit: () => void;
@@ -95,6 +102,7 @@ interface ClimbFormProps {
 
 function ClimbForm({
   formData,
+  wallAngle,
   onFormChange,
   selectedHolds,
   onSubmit,
@@ -103,13 +111,25 @@ function ClimbForm({
   error,
   canSubmit,
 }: ClimbFormProps) {
-  const [tagInput, setTagInput] = useState("");
   const [isGradeOpen, setIsGradeOpen] = useState(false);
+  const [isAngleOpen, setIsAngleOpen] = useState(false);
+  const [tagInput, setTagInput] = useState("");
 
-  const startHolds = selectedHolds.filter((h) => h.category === "start");
-  const finishHolds = selectedHolds.filter((h) => h.category === "finish");
-  const handHolds = selectedHolds.filter((h) => h.category === "hand");
-  const footHolds = selectedHolds.filter((h) => h.category === "foot");
+  const selectedGradeLabel =
+    GRADE_OPTIONS.find((opt) => opt.value === formData.grade)?.label ||
+    "Select Grade";
+
+  // Count holds by category
+  const holdCounts = useMemo(() => {
+    const counts: Record<HoldCategory, number> = {
+      hand: 0,
+      foot: 0,
+      start: 0,
+      finish: 0,
+    };
+    selectedHolds.forEach((h) => counts[h.category]++);
+    return counts;
+  }, [selectedHolds]);
 
   const handleAddTag = (tag: string) => {
     const trimmed = tag.trim().toLowerCase();
@@ -123,105 +143,63 @@ function ClimbForm({
     onFormChange({ tags: formData.tags.filter((t) => t !== tag) });
   };
 
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      handleAddTag(tagInput);
-    }
-  };
-
-  const gradeLabel =
-    formData.grade !== null
-      ? `V${Math.floor(formData.grade / 10)}`
-      : "Project (Ungraded)";
-
-  // Validation messages
-  const validationMessages: string[] = [];
-  if (!formData.name.trim()) {
-    validationMessages.push("Name required");
-  }
-  if (startHolds.length === 0) {
-    validationMessages.push("At least 1 start hold required");
-  }
-  if (finishHolds.length === 0) {
-    validationMessages.push("At least 1 finish hold required");
-  }
-
   return (
-    <div className="flex flex-col h-full bg-zinc-900 overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-zinc-800 flex-shrink-0">
-        <h2 className="text-lg font-medium text-zinc-100">Create Climb</h2>
-        <p className="text-xs text-zinc-500 mt-1">
-          Fill in details and select holds on the wall
+    <div className="w-80 flex-shrink-0 border-l border-zinc-800 bg-zinc-900 flex flex-col">
+      <div className="p-4 border-b border-zinc-800">
+        <h2 className="text-lg font-semibold text-zinc-100">Create Climb</h2>
+        <p className="text-sm text-zinc-500 mt-1">
+          Click holds to select them for your climb
         </p>
       </div>
 
-      {/* Scrollable Form Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {/* Name Field */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Name */}
         <div>
-          <label
-            htmlFor="climb-name"
-            className="block text-sm font-medium text-zinc-400 mb-2"
-          >
-            Climb Name <span className="text-red-400">*</span>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">
+            Name <span className="text-red-400">*</span>
           </label>
           <input
-            id="climb-name"
             type="text"
             value={formData.name}
             onChange={(e) => onFormChange({ name: e.target.value })}
-            placeholder="Enter climb name..."
-            className="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg 
-                       text-zinc-100 placeholder-zinc-500 
-                       focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none
-                       transition-colors"
+            placeholder="Enter climb name"
+            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg 
+                       text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
           />
         </div>
 
-        {/* Grade Field */}
+        {/* Grade */}
         <div>
-          <label className="block text-sm font-medium text-zinc-400 mb-2">
+          <label className="block text-sm font-medium text-zinc-400 mb-1">
             Grade
           </label>
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsGradeOpen(!isGradeOpen)}
-              className="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg 
-                         text-left text-zinc-100
-                         focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none
-                         transition-colors flex items-center justify-between"
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg 
+                         text-zinc-100 text-left flex items-center justify-between"
             >
-              <span>{gradeLabel}</span>
-              <ChevronDown
-                className={`w-4 h-4 text-zinc-500 transition-transform ${
-                  isGradeOpen ? "rotate-180" : ""
-                }`}
-              />
+              {selectedGradeLabel}
+              <ChevronDown className="w-4 h-4 text-zinc-500" />
             </button>
             {isGradeOpen && (
               <div
-                className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto 
-                              bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl"
+                className="absolute top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 
+                              rounded-lg shadow-lg max-h-48 overflow-y-auto z-10"
               >
-                {GRADE_OPTIONS.map((option) => (
+                {GRADE_OPTIONS.map((opt) => (
                   <button
-                    key={option.value ?? "null"}
+                    key={opt.value ?? "null"}
                     type="button"
                     onClick={() => {
-                      onFormChange({ grade: option.value });
+                      onFormChange({ grade: opt.value });
                       setIsGradeOpen(false);
                     }}
-                    className={`w-full px-3 py-2 text-left text-sm transition-colors
-                      ${
-                        formData.grade === option.value
-                          ? "bg-blue-600 text-white"
-                          : "text-zinc-300 hover:bg-zinc-700"
-                      }`}
+                    className={`w-full px-3 py-2 text-left hover:bg-zinc-700 transition-colors
+                      ${formData.grade === opt.value ? "bg-zinc-700 text-emerald-400" : "text-zinc-300"}`}
                   >
-                    {option.label}
+                    {opt.label}
                   </button>
                 ))}
               </div>
@@ -229,80 +207,116 @@ function ClimbForm({
           </div>
         </div>
 
-        {/* Setter Field */}
+        {/* Angle */}
         <div>
-          <label
-            htmlFor="climb-setter"
-            className="block text-sm font-medium text-zinc-400 mb-2"
-          >
+          <label className="block text-sm font-medium text-zinc-400 mb-1">
+            Angle
+          </label>
+          {!!wallAngle ? (
+            <div
+              className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg 
+                         text-zinc-100 text-left flex items-center justify-between"
+            >
+              {wallAngle}
+            </div>
+          ) : (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsAngleOpen((prev) => !prev)}
+                className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg 
+                         text-zinc-100 text-left flex items-center justify-between"
+              >
+                {selectedGradeLabel}
+                <ChevronDown className="w-4 h-4 text-zinc-500" />
+              </button>
+              {isAngleOpen && (
+                <div
+                  className="absolute top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 
+                              rounded-lg shadow-lg max-h-48 overflow-y-auto z-10"
+                >
+                  {ANGLES.map((opt) => (
+                    <button
+                      key={opt ?? "null"}
+                      type="button"
+                      onClick={() => {
+                        onFormChange({ angle: opt });
+                        setIsGradeOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left hover:bg-zinc-700 transition-colors
+                      ${formData.angle === opt ? "bg-zinc-700 text-emerald-400" : "text-zinc-300"}`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Setter */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-400 mb-1">
             Setter
           </label>
           <input
-            id="climb-setter"
             type="text"
-            value={formData.setter}
-            onChange={(e) => onFormChange({ setter: e.target.value })}
-            placeholder="Your name (optional)"
-            className="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg 
-                       text-zinc-100 placeholder-zinc-500 
-                       focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none
-                       transition-colors"
+            value={formData.setter_name}
+            onChange={(e) => onFormChange({ setter_name: e.target.value })}
+            placeholder="Who set this climb?"
+            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg 
+                       text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
           />
         </div>
 
-        {/* Tags Field */}
+        {/* Tags */}
         <div>
-          <label className="block text-sm font-medium text-zinc-400 mb-2">
+          <label className="block text-sm font-medium text-zinc-400 mb-1">
             Tags
           </label>
-
-          {/* Selected Tags */}
-          {formData.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {formData.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-1 px-2 py-1 text-xs 
-                             bg-blue-600/20 text-blue-400 rounded-md"
+          <div className="flex flex-wrap gap-1 mb-2">
+            {formData.tags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-700 
+                           text-zinc-200 rounded text-xs"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTag(tag)}
+                  className="hover:text-red-400"
                 >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveTag(tag)}
-                    className="hover:text-blue-200 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Tag Input */}
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
           <input
             type="text"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={handleTagKeyDown}
-            onBlur={() => tagInput && handleAddTag(tagInput)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddTag(tagInput);
+              }
+            }}
             placeholder="Add tags..."
-            className="w-full px-3 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg 
-                       text-zinc-100 placeholder-zinc-500 
-                       focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none
-                       transition-colors"
+            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg 
+                       text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500"
           />
-
-          {/* Suggested Tags */}
           <div className="flex flex-wrap gap-1 mt-2">
             {SUGGESTED_TAGS.filter((t) => !formData.tags.includes(t))
-              .slice(0, 8)
+              .slice(0, 6)
               .map((tag) => (
                 <button
                   key={tag}
                   type="button"
                   onClick={() => handleAddTag(tag)}
-                  className="px-2 py-0.5 text-xs text-zinc-500 hover:text-zinc-300 
-                             bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+                  className="px-2 py-0.5 bg-zinc-800 text-zinc-500 text-xs rounded 
+                             hover:bg-zinc-700 hover:text-zinc-300"
                 >
                   + {tag}
                 </button>
@@ -311,89 +325,54 @@ function ClimbForm({
         </div>
 
         {/* Hold Selection Summary */}
-        <div>
-          <label className="block text-sm font-medium text-zinc-400 mb-2">
+        <div className="pt-4 border-t border-zinc-800">
+          <h3 className="text-sm font-medium text-zinc-400 mb-2">
             Selected Holds
-          </label>
+          </h3>
           <div className="grid grid-cols-2 gap-2">
-            <div className="px-3 py-2 bg-zinc-800 rounded-lg border border-zinc-700">
-              <div className="flex items-center gap-2">
+            {CATEGORY_ORDER.map((cat) => (
+              <div
+                key={cat}
+                className="flex items-center gap-2 px-3 py-2 bg-zinc-800 rounded-lg"
+              >
                 <div
                   className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: CATEGORY_COLORS.start }}
+                  style={{ backgroundColor: CATEGORY_COLORS[cat] }}
                 />
                 <span className="text-sm text-zinc-300">
-                  Start: {startHolds.length}/2
+                  {CATEGORY_LABELS[cat]}
+                </span>
+                <span className="ml-auto text-sm font-medium text-zinc-100">
+                  {holdCounts[cat]}
                 </span>
               </div>
-            </div>
-            <div className="px-3 py-2 bg-zinc-800 rounded-lg border border-zinc-700">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: CATEGORY_COLORS.finish }}
-                />
-                <span className="text-sm text-zinc-300">
-                  Finish: {finishHolds.length}/2
-                </span>
-              </div>
-            </div>
-            <div className="px-3 py-2 bg-zinc-800 rounded-lg border border-zinc-700">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: CATEGORY_COLORS.hand }}
-                />
-                <span className="text-sm text-zinc-300">
-                  Hand: {handHolds.length}
-                </span>
-              </div>
-            </div>
-            <div className="px-3 py-2 bg-zinc-800 rounded-lg border border-zinc-700">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: CATEGORY_COLORS.foot }}
-                />
-                <span className="text-sm text-zinc-300">
-                  Foot: {footHolds.length}
-                </span>
-              </div>
-            </div>
+            ))}
           </div>
           <p className="text-xs text-zinc-500 mt-2">
-            Click holds on the wall to cycle: Hand → Foot → Start → Finish
+            Click holds to cycle through: Hand → Foot → Start → Finish → Remove
           </p>
         </div>
-
-        {/* Validation Messages */}
-        {validationMessages.length > 0 && (
-          <div className="p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
-            <ul className="text-xs text-yellow-400 space-y-1">
-              {validationMessages.map((msg, i) => (
-                <li key={i}>• {msg}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Error Display */}
-        {error && (
-          <div className="p-3 bg-red-900/20 border border-red-700/50 rounded-lg">
-            <p className="text-sm text-red-400">{error}</p>
-          </div>
-        )}
       </div>
 
-      {/* Footer Actions */}
-      <div className="p-4 border-t border-zinc-800 flex-shrink-0 space-y-2">
+      {/* Error */}
+      {error && (
+        <div className="px-4 py-2 bg-red-900/50 text-red-300 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="p-4 border-t border-zinc-800 space-y-2">
         <button
           type="button"
           onClick={onSubmit}
-          disabled={!canSubmit || isSubmitting}
-          className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 
-                     disabled:text-zinc-500 text-white font-medium rounded-lg 
-                     transition-colors flex items-center justify-center gap-2"
+          disabled={!canSubmit}
+          className={`w-full px-4 py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2
+            ${
+              canSubmit
+                ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                : "bg-zinc-700 text-zinc-500 cursor-not-allowed"
+            }`}
         >
           {isSubmitting ? (
             <>
@@ -426,8 +405,9 @@ function ClimbForm({
 interface CanvasProps {
   wallId: string;
   holds: HoldDetail[];
+  wallDimensions: { width: number; height: number };
   selectedHolds: HoldSelection[];
-  onHoldClick: (holdId: number) => void;
+  onHoldClick: (holdIndex: number) => void;
   imageDimensions: { width: number; height: number };
   onImageLoad: (dimensions: { width: number; height: number }) => void;
 }
@@ -435,6 +415,7 @@ interface CanvasProps {
 function Canvas({
   wallId,
   holds,
+  wallDimensions,
   selectedHolds,
   onHoldClick,
   imageDimensions,
@@ -457,7 +438,7 @@ function Canvas({
   // Create lookup map for selected holds
   const selectedHoldsMap = useMemo(() => {
     const map = new Map<number, HoldCategory>();
-    selectedHolds.forEach((h) => map.set(h.holdId, h.category));
+    selectedHolds.forEach((h) => map.set(h.holdIndex, h.category));
     return map;
   }, [selectedHolds]);
 
@@ -484,15 +465,17 @@ function Canvas({
     img.src = getWallPhotoUrl(wallId);
   }, [wallId, onImageLoad]);
 
-  // Convert normalized hold coords to pixel coords
-  const getHoldPixelCoords = useCallback(
+  // Convert feet to pixel coordinates
+  const toPixelCoords = useCallback(
     (hold: HoldDetail): { x: number; y: number } => {
+      const { width: imgW, height: imgH } = imageDimensions;
+      const { width: wallW, height: wallH } = wallDimensions;
       return {
-        x: hold.norm_x * imageDimensions.width,
-        y: (1 - hold.norm_y) * imageDimensions.height,
+        x: (hold.x / wallW) * imgW,
+        y: (1 - hold.y / wallH) * imgH,
       };
     },
-    [imageDimensions]
+    [imageDimensions, wallDimensions]
   );
 
   // Draw canvas
@@ -504,192 +487,172 @@ function Canvas({
     if (!ctx) return;
 
     const { width, height } = imageDimensions;
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = width || 800;
+    canvas.height = height || 600;
 
-    // Clear and draw image
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(image, 0, 0, width, height);
+    // Clear
+    ctx.fillStyle = "#18181b";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw all holds
+    // Draw image
+    ctx.drawImage(image, 0, 0);
+
+    // Draw holds
     holds.forEach((hold) => {
-      const { x, y } = getHoldPixelCoords(hold);
+      const { x, y } = toPixelCoords(hold);
       const radius = 18;
-      const isSelected = selectedHoldsMap.has(hold.hold_id);
-      const category = selectedHoldsMap.get(hold.hold_id);
+      const category = selectedHoldsMap.get(hold.hold_index);
+      const isSelected = category !== undefined;
 
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-
-      if (isSelected && category) {
-        // Draw filled circle with category color
-        ctx.fillStyle = CATEGORY_COLORS[category];
-        ctx.globalAlpha = 0.7;
-        ctx.fill();
-        ctx.globalAlpha = 1;
+      // Draw selection ring if selected
+      if (isSelected) {
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 4, 0, 2 * Math.PI);
         ctx.strokeStyle = CATEGORY_COLORS[category];
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // Draw category label
-        ctx.font = "bold 11px system-ui";
-        ctx.fillStyle = "#fff";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(CATEGORY_LABELS[category][0], x, y);
-      } else {
-        // Draw default hold outline
-        ctx.strokeStyle = HOLD_STROKE_COLOR;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 4;
         ctx.stroke();
       }
 
-      // Draw hold ID
-      ctx.font = "10px system-ui";
-      ctx.fillStyle = isSelected ? "#fff" : "#888";
+      // Draw hold circle
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, 2 * Math.PI);
+      ctx.strokeStyle = isSelected
+        ? CATEGORY_COLORS[category]
+        : HOLD_STROKE_COLOR;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw hold index
+      ctx.fillStyle = isSelected ? CATEGORY_COLORS[category] : "white";
+      ctx.font = "bold 11px sans-serif";
       ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillText(String(hold.hold_id), x, y + radius + 2);
+      ctx.textBaseline = "middle";
+      ctx.fillText(hold.hold_index.toString(), x, y);
     });
-  }, [image, holds, imageDimensions, selectedHoldsMap, getHoldPixelCoords]);
+  }, [image, imageDimensions, holds, selectedHoldsMap, toPixelCoords]);
+
+  // Get image coordinates from mouse event
+  const getImageCoords = useCallback(
+    (e: React.MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return { x: 0, y: 0 };
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (imageDimensions.width / rect.width),
+        y: (e.clientY - rect.top) * (imageDimensions.height / rect.height),
+      };
+    },
+    [imageDimensions]
+  );
 
   // Find hold at position
   const findHoldAt = useCallback(
-    (clientX: number, clientY: number): HoldDetail | null => {
-      const canvas = canvasRef.current;
-      if (!canvas) return null;
-
-      const rect = canvas.getBoundingClientRect();
-      const { zoom, x: viewX, y: viewY } = viewTransform;
-
-      // Convert client coords to canvas coords
-      const canvasX = (clientX - rect.left - viewX) / zoom;
-      const canvasY = (clientY - rect.top - viewY) / zoom;
-
-      // Find closest hold within radius
+    (pixelX: number, pixelY: number): HoldDetail | null => {
       const radius = 25;
-      let closest: HoldDetail | null = null;
-      let minDist = Infinity;
-
-      holds.forEach((hold) => {
-        const { x, y } = getHoldPixelCoords(hold);
-        const dist = Math.sqrt((x - canvasX) ** 2 + (y - canvasY) ** 2);
-        if (dist < radius && dist < minDist) {
-          minDist = dist;
-          closest = hold;
-        }
-      });
-
-      return closest;
+      for (const hold of holds) {
+        const { x, y } = toPixelCoords(hold);
+        const dist = Math.sqrt((x - pixelX) ** 2 + (y - pixelY) ** 2);
+        if (dist < radius) return hold;
+      }
+      return null;
     },
-    [holds, viewTransform, getHoldPixelCoords]
+    [holds, toPixelCoords]
   );
 
-  // Mouse handlers
+  // Handle click
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (panDragRef.current.isDragging) return;
+      const { x, y } = getImageCoords(e);
+      const hold = findHoldAt(x, y);
+      if (hold) {
+        onHoldClick(hold.hold_index);
+      }
+    },
+    [getImageCoords, findHoldAt, onHoldClick]
+  );
+
+  // Pan handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Check if clicking on a hold
-      const hold = findHoldAt(e.clientX, e.clientY);
-      if (hold) {
-        onHoldClick(hold.hold_id);
-        return;
+      if (e.shiftKey || e.button === 1) {
+        panDragRef.current = {
+          isDragging: true,
+          startX: e.clientX,
+          startY: e.clientY,
+          startViewX: viewTransform.x,
+          startViewY: viewTransform.y,
+        };
       }
-
-      // Otherwise, start panning
-      panDragRef.current = {
-        isDragging: true,
-        startX: e.clientX,
-        startY: e.clientY,
-        startViewX: viewTransform.x,
-        startViewY: viewTransform.y,
-      };
     },
-    [findHoldAt, onHoldClick, viewTransform]
+    [viewTransform]
   );
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!panDragRef.current.isDragging) return;
-
-    const dx = e.clientX - panDragRef.current.startX;
-    const dy = e.clientY - panDragRef.current.startY;
-
-    setViewTransform((prev) => ({
-      ...prev,
-      x: panDragRef.current.startViewX + dx,
-      y: panDragRef.current.startViewY + dy,
-    }));
+    if (panDragRef.current.isDragging) {
+      setViewTransform((prev) => ({
+        ...prev,
+        x:
+          panDragRef.current.startViewX +
+          (e.clientX - panDragRef.current.startX),
+        y:
+          panDragRef.current.startViewY +
+          (e.clientY - panDragRef.current.startY),
+      }));
+    }
   }, []);
 
   const handleMouseUp = useCallback(() => {
     panDragRef.current.isDragging = false;
   }, []);
 
-  // Wheel zoom
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!element) return;
 
-    setViewTransform((prev) => {
-      const newZoom = Math.max(0.1, Math.min(5, prev.zoom * delta));
-      const rect = e.currentTarget.getBoundingClientRect();
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      const rect = element.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
 
-      // Zoom towards cursor
-      const beforeX = (mouseX - prev.x) / prev.zoom;
-      const beforeY = (mouseY - prev.y) / prev.zoom;
+      setViewTransform((prev) => {
+        const newZoom = Math.max(0.1, Math.min(10, prev.zoom * zoomFactor));
+        const scale = newZoom / prev.zoom;
+        return {
+          zoom: newZoom,
+          x: mouseX - (mouseX - prev.x) * scale,
+          y: mouseY - (mouseY - prev.y) * scale,
+        };
+      });
+    };
 
-      return {
-        zoom: newZoom,
-        x: mouseX - beforeX * newZoom,
-        y: mouseY - beforeY * newZoom,
-      };
-    });
+    element.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      element.removeEventListener("wheel", handleWheel);
+    };
   }, []);
 
-  const { zoom, x, y } = viewTransform;
-  const { width, height } = imageDimensions;
-
   return (
-    <div
-      ref={wrapperRef}
-      className="w-full h-full overflow-hidden bg-zinc-950 cursor-grab active:cursor-grabbing relative"
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
-    >
-      {/* Legend */}
-      <div className="absolute top-4 right-4 bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-3 z-10">
-        <p className="text-xs text-zinc-400 mb-2 font-medium">
-          Hold Categories
-        </p>
-        <div className="space-y-1.5">
-          {CATEGORY_ORDER.map((category) => (
-            <div key={category} className="flex items-center gap-2">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: CATEGORY_COLORS[category] }}
-              />
-              <span className="text-xs text-zinc-300">
-                {CATEGORY_LABELS[category]}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
+    <div ref={wrapperRef} className="flex-1 overflow-hidden bg-zinc-950">
       <div
         style={{
-          transform: `translate(${x}px, ${y}px)`,
+          transform: `translate(${viewTransform.x}px, ${viewTransform.y}px)`,
         }}
       >
         <canvas
           ref={canvasRef}
+          onClick={handleClick}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          className="cursor-pointer"
           style={{
-            width: (width || 800) * zoom,
-            height: (height || 600) * zoom,
+            width: (imageDimensions.width || 800) * viewTransform.zoom,
+            height: (imageDimensions.height || 600) * viewTransform.zoom,
           }}
         />
       </div>
@@ -703,27 +666,28 @@ function CreateClimbPage() {
   const navigate = useNavigate();
   const { wall } = Route.useLoaderData() as { wall: WallDetail };
   const wallId = wall.metadata.id;
+  const wallDimensions = {
+    width: wall.metadata.dimensions[0],
+    height: wall.metadata.dimensions[1],
+  };
+  const wallAngle = wall.metadata.angle ?? null;
 
   const [imageDimensions, setImageDimensions] = useState({
     width: 0,
     height: 0,
   });
-
-  // Form state
+  const [selectedHolds, setSelectedHolds] = useState<HoldSelection[]>([]);
   const [formData, setFormData] = useState<ClimbFormData>({
     name: "",
+    angle: wallAngle,
     grade: null,
-    setter: "",
+    setter_name: "",
     tags: [],
   });
-
-  // Selected holds state
-  const [selectedHolds, setSelectedHolds] = useState<HoldSelection[]>([]);
-
-  // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Handle image load
   const handleImageLoad = useCallback(
     (dimensions: { width: number; height: number }) => {
       setImageDimensions(dimensions);
@@ -731,18 +695,32 @@ function CreateClimbPage() {
     []
   );
 
+  // Handle form reset
+  const handleReset = useCallback(() => {
+    setSelectedHolds([]);
+    setFormData({
+      name: "",
+      angle: wallAngle,
+      grade: null,
+      setter_name: "",
+      tags: [],
+    });
+    setError(null);
+  }, []);
+
+  // Handle form change
   const handleFormChange = useCallback((updates: Partial<ClimbFormData>) => {
     setFormData((prev) => ({ ...prev, ...updates }));
   }, []);
 
   // Handle hold click - cycle through categories
-  const handleHoldClick = useCallback((holdId: number) => {
+  const handleHoldClick = useCallback((holdIndex: number) => {
     setSelectedHolds((prev) => {
-      const existing = prev.find((h) => h.holdId === holdId);
+      const existing = prev.find((h) => h.holdIndex === holdIndex);
 
       if (!existing) {
         // Not selected - add as "hand"
-        return [...prev, { holdId, category: "hand" as HoldCategory }];
+        return [...prev, { holdIndex, category: "hand" as HoldCategory }];
       }
 
       // Get current category index
@@ -751,7 +729,7 @@ function CreateClimbPage() {
 
       // If we've cycled through all, remove the hold
       if (nextIndex === CATEGORY_ORDER.length) {
-        return prev.filter((h) => h.holdId !== holdId);
+        return prev.filter((h) => h.holdIndex !== holdIndex);
       }
 
       const nextCategory = CATEGORY_ORDER[nextIndex];
@@ -766,10 +744,10 @@ function CreateClimbPage() {
           ).length;
           if (finishCount >= 2) {
             // Both full, remove the hold
-            return prev.filter((h) => h.holdId !== holdId);
+            return prev.filter((h) => h.holdIndex !== holdIndex);
           }
           return prev.map((h) =>
-            h.holdId === holdId
+            h.holdIndex === holdIndex
               ? { ...h, category: "finish" as HoldCategory }
               : h
           );
@@ -780,13 +758,13 @@ function CreateClimbPage() {
         const finishCount = prev.filter((h) => h.category === "finish").length;
         if (finishCount >= 2 && existing.category !== "finish") {
           // Finish is full, remove the hold
-          return prev.filter((h) => h.holdId !== holdId);
+          return prev.filter((h) => h.holdIndex !== holdIndex);
         }
       }
 
       // Update to next category
       return prev.map((h) =>
-        h.holdId === holdId ? { ...h, category: nextCategory } : h
+        h.holdIndex === holdIndex ? { ...h, category: nextCategory } : h
       );
     });
   }, []);
@@ -794,9 +772,10 @@ function CreateClimbPage() {
   // Check if form can be submitted
   const canSubmit = useMemo(() => {
     const hasName = formData.name.trim().length > 0;
+    const hasAngle = !!formData.angle;
     const hasStart = selectedHolds.some((h) => h.category === "start");
     const hasFinish = selectedHolds.some((h) => h.category === "finish");
-    return hasName && hasStart && hasFinish && !isSubmitting;
+    return hasName && hasAngle && hasStart && hasFinish && !isSubmitting;
   }, [formData.name, selectedHolds, isSubmitting]);
 
   // Handle form submission
@@ -807,32 +786,33 @@ function CreateClimbPage() {
     setError(null);
 
     try {
-      // Build the holds data with the new format
-      const holds = {
+      // Build the holds data with the Holdset structure
+      const holdset = {
         start: selectedHolds
           .filter((h) => h.category === "start")
-          .map((h) => h.holdId),
+          .map((h) => h.holdIndex),
         finish: selectedHolds
           .filter((h) => h.category === "finish")
-          .map((h) => h.holdId),
+          .map((h) => h.holdIndex),
         hand: selectedHolds
           .filter((h) => h.category === "hand")
-          .map((h) => h.holdId),
+          .map((h) => h.holdIndex),
         foot: selectedHolds
           .filter((h) => h.category === "foot")
-          .map((h) => h.holdId),
+          .map((h) => h.holdIndex),
       };
 
       await createClimb(wallId, {
         name: formData.name.trim(),
+        angle: formData.angle!,
         grade: formData.grade,
-        setter: formData.setter.trim() || null,
+        setter_name: formData.setter_name.trim() || null,
         tags: formData.tags.length > 0 ? formData.tags : null,
-        holds,
+        holdset,
       });
 
-      // Reset form after successful submission
-      handleReset();
+      // Navigate back to wall view after successful submission
+      navigate({ to: "/walls/$wallId/view", params: { wallId } });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to create climb";
@@ -840,19 +820,7 @@ function CreateClimbPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [canSubmit, wallId, formData, selectedHolds]);
-
-  // Handle form reset
-  const handleReset = useCallback(() => {
-    setFormData({
-      name: "",
-      grade: null,
-      setter: "",
-      tags: [],
-    });
-    setSelectedHolds([]);
-    setError(null);
-  }, []);
+  }, [canSubmit, wallId, formData, selectedHolds, navigate]);
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
@@ -878,31 +846,29 @@ function CreateClimbPage() {
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
-        {/* Left panel - ClimbForm */}
-        <div className="w-80 flex-shrink-0 border-r border-zinc-800">
-          <ClimbForm
-            formData={formData}
-            onFormChange={handleFormChange}
-            selectedHolds={selectedHolds}
-            onSubmit={handleSubmit}
-            onReset={handleReset}
-            isSubmitting={isSubmitting}
-            error={error}
-            canSubmit={canSubmit}
-          />
-        </div>
+        {/* Canvas */}
+        <Canvas
+          wallId={wallId}
+          holds={wall.holds}
+          wallDimensions={wallDimensions}
+          selectedHolds={selectedHolds}
+          onHoldClick={handleHoldClick}
+          imageDimensions={imageDimensions}
+          onImageLoad={handleImageLoad}
+        />
 
-        {/* Right panel - Canvas */}
-        <div className="flex-1 min-w-0">
-          <Canvas
-            wallId={wallId}
-            holds={wall.holds}
-            selectedHolds={selectedHolds}
-            onHoldClick={handleHoldClick}
-            imageDimensions={imageDimensions}
-            onImageLoad={handleImageLoad}
-          />
-        </div>
+        {/* Form sidebar */}
+        <ClimbForm
+          formData={formData}
+          wallAngle={wallAngle}
+          onFormChange={handleFormChange}
+          selectedHolds={selectedHolds}
+          onSubmit={handleSubmit}
+          onReset={handleReset}
+          isSubmitting={isSubmitting}
+          error={error}
+          canSubmit={canSubmit}
+        />
       </div>
     </div>
   );
