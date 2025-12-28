@@ -1,22 +1,57 @@
-import { Trash } from "lucide-react";
+import { PlusCircle, Eraser, Hand } from "lucide-react";
 import type { HoldMode, HoldDetail } from "@/types";
 
 // --- Help Overlay Component ---
 
 export function HelpOverlay() {
   return (
-    <div className="absolute bottom-4 left-4 text-xs text-zinc-600 bg-zinc-900/80 px-3 py-2 rounded-lg z-10">
-      <div className="flex items-center gap-4">
-        <span>
-          <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded">Scroll</kbd> Zoom
-        </span>
-        <span>
-          <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded">Shift+Drag</kbd>{" "}
-          Pan
-        </span>
-        <span>
-          <kbd className="bg-zinc-800 px-1.5 py-0.5 rounded">Ctrl+Z</kbd> Undo
-        </span>
+    <div className="fixed bottom-20 left-6 z-50 bg-zinc-900/90 backdrop-blur-md border border-zinc-800 p-4 rounded-xl shadow-2xl max-w-xs pointer-events-none">
+      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">
+        Hotkeys
+      </h3>
+      <div className="space-y-2 text-[11px] leading-relaxed">
+        <p className="flex items-center gap-1.5">
+          <span className="text-emerald-400 font-mono font-bold border px-1">
+            1
+          </span>
+          <PlusCircle size={14} className="text-emerald-400" />
+          <span className="text-zinc-400">
+            Click & drag to create a new hold
+          </span>
+        </p>
+        <p className="flex items-center gap-1.5">
+          <span className="text-red-400 font-mono font-bold border px-1">
+            2
+          </span>
+          <Eraser size={14} className="text-red-400" />
+          <span className="text-zinc-400">Click on a hold to delete it</span>
+        </p>
+        <p className="flex items-center gap-1.5">
+          <span className="text-blue-400 font-mono font-bold border px-1">
+            3
+          </span>
+          <Hand size={14} className="text-blue-400" />
+          <span className="text-zinc-400">
+            Click on a hold to view hold features
+          </span>
+        </p>
+        <div className="pt-2 border-t border-zinc-800 text-zinc-500 space-y-1">
+          <p className="flex items-center gap-1.5">
+            <span>•</span>
+            <span className="text-zinc-400 border px-1">Shift + Drag:</span>
+            <span>Pan camera</span>
+          </p>
+          <p className="flex items-center gap-1.5">
+            <span>•</span>
+            <span className="text-zinc-400 border px-1">Scroll:</span>
+            <span>Zoom in/out</span>
+          </p>
+          <p className="flex items-center gap-1.5">
+            <span>•</span>
+            <span className="text-zinc-400 border px-1">Backspace:</span>
+            <span>Undo last created hold</span>
+          </p>
+        </div>
       </div>
     </div>
   );

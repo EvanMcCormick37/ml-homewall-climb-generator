@@ -203,25 +203,62 @@ function HoldsEditorPage() {
     }
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewTransform((prev) => ({
-      ...prev,
-      zoom: Math.max(0.1, Math.min(10, prev.zoom * zoomFactor)),
-    }));
-  };
-
-  // Keyboard shortcuts
+  // Scroll wheel
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
-        e.preventDefault();
-        removeLastHold();
+    const element = wrapperRef.current;
+    if (!element) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      const rect = element.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      setViewTransform((prev) => {
+        const newZoom = Math.max(0.1, Math.min(10, prev.zoom * zoomFactor));
+        const scale = newZoom / prev.zoom;
+        return {
+          zoom: newZoom,
+          x: mouseX - (mouseX - prev.x) * scale,
+          y: mouseY - (mouseY - prev.y) * scale,
+        };
+      });
+    };
+    element.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      element.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
+  // Hotkeys
+  useEffect(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      const key = e.key;
+      switch (key) {
+        case "1":
+          e.preventDefault();
+          setHoldMode("add");
+          break;
+        case "2":
+          e.preventDefault();
+          setHoldMode("remove");
+          break;
+        case "3":
+          e.preventDefault();
+          setHoldMode("select");
+          break;
+        case "Backspace":
+          e.preventDefault();
+          removeLastHold();
+          break;
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeydown);
+    return () => {
+      window.removeEventListener("keydown", handleKeydown);
+    };
   }, [removeLastHold]);
 
   // Draw canvas
@@ -345,35 +382,6 @@ function HoldsEditorPage() {
     selectedHold,
     toPixelCoords,
   ]);
-  // Scroll wheel
-  useEffect(() => {
-    const element = wrapperRef.current;
-    if (!element) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      const rect = element.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      setViewTransform((prev) => {
-        const newZoom = Math.max(0.1, Math.min(10, prev.zoom * zoomFactor));
-        const scale = newZoom / prev.zoom;
-        return {
-          zoom: newZoom,
-          x: mouseX - (mouseX - prev.x) * scale,
-          y: mouseY - (mouseY - prev.y) * scale,
-        };
-      });
-    };
-
-    element.addEventListener("wheel", handleWheel, { passive: false });
-
-    return () => {
-      element.removeEventListener("wheel", handleWheel);
-    };
-  }, []);
 
   // Drag params for sidebar
   const dragParams = addHoldState.isDragging
