@@ -3,7 +3,7 @@ Service for managing walls.
 
 Handles:
 - Wall CRUD operations
-- HoldDetail data storage (JSON files)
+- Hold data storage (SQLite holds table)
 - Photo storage
 """
 import json
@@ -29,7 +29,36 @@ def _parse_dimensions(dim_str: str | None = None) -> tuple[int, int] | None:
     except (ValueError, IndexError):
         return None
 
-def wall_exists( wall_id: str) -> bool:
+
+def _row_to_hold_detail(row) -> HoldDetail:
+    """Convert a database row to a HoldDetail object."""
+    return HoldDetail(
+        hold_id=row["hold_index"],
+        norm_x=row["x"],
+        norm_y=row["y"],
+        pull_x=row["pull_x"],
+        pull_y=row["pull_y"],
+        useability=row["useability"],
+    )
+
+
+def _hold_detail_to_row(wall_id: str, hold: HoldDetail) -> tuple:
+    """Convert a HoldDetail object to database row values."""
+    hold_id = f"{wall_id}-hold-{hold.hold_id}"
+    return (
+        hold_id,
+        wall_id,
+        hold.hold_id,
+        hold.norm_x,
+        hold.norm_y,
+        hold.pull_x,
+        hold.pull_y,
+        hold.useability,
+        None,  # tags - not in HoldDetail schema yet
+    )
+
+
+def wall_exists(wall_id: str) -> bool:
     """Check if a wall exists."""
     with get_db() as conn:
         row = conn.execute(
@@ -37,13 +66,30 @@ def wall_exists( wall_id: str) -> bool:
         ).fetchone()
     return row is not None
 
-def get_num_holds( wall_id: str) -> int | None:
+
+def get_num_holds(wall_id: str) -> int | None:
     """Get the number of holds of a wall, if it exists"""
     with get_db() as conn:
         row = conn.execute(
             "SELECT num_holds FROM walls WHERE id = ?", (wall_id,)
         ).fetchone()
     return row["num_holds"] if row else None
+
+
+def get_holds(wall_id: str) -> list[HoldDetail]:
+    """Get all holds for a wall from the database."""
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT hold_index, x, y, pull_x, pull_y, useability
+            FROM holds
+            WHERE wall_id = ?
+            ORDER BY hold_index ASC
+            """,
+            (wall_id,)
+        ).fetchall()
+    return [_row_to_hold_detail(row) for row in rows]
+
 
 def get_all_walls() -> list[WallMetadata]:
     """Get all walls with basic metadata."""
@@ -87,7 +133,8 @@ def get_all_walls() -> list[WallMetadata]:
     
     return walls
 
-def get_wall( wall_id: str) -> WallDetail | None:
+
+def get_wall(wall_id: str) -> WallDetail | None:
     """Get full wall details including holds."""
     with get_db() as conn:
         # Get wall metadata with counts
@@ -113,13 +160,8 @@ def get_wall( wall_id: str) -> WallDetail | None:
     if not row:
         return None
     
-    # Load holds from JSON file
-    holds = []
-    json_path = settings.WALLS_DIR / wall_id / "holds.json"
-    if json_path.exists():
-        with open(json_path, "r") as f:
-            holds_json = json.load(f)
-            holds = [HoldDetail(**hold_data) for hold_data in holds_json.get("holds", [])]
+    # Load holds from database
+    holds = get_holds(wall_id)
     
     metadata = WallMetadata(
         id=row["id"],
@@ -140,6 +182,7 @@ def get_wall( wall_id: str) -> WallDetail | None:
         holds=holds
     )
 
+
 def create_wall(
     wall_data: WallCreate,
     photo: UploadFile
@@ -148,7 +191,7 @@ def create_wall(
     Create a new wall.
     
     Args:
-        wall_data: Wall creation data with holds
+        wall_data: Wall creation data
         photo: UploadFile containing wall photo (JPEG or PNG)
         
     Returns:
@@ -185,7 +228,8 @@ def create_wall(
     
     return wall_id
 
-def delete_wall( wall_id: str) -> bool:
+
+def delete_wall(wall_id: str) -> bool:
     """
     Delete a wall and all associated data.
     
@@ -195,50 +239,76 @@ def delete_wall( wall_id: str) -> bool:
     Returns:
         True if deleted, False if not found
     """
-    
-    # Delete from database (cascades to climbs/models due to FK)
-    with get_db() as conn:
-        conn.execute("DELETE FROM walls WHERE id = ?", (wall_id,))
-    
-    # Delete wall directory (JSON, photo, model files)
-    wall_dir = settings.WALLS_DIR / wall_id
-    if wall_dir.exists():
-        shutil.rmtree(wall_dir)
-        return True
-    return False
-
-def set_holds( wall_id: str, holds: list[HoldDetail]) -> bool:
     if not wall_exists(wall_id):
         return False
     
-    holds_json_path = settings.WALLS_DIR / wall_id / "holds.json"
-    holds_json = {
-        "holds": [hold.model_dump() for hold in holds],
-    }
-    with open(holds_json_path, "w") as f:
-        json.dump(holds_json, f, indent=2)
-    
-    # Update the wall info in the database
+    # Delete from database (cascades to climbs/models due to FK)
+    # Also delete holds explicitly since they may not have FK cascade
     with get_db() as conn:
+        conn.execute("DELETE FROM holds WHERE wall_id = ?", (wall_id,))
+        conn.execute("DELETE FROM walls WHERE id = ?", (wall_id,))
+    
+    # Delete wall directory (photo, model files)
+    wall_dir = settings.WALLS_DIR / wall_id
+    if wall_dir.exists():
+        shutil.rmtree(wall_dir)
+    
+    return True
+
+
+def set_holds(wall_id: str, holds: list[HoldDetail]) -> bool:
+    """
+    Set or replace holds for a wall.
+    
+    Args:
+        wall_id: The wall ID
+        holds: List of HoldDetail objects
+        
+    Returns:
+        True if successful, False if wall not found
+    """
+    if not wall_exists(wall_id):
+        return False
+    
+    with get_db() as conn:
+        # Delete existing holds for this wall
+        conn.execute("DELETE FROM holds WHERE wall_id = ?", (wall_id,))
+        
+        # Insert new holds
+        conn.executemany(
+            """
+            INSERT INTO holds (id, wall_id, hold_index, x, y, pull_x, pull_y, useability, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [_hold_detail_to_row(wall_id, hold) for hold in holds]
+        )
+        
+        # Update the wall info in the database
         conn.execute(
             """
             UPDATE walls
             SET num_holds = ?, updated_at = ?
             WHERE id = ?
             """,
-            (len(holds),datetime.now(),wall_id))
+            (len(holds), datetime.now(), wall_id)
+        )
     
     return True
-    
-def get_photo_path( wall_id: str) -> Path | None:
+
+
+def get_photo_path(wall_id: str) -> Path | None:
     """Get photo path for wall_id from the walls table"""
     if not wall_exists(wall_id):
         return None
     with get_db() as conn:
-        row = conn.execute("SELECT photo_path FROM walls WHERE id = ?",(wall_id,)).fetchone()
+        row = conn.execute(
+            "SELECT photo_path FROM walls WHERE id = ?", 
+            (wall_id,)
+        ).fetchone()
     return settings.WALLS_DIR / wall_id / row['photo_path']
 
-def replace_photo( wall_id: str, photo: UploadFile) -> bool:
+
+def replace_photo(wall_id: str, photo: UploadFile) -> bool:
     """
     Replace wall photo by removing old versions and saving the new one.
     """
@@ -246,12 +316,15 @@ def replace_photo( wall_id: str, photo: UploadFile) -> bool:
         return False
     # Get the existing photo path and delete the current photo
     photo_path = get_photo_path(wall_id)
-    shutil.rmtree(photo_path)
+    if photo_path and photo_path.exists():
+        photo_path.unlink()
     # Upload the image to the new photo path and save the new photo path to the database
     save_photo(wall_id, photo)
     return True
 
-def save_photo( wall_id: str, photo: UploadFile):
+
+def save_photo(wall_id: str, photo: UploadFile):
+    """Save a photo for a wall and update the database."""
     # Get the extension from the incoming file and create the new photo path
     ext = Path(photo.filename).suffix
     photo_path = settings.WALLS_DIR / wall_id / f"photo{ext}"
@@ -262,4 +335,7 @@ def save_photo( wall_id: str, photo: UploadFile):
     
     # Add the new photo path to the database
     with get_db() as conn:
-        conn.execute("UPDATE walls SET photo_path = ? WHERE id = ?",(photo_path,wall_id))
+        conn.execute(
+            "UPDATE walls SET photo_path = ?, updated_at = ? WHERE id = ?",
+            (photo_path.name, datetime.now(), wall_id)
+        )

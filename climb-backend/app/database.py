@@ -78,7 +78,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS holds (
                 id TEXT PRIMARY KEY,
                 wall_id TEXT NOT_NULL,
-                hold_index INTEGER NOT NULL
+                hold_index INTEGER NOT NULL,
                 x REAL NOT NULL,
                 y REAL NOT NULL,
                 pull_x REAL DEFAULT 0.0,
