@@ -30,6 +30,10 @@ router = APIRouter()
 )
 def list_climbs(
     wall_id: str,
+    angle: int | None = Query(
+        None,
+        description="Filter by wall angle"
+    ),
     grade_range: list[int] = Query(
         [0,180],
         min_length=2,
@@ -42,7 +46,7 @@ def list_climbs(
     ),
     setter: str | None = Query(
         None, 
-        description="Filter by setter ID"
+        description="Filter by setter name"
     ),
     name_includes: str | None = Query(
         None, 
@@ -50,14 +54,15 @@ def list_climbs(
     ),
     holds_include: list[int] | None = Query(
         None,
-        description="Comma-separated hold IDs that must be in the climb",
+        description="Comma-separated hold indices that must be in the climb",
         example="1,5,12",
     ),
     tags_include: list[str] | None = Query(
         None,
-        description="Comma-separated tags that are used in the climb",
-        example="1,5,12",
-    ),after: datetime | None = Query(
+        description="Comma-separated tags that the climb must have",
+        example="crimp,dynamic",
+    ),
+    after: datetime | None = Query(
         None, 
         description="Filter climbs created after this date"
     ),
@@ -85,13 +90,16 @@ def list_climbs(
     Get all climbs for a wall with filtering options.
     
     Filters:
-    - name: Partial match on climb name
-    - setter: Exact match on setter ID
+    - angle: Exact match on wall angle
+    - name_includes: Partial match on climb name
+    - setter: Exact match on setter name
     - after: Only climbs created after this datetime
-    - holds_include: Climbs must include ALL specified hold IDs
+    - holds_include: Climbs must include ALL specified hold indices
+    - tags_include: Climbs must have ALL specified tags
     """
     climbs, total, limit, offset = services.get_climbs(
         wall_id=wall_id,
+        angle=angle,
         grade_range=grade_range,
         include_projects=include_projects,
         setter=setter,
