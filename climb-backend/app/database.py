@@ -48,6 +48,7 @@ def init_db():
                 photo_path TEXT NOT NULL,
                 num_holds INTEGER DEFAULT 0,
                 num_climbs INTEGER DEFAULT 0,
+                num_models INTEGER DEFAULT 0,
                 dimensions TEXT,
                 angle INTEGER,
                 created_at TIMESTAMP,

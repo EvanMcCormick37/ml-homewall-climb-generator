@@ -112,13 +112,13 @@ function NewWallPage() {
         });
 
         // Parse dimensions if provided
-        const dimensions: [number, number] | undefined =
-          width && height
-            ? [parseInt(width, 10), parseInt(height, 10)]
-            : undefined;
+        const dimensions: [number, number] = [
+          parseInt(width, 10),
+          parseInt(height, 10),
+        ];
 
         // Parse angle if provided
-        const angleValue = angle ? parseInt(angle, 10) : undefined;
+        const angleValue = angle ? parseInt(angle, 10) : null;
 
         const response = await createWall({
           name: name.trim(),
@@ -304,7 +304,7 @@ function NewWallPage() {
             {/* Dimensions fields */}
             <div className="mb-4">
               <label className="block text-sm text-zinc-400 mb-2">
-                Dimensions (optional)
+                Dimensions
               </label>
               <div className="flex gap-3">
                 <div className="flex-1">
@@ -368,7 +368,14 @@ function NewWallPage() {
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || !name.trim()}
+                disabled={
+                  isSubmitting ||
+                  !name.trim() ||
+                  !width ||
+                  !height ||
+                  parseInt(width, 10) <= 0 ||
+                  parseInt(height, 10) <= 0
+                }
                 className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 disabled:cursor-not-allowed rounded text-white font-medium transition-colors"
               >
                 {isSubmitting ? "Creating Wall..." : "Create Wall & Add Holds"}

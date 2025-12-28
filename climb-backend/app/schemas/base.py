@@ -21,3 +21,10 @@ class HoldDetail(BaseModel):
     pull_x: float = Field(..., ge=-1, le=1)
     pull_y: float = Field(..., ge=-1, le=1)
     useability: float | None = Field(None, ge=0, le=10)
+
+class Holdset(BaseModel):
+    """Schema for hold sets for a climb"""
+    start: HoldPosition
+    finish: HoldPosition
+    hand: list[PositiveInt]
+    foot: list[PositiveInt]

@@ -10,12 +10,13 @@ import uuid
 from datetime import datetime
 
 from app.database import get_db
-from app.schemas import Climb, ClimbCreate, ClimbSortBy
+from app.schemas import Climb, ClimbCreate, ClimbSortBy, Holdset
 
 
 
 def get_climbs(
     wall_id: str,
+    angle: int | None = None,
     grade_range: list[int] = [0,180],
     include_projects: bool = True,
     setter: str | None = None,        
@@ -33,11 +34,12 @@ def get_climbs(
     
     Args:
         wall_id: The wall ID
+        angle: Filter by wall angle (optional)
         grade_range: Range of grade (converted to decimal V-grade; v9 = 90, v3- = 27)
         include_projects: Whether to include ungraded climbs
-        setter: Filter by setter ID
+        setter: Filter by setter name
         name_includes: Filter by name (partial match)
-        holds_include: Hold IDs that must be in the climb
+        holds_include: Hold indices that must be in the climb
         tags_include: Tags that the climb must have
         after: Filter climbs created after this date
         sort_by: Sort order
@@ -46,11 +48,15 @@ def get_climbs(
         offset: Pagination offset
         
     Returns:
-        Tuple of (list of climbs, total count)
+        Tuple of (list of climbs, total count, limit, offset)
     """
     # Build WHERE clauses
     conditions = ["wall_id = ?"]
     params: list = [wall_id]
+    
+    if angle is not None:
+        conditions.append("angle = ?")
+        params.append(angle)
     
     if include_projects:
         # Projects (NULL) OR within grade range
@@ -61,7 +67,7 @@ def get_climbs(
     params.extend([grade_range[0], grade_range[1]])
     
     if setter:
-        conditions.append("setter = ?")
+        conditions.append("setter_name = ?")
         params.append(setter)
     
     if name_includes:
@@ -73,17 +79,15 @@ def get_climbs(
         params.append(after.isoformat())
     
     
-    # Filter by holds - check if hold ID appears anywhere in sequence
-    # Sequence is [[lh, rh], [lh, rh], ...] so we need nested json_each
+    # Filter by holds - check if hold index appears in holds list
+    # Holds format is [[hold_idx, role], [hold_idx, role], ...]
+    # We check if hold_idx matches the first element of any sublist
     if holds_include:
         for hold_id in holds_include:
             conditions.append("""
                 EXISTS (
-                    SELECT 1 FROM json_each(sequence) AS pos
-                    WHERE EXISTS (
-                        SELECT 1 FROM json_each(pos.value) AS hold
-                        WHERE hold.value = ?
-                    )
+                    SELECT 1 FROM json_each(holds) AS hold
+                    WHERE json_extract(hold.value, '$[0]') = ?
                 )
             """)
             params.append(hold_id)
@@ -135,20 +139,22 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
         The new climb ID
     """
     climb_id = f"climb-{uuid.uuid4().hex[:12]}"
+    holds = json.dumps(_holdset_to_holds(climb_data.holds))
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO climbs (id, wall_id, name, grade, setter, sequence, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, setter_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 climb_id,
                 wall_id,
+                climb_data.angle,
                 climb_data.name,
+                holds,
+                json.dumps(climb_data.tags) if climb_data.tags else None,
                 climb_data.grade,
                 climb_data.setter,
-                json.dumps(climb_data.sequence),
-                json.dumps(climb_data.tags) if climb_data.tags else None,
             ),
         )
     
@@ -173,7 +179,6 @@ def delete_climb(wall_id: str, climb_id: str) -> bool:
     return cursor.rowcount > 0
 
 def get_climbs_for_training(
-    
     wall_id: str, 
     tags: list[str] | None = None,
 ) -> list[dict]:
@@ -185,7 +190,7 @@ def get_climbs_for_training(
         tags: Optional list of tags - climb must have ALL specified tags
         
     Returns:
-        List of climb dicts with parsed sequences
+        List of climb dicts with parsed holds
     """
     conditions = ["wall_id = ?"]
     params: list = [wall_id]
@@ -205,27 +210,29 @@ def get_climbs_for_training(
     
     with get_db() as conn:
         rows = conn.execute(
-            f"SELECT id, sequence FROM climbs WHERE {where_clause}",
+            f"SELECT id, holds FROM climbs WHERE {where_clause}",
             params,
         ).fetchall()
     
     return [
-        {"id": row["id"], "sequence": json.loads(row["sequence"])}
+        {"id": row["id"], "holds": json.loads(row["holds"])}
         for row in rows
     ]
 
 def _row_to_climb(row) -> Climb:
     """Convert a database row to a Climb object."""
-    sequence = json.loads(row["sequence"]) if row["sequence"] else []
+    holds = json.loads(row["holds"]) if row["holds"] else []
     return Climb(
         id=row["id"],
         wall_id=row["wall_id"],
+        angle=row["angle"],
         name=row["name"],
         grade=row["grade"],
-        setter=row["setter"],
-        sequence=sequence,
+        setter=row["setter_name"],
+        holds=holds,
         tags=json.loads(row["tags"]) if row["tags"] else None,
-        num_moves=len(sequence) - 1 if sequence else 0,
+        num_holds=len(holds),
+        ascents=row["ascents"],
         created_at=row["created_at"],
     )
 
@@ -238,10 +245,28 @@ def _get_sort_column(sort_by: ClimbSortBy) -> str:
             return "name"
         case ClimbSortBy.GRADE:
             return "grade"
-        case ClimbSortBy.TICKS:
-            # Ticks not yet implemented - fall back to date
-            return "created_at"
-        case ClimbSortBy.NUM_MOVES:
-            return "json_array_length(sequence)"
+        case ClimbSortBy.ASCENTS:
+            return "ascents"
+        case ClimbSortBy.NUM_HOLDS:
+            return "json_array_length(holds)"
         case _:
             return "created_at"
+
+def _holdset_to_holds(holdset: Holdset) -> list[list[int,int]]:
+    """Converts a Holdset object into a list of [idx, role] for each hold within the holdset."""
+    holds = []
+    for role, hold_list in enumerate(holdset.values()):
+        holds.extend([[h_idx,role] for h_idx in hold_list])
+    return holds
+
+def _holds_to_holdset(holds: list[list[int,int]]):
+    """Converts a list of [hold_idx, role] back to a Holdset object."""
+    roles = [[],[],[],[]]
+    for h in holds:
+        roles[h[1]].append(h[0])
+    return Holdset(
+        start=roles[0],
+        finish=roles[1],
+        hand=roles[2],
+        foot=roles[3],
+    )

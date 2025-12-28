@@ -5,6 +5,7 @@ from app.schemas.base import (
     PositiveInt,
     HoldPosition,
     HoldDetail,
+    Holdset
 )
 from app.schemas.walls import (
     WallCreate,
@@ -12,7 +13,6 @@ from app.schemas.walls import (
     WallMetadata,
     WallListResponse,
     WallCreateResponse,
-    SetHoldsResponse,
 )
 from app.schemas.climbs import (
     Climb,

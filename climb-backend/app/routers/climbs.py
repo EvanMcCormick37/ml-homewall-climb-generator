@@ -122,13 +122,6 @@ def list_climbs(
 )
 def create_climb(wall_id: str, climb_data: ClimbCreate):
     """Create a new climb for a wall."""
-    num_holds = services.get_num_holds(wall_id)
-    holds_used = [h for pos in climb_data.sequence for h in pos]
-    if num_holds is None:
-        raise HTTPException(status_code=404, detail="Wall not found")
-    if num_holds < max(holds_used):
-        raise HTTPException(status_code=400, detail=f"Invalid hold sequence. hold_id {max(holds_used)} does not exist on wall {wall_id}.")
-        
     climb_id = services.create_climb(wall_id, climb_data)
     return ClimbCreateResponse(id=climb_id)
 

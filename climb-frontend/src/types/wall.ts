@@ -7,20 +7,15 @@
 
 // From schemas/base.py
 export interface HoldDetail {
-  hold_id: number;
-  norm_x: number; // 0-1, normalized position
-  norm_y: number; // 0-1, normalized position
-  pull_x: number; // -1 to 1, pull direction
-  pull_y: number; // -1 to 1, pull direction
-  useability: number | null; // 0-10 or null
+  hold_index: number;
+  x: number; // horizontal position
+  y: number; // vertival position
+  pull_x: number | null; // -1 to 1, pull direction
+  pull_y: number | null; // -1 to 1, pull direction
+  useability: number | null; // 0-1 or null
 }
 
 export type HoldMode = "add" | "remove" | "select";
-
-export interface HoldWithPixels extends HoldDetail {
-  pixel_x?: number;
-  pixel_y?: number;
-}
 
 export interface WallMetadata {
   id: string;
@@ -29,7 +24,7 @@ export interface WallMetadata {
   num_holds: number;
   num_climbs: number;
   num_models: number;
-  dimensions: [number, number] | null;
+  dimensions: [number, number];
   angle: number | null;
   created_at: string;
   updated_at: string;
@@ -53,8 +48,8 @@ export interface WallCreateResponse {
 export interface WallCreate {
   name: string;
   photo: File;
-  dimensions?: [number, number];
-  angle?: number;
+  dimensions: [number, number];
+  angle: number | null;
 }
 
 export interface WallSetHolds {

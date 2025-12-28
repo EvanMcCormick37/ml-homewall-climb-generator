@@ -83,14 +83,7 @@ export async function createClimb(
 
   const response = await apiClient.post<ClimbCreateResponse>(
     `/walls/${wallId}/climbs`,
-    {
-      name: data.name,
-      grade: data.grade,
-      setter: data.setter,
-      tags: data.tags,
-      // Send holds in the new format
-      holds: data.holds,
-    }
+    data
   );
 
   return response.data;
