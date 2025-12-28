@@ -58,4 +58,5 @@ def clean_db_between_tests():
         conn.execute("DELETE FROM jobs")
         conn.execute("DELETE FROM models")
         conn.execute("DELETE FROM climbs")
+        conn.execute("DELETE FROM holds")
         conn.execute("DELETE FROM walls")
