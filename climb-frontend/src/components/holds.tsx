@@ -1,4 +1,4 @@
-import { PlusCircle, Eraser, Hand } from "lucide-react";
+import { PlusCircle, Eraser, Hand, Trash } from "lucide-react";
 import type { HoldMode, HoldDetail } from "@/types";
 
 // --- Help Overlay Component ---
