@@ -12,7 +12,7 @@ export interface HoldDetail {
   pull_x: number | null;
   pull_y: number | null;
   useability: number | null;
-  is_foot: number | null;
+  is_foot: number;
 }
 
 export type HoldMode = "add" | "remove" | "select";

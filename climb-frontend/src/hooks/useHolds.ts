@@ -54,7 +54,7 @@ export function useHolds(
         pull_x: pull_x ?? null,
         pull_y: pull_y ?? null,
         useability: useability ?? null,
-        is_foot: is_foot ?? null,
+        is_foot: is_foot ?? 0,
       };
 
       setHolds((prev) => [...prev, newHold]);
