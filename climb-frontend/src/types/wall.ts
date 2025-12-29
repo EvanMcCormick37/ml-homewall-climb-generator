@@ -49,7 +49,7 @@ export interface WallCreate {
   name: string;
   photo: File;
   dimensions: [number, number];
-  angle: number | null;
+  angle?: number;
 }
 
 export interface WallSetHolds {

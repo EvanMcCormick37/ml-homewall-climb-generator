@@ -71,11 +71,11 @@ def create_wall_with_photo(client, name: str, test_photo: tuple,
     data = {
         "name": name,
     }
-    if dimensions:
-        data["dimensions"] = dimensions
+    data["dimensions"] = dimensions
     if angle is not None:
         data["angle"] = str(angle)
-    
+    else:
+        data["angle"] = None
     files = {
         "photo": test_photo
     }
@@ -233,6 +233,14 @@ class TestWallEndpoints:
         
         # Cleanup
         client.delete(f"/api/v1/walls/{data['id']}")
+    
+    def test_create_wall_without_angle(self,client, test_photo):
+        """Create a wall without declaring a default angle"""
+        response = create_wall_with_photo(
+            client, "Wall With Dims", test_photo,
+            dimensions="244,305"
+        )
+        assert response.status_code == 201
     
     def test_create_wall_missing_name(self, client, test_photo):
         """Create wall without name should fail."""

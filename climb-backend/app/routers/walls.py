@@ -48,7 +48,7 @@ def create_wall(
     name: str = Form(..., min_length=1, max_length=100),
     photo: UploadFile = File(..., description="Wall photo (JPEG or PNG)"),
     dimensions: str = Form(None, description="Comma-separated 'width,height' in feet"),
-    angle: int = Form(None, description="Wall angle in degrees from vertical"),
+    angle: int | None = Form(None, description="Wall angle in degrees from vertical"),
 ):
     """Create a new wall from holdset, metadata, and photo."""
     

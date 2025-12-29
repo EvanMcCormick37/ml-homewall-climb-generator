@@ -117,14 +117,11 @@ function NewWallPage() {
           parseInt(height, 10),
         ];
 
-        // Parse angle if provided
-        const angleValue = angle ? parseInt(angle, 10) : null;
-
         const response = await createWall({
           name: name.trim(),
           photo: file,
           dimensions,
-          angle: angleValue,
+          ...(parseInt(angle, 10) && { angle: parseInt(angle, 10) }),
         });
 
         // Navigate to holds page for the new wall
