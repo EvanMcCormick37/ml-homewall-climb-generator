@@ -84,6 +84,7 @@ def init_db():
                 pull_x REAL DEFAULT 0.0,
                 pull_y REAL DEFAULT 0.0,
                 useability REAL DEFAULT 0.5,
+                is_foot INTEGER DEFAULT 0,
                 tags TEXT -- serialized list of hold tags (e.g. sloper, crimp, slot, etc.)
             )
         """)

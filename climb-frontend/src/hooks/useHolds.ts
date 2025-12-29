@@ -1,191 +1,132 @@
 import { useState, useCallback } from "react";
 import type { HoldDetail } from "@/types";
 
-interface ImageDimensions {
+interface Dimensions {
   width: number;
   height: number;
 }
 
-interface WallDimensions {
-  width: number; // in feet
-  height: number; // in feet
-}
-
-interface UseHoldsReturn {
-  holds: HoldDetail[];
-  addHold: (
-    pixelX: number,
-    pixelY: number,
-    pull_x: number,
-    pull_y: number,
-    useability: number
-  ) => void;
-  removeHold: (pixelX: number, pixelY: number, radius?: number) => void;
-  removeHoldByIndex: (holdIndex: number) => void;
-  removeLastHold: () => HoldDetail | null;
-  findHoldAt: (
-    pixelX: number,
-    pixelY: number,
-    radius?: number
-  ) => HoldDetail | null;
-  clearHolds: () => void;
-  loadHolds: (holds: HoldDetail[]) => void;
-  // Coordinate conversion utilities
-  toPixelCoords: (hold: HoldDetail) => { x: number; y: number };
-  toFeetCoords: (pixelX: number, pixelY: number) => { x: number; y: number };
-}
-
-/**
- * Custom hook for managing hold annotation and operations.
- *
- * Holds are stored with x/y in feet. This hook provides utilities to convert
- * between feet (for storage/API) and pixels (for canvas rendering).
- *
- * @param imageDimensions - The dimensions of the wall image in pixels
- * @param wallDimensions - The dimensions of the wall in feet
- * @returns Hold state and CRUD operations
- */
 export function useHolds(
-  imageDimensions: ImageDimensions,
-  wallDimensions: WallDimensions
-): UseHoldsReturn {
+  imageDimensions: Dimensions,
+  wallDimensions: Dimensions
+) {
   const [holds, setHolds] = useState<HoldDetail[]>([]);
-  const [nextIndex, setNextIndex] = useState(0);
 
-  // Convert from feet to pixel coordinates
-  const toPixelCoords = useCallback(
-    (hold: HoldDetail): { x: number; y: number } => {
-      const { width: imgW, height: imgH } = imageDimensions;
-      const { width: wallW, height: wallH } = wallDimensions;
-
-      return {
-        x: (hold.x / wallW) * imgW,
-        y: (1 - hold.y / wallH) * imgH, // y is inverted (0 at bottom in feet, 0 at top in pixels)
-      };
-    },
-    [imageDimensions, wallDimensions]
-  );
-
-  // Convert from pixel to feet coordinates
+  // Convert pixel coordinates to feet
   const toFeetCoords = useCallback(
-    (pixelX: number, pixelY: number): { x: number; y: number } => {
-      const { width: imgW, height: imgH } = imageDimensions;
-      const { width: wallW, height: wallH } = wallDimensions;
-
-      return {
-        x: (pixelX / imgW) * wallW,
-        y: (1 - pixelY / imgH) * wallH, // invert y back to feet
-      };
+    (pixelX: number, pixelY: number) => {
+      const xFeet = (pixelX / imageDimensions.width) * wallDimensions.width;
+      const yFeet =
+        ((imageDimensions.height - pixelY) / imageDimensions.height) *
+        wallDimensions.height;
+      return { x: xFeet, y: yFeet };
     },
     [imageDimensions, wallDimensions]
   );
 
-  // Load holds from data (e.g., from API)
-  const loadHolds = useCallback((holdsData: HoldDetail[]) => {
-    setHolds(holdsData || []);
-    const maxIndex = Math.max(
-      ...(holdsData || []).map((h) => h.hold_index),
-      -1
-    );
-    setNextIndex(maxIndex + 1);
-  }, []);
+  // Convert feet coordinates to pixels
+  const toPixelCoords = useCallback(
+    (hold: HoldDetail) => {
+      const pixelX = (hold.x / wallDimensions.width) * imageDimensions.width;
+      const pixelY =
+        imageDimensions.height -
+        (hold.y / wallDimensions.height) * imageDimensions.height;
+      return { x: pixelX, y: pixelY };
+    },
+    [imageDimensions, wallDimensions]
+  );
 
-  // Add a new hold at pixel position with pull direction and useability
+  // Add a new hold with optional features
   const addHold = useCallback(
     (
       pixelX: number,
       pixelY: number,
-      pull_x: number,
-      pull_y: number,
-      useability: number
+      pull_x?: number,
+      pull_y?: number,
+      useability?: number,
+      is_foot?: number
     ) => {
-      const { width: imgW, height: imgH } = imageDimensions;
-      const { width: wallW, height: wallH } = wallDimensions;
-      if (!imgW || !imgH || !wallW || !wallH) return;
-
-      const feetCoords = toFeetCoords(pixelX, pixelY);
-
+      const { x, y } = toFeetCoords(pixelX, pixelY);
       const newHold: HoldDetail = {
-        hold_index: nextIndex,
-        x: feetCoords.x,
-        y: feetCoords.y,
-        pull_x: pull_x,
-        pull_y: pull_y,
-        useability: useability,
+        hold_index: holds.length,
+        x,
+        y,
+        pull_x: pull_x ?? null,
+        pull_y: pull_y ?? null,
+        useability: useability ?? null,
+        is_foot: is_foot ?? null,
       };
 
       setHolds((prev) => [...prev, newHold]);
-      setNextIndex((prev) => prev + 1);
     },
-    [nextIndex, imageDimensions, wallDimensions, toFeetCoords]
+    [holds.length, toFeetCoords]
   );
 
-  // Remove hold nearest to pixel position
+  // Remove a hold at pixel coordinates (finds closest)
   const removeHold = useCallback(
-    (pixelX: number, pixelY: number, radius: number = 40) => {
-      setHolds((prev) => {
-        let minDist = Infinity;
-        let nearestIdx = -1;
+    (pixelX: number, pixelY: number) => {
+      let closestIndex = -1;
+      let minDist = Infinity;
 
-        prev.forEach((hold, idx) => {
-          const pixelCoords = toPixelCoords(hold);
-          const dist = Math.sqrt(
-            (pixelCoords.x - pixelX) ** 2 + (pixelCoords.y - pixelY) ** 2
-          );
-
-          if (dist < minDist && dist < radius) {
-            minDist = dist;
-            nearestIdx = idx;
-          }
-        });
-
-        if (nearestIdx >= 0) {
-          return prev.filter((_, idx) => idx !== nearestIdx);
+      holds.forEach((hold, index) => {
+        const { x, y } = toPixelCoords(hold);
+        const dist = Math.sqrt((x - pixelX) ** 2 + (y - pixelY) ** 2);
+        if (dist < minDist && dist < 30) {
+          minDist = dist;
+          closestIndex = index;
         }
-        return prev;
       });
+
+      if (closestIndex !== -1) {
+        setHolds((prev) => {
+          const updated = prev.filter((_, i) => i !== closestIndex);
+          // Re-index remaining holds
+          return updated.map((hold, i) => ({
+            ...hold,
+            hold_index: i,
+          }));
+        });
+      }
     },
-    [toPixelCoords]
+    [holds, toPixelCoords]
   );
 
   // Remove hold by index
   const removeHoldByIndex = useCallback((holdIndex: number) => {
-    setHolds((prev) => prev.filter((hold) => hold.hold_index !== holdIndex));
+    setHolds((prev) => {
+      const updated = prev.filter((h) => h.hold_index !== holdIndex);
+      // Re-index remaining holds
+      return updated.map((hold, i) => ({
+        ...hold,
+        hold_index: i,
+      }));
+    });
   }, []);
 
-  // Remove the most recently added hold and return it
-  const removeLastHold = useCallback((): HoldDetail | null => {
-    let removedHold: HoldDetail | null = null;
+  // Remove the last added hold
+  const removeLastHold = useCallback(() => {
     setHolds((prev) => {
       if (prev.length === 0) return prev;
-      removedHold = prev[prev.length - 1];
       return prev.slice(0, -1);
     });
-    return removedHold;
   }, []);
 
-  // Find hold at pixel position
+  // Find hold at pixel coordinates
   const findHoldAt = useCallback(
-    (
-      pixelX: number,
-      pixelY: number,
-      radius: number = 40
-    ): HoldDetail | null => {
-      let nearest: HoldDetail | null = null;
+    (pixelX: number, pixelY: number): HoldDetail | null => {
+      let closestHold: HoldDetail | null = null;
       let minDist = Infinity;
 
-      for (const hold of holds) {
-        const pixelCoords = toPixelCoords(hold);
-        const dist = Math.sqrt(
-          (pixelCoords.x - pixelX) ** 2 + (pixelCoords.y - pixelY) ** 2
-        );
-
-        if (dist < minDist && dist < radius) {
+      holds.forEach((hold) => {
+        const { x, y } = toPixelCoords(hold);
+        const dist = Math.sqrt((x - pixelX) ** 2 + (y - pixelY) ** 2);
+        if (dist < minDist && dist < 30) {
           minDist = dist;
-          nearest = hold;
+          closestHold = hold;
         }
-      }
-      return nearest;
+      });
+
+      return closestHold;
     },
     [holds, toPixelCoords]
   );
@@ -193,7 +134,11 @@ export function useHolds(
   // Clear all holds
   const clearHolds = useCallback(() => {
     setHolds([]);
-    setNextIndex(0);
+  }, []);
+
+  // Load holds from API data
+  const loadHolds = useCallback((holdsData: HoldDetail[]) => {
+    setHolds(holdsData);
   }, []);
 
   return {

@@ -5,14 +5,14 @@
  * Keep in sync manually, or use Option 2 (openapi-typescript) for auto-generation.
  */
 
-// From schemas/base.py
 export interface HoldDetail {
   hold_index: number;
-  x: number; // horizontal position
-  y: number; // vertival position
-  pull_x: number | null; // -1 to 1, pull direction
-  pull_y: number | null; // -1 to 1, pull direction
-  useability: number | null; // 0-1 or null
+  x: number;
+  y: number;
+  pull_x: number | null;
+  pull_y: number | null;
+  useability: number | null;
+  is_foot: number | null;
 }
 
 export type HoldMode = "add" | "remove" | "select";
@@ -56,3 +56,11 @@ export interface WallSetHolds {
   id: string;
   holds: HoldDetail[];
 }
+
+export interface EnabledFeatures {
+  direction: boolean;
+  useability: boolean;
+  footholds: boolean;
+}
+
+export type FeatureLabel = "direction" | "useability" | "footholds";

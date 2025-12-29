@@ -20,3 +20,4 @@ class HoldDetail(BaseModel):
     pull_x: float | None = Field(None, ge=-1, le=1)
     pull_y: float | None = Field(None, ge=-1, le=1)
     useability: float | None = Field(None, ge=0, le=1)
+    is_foot: int = Field(0, ge=0, le=1)

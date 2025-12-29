@@ -38,12 +38,13 @@ def _row_to_hold_detail(row) -> HoldDetail:
         pull_x=row["pull_x"],
         pull_y=row["pull_y"],
         useability=row["useability"],
+        is_foot=row["is_foot"]
     )
 
 
 def _hold_detail_to_row(wall_id: str, hold: HoldDetail) -> tuple:
     """Convert a HoldDetail object to database row values."""
-    hold_id = f"{wall_id}-hold-{hold.hold_index}"
+    hold_id = f"hold-{uuid.uuid4().hex[:15]}"
     return (
         hold_id,
         wall_id,
@@ -53,6 +54,7 @@ def _hold_detail_to_row(wall_id: str, hold: HoldDetail) -> tuple:
         hold.pull_x,
         hold.pull_y,
         hold.useability,
+        hold.is_foot,
         None,  # tags - not in HoldDetail schema yet
     )
 
@@ -80,7 +82,7 @@ def get_holds(wall_id: str) -> list[HoldDetail]:
     with get_db() as conn:
         rows = conn.execute(
             """
-            SELECT hold_index, x, y, pull_x, pull_y, useability
+            SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot
             FROM holds
             WHERE wall_id = ?
             ORDER BY hold_index ASC
@@ -276,8 +278,8 @@ def set_holds(wall_id: str, holds: list[HoldDetail]) -> bool:
         # Insert new holds
         conn.executemany(
             """
-            INSERT INTO holds (id, wall_id, hold_index, x, y, pull_x, pull_y, useability, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO holds (id, wall_id, hold_index, x, y, pull_x, pull_y, useability, is_foot, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [_hold_detail_to_row(wall_id, hold) for hold in holds]
         )

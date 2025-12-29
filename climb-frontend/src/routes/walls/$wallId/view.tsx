@@ -492,7 +492,7 @@ function WallViewPage() {
         <div className="flex-1 min-w-0">
           <WallCanvas
             wallId={wallId}
-            holds={wall.holds}
+            holds={wall.holds ?? []}
             wallDimensions={wallDimensions}
             selectedClimb={selectedClimb}
             imageDimensions={imageDimensions}
