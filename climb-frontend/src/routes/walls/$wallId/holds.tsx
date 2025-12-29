@@ -40,6 +40,8 @@ function HoldsEditorPage() {
     useability: true,
     footholds: true,
   });
+  const [useabilityLocked, setUseabilityLocked] = useState(false);
+  const [lockedUseability, setLockedUseability] = useState(0.5);
 
   const {
     holds,
@@ -239,12 +241,17 @@ function HoldsEditorPage() {
       const { holdX, holdY, dragX, dragY } = addHoldState;
       const params = calculateHoldParams(holdX, holdY, dragX, dragY);
 
+      // Use locked useability if enabled, otherwise use calculated value
+      const finalUseability = useabilityLocked
+        ? lockedUseability
+        : params.useability;
+
       addHold(
         holdX,
         holdY,
         enabledFeatures.direction ? params.pull_x : undefined,
         enabledFeatures.direction ? params.pull_y : undefined,
-        params.useability,
+        finalUseability,
         enabledFeatures.footholds && isAddFoot ? 1 : 0
       );
       setAddHoldState({
@@ -412,7 +419,10 @@ function HoldsEditorPage() {
       const { holdX, holdY, dragX, dragY } = addHoldState;
       const params = calculateHoldParams(holdX, holdY, dragX, dragY);
       const sizeMultiplier = isAddFoot ? 0.5 : 1;
-      const useability = params.useability ?? 0.5;
+      // Use locked useability if enabled, otherwise use calculated value
+      const useability = useabilityLocked
+        ? lockedUseability
+        : (params.useability ?? 0.5);
       const color = getHoldColor(useability, isAddFoot);
 
       const circleSize = 6 * sizeMultiplier;
@@ -447,16 +457,29 @@ function HoldsEditorPage() {
     selectedHold,
     toPixelCoords,
     enabledFeatures,
+    useabilityLocked,
+    lockedUseability,
   ]);
 
   // Drag params for sidebar
   const dragParams = addHoldState.isDragging
-    ? calculateHoldParams(
-        addHoldState.holdX,
-        addHoldState.holdY,
-        addHoldState.dragX,
-        addHoldState.dragY
-      )
+    ? {
+        ...calculateHoldParams(
+          addHoldState.holdX,
+          addHoldState.holdY,
+          addHoldState.dragX,
+          addHoldState.dragY
+        ),
+        // Override useability with locked value if enabled
+        useability: useabilityLocked
+          ? lockedUseability
+          : calculateHoldParams(
+              addHoldState.holdX,
+              addHoldState.holdY,
+              addHoldState.dragX,
+              addHoldState.dragY
+            ).useability,
+      }
     : { pull_x: 0, pull_y: -1, useability: 0, x: 0, y: 0 };
 
   return (
@@ -598,6 +621,10 @@ function HoldsEditorPage() {
               setSelectedHold(null);
             }
           }}
+          useabilityLocked={useabilityLocked}
+          lockedUseability={lockedUseability}
+          onUseabilityLockChange={setUseabilityLocked}
+          onLockedUseabilityChange={setLockedUseability}
         />
       </div>
     </div>

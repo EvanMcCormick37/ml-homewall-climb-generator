@@ -1,4 +1,5 @@
-import { PlusCircle, Eraser, Hand, Trash2 } from "lucide-react";
+import { useState, useCallback, useRef } from "react";
+import { PlusCircle, Eraser, Hand, Trash2, Lock, Unlock } from "lucide-react";
 import type {
   HoldMode,
   HoldDetail,
@@ -210,6 +211,118 @@ function HotkeysAndInstructions({
   );
 }
 
+// --- Draggable Useability Bar Component ---
+interface UseabilityBarProps {
+  useability: number;
+  color: string;
+  isLocked: boolean;
+  onLockedChange: (locked: boolean) => void;
+  onUseabilityChange: (value: number) => void;
+}
+
+function UseabilityBar({
+  useability,
+  color,
+  isLocked,
+  onLockedChange,
+  onUseabilityChange,
+}: UseabilityBarProps) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleBarInteraction = useCallback(
+    (clientX: number) => {
+      if (!barRef.current || !isLocked) return;
+      const rect = barRef.current.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, x / rect.width));
+      onUseabilityChange(percentage);
+    },
+    [isLocked, onUseabilityChange]
+  );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isLocked) return;
+      setIsDragging(true);
+      handleBarInteraction(e.clientX);
+    },
+    [isLocked, handleBarInteraction]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isDragging || !isLocked) return;
+      handleBarInteraction(e.clientX);
+    },
+    [isDragging, isLocked, handleBarInteraction]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  return (
+    <div>
+      <label className="text-xs text-zinc-500 uppercase tracking-wider">
+        Useability
+      </label>
+      <div className="mt-2 bg-zinc-950 rounded-lg p-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-2xl font-mono text-zinc-300">
+            {(useability * 100).toFixed(0)}%
+          </span>
+          {isLocked && (
+            <span className="text-xs text-amber-500 flex items-center gap-1">
+              <Lock size={12} />
+              Manual
+            </span>
+          )}
+        </div>
+        <div
+          ref={barRef}
+          className={`h-2 bg-zinc-800 rounded-full overflow-hidden ${isLocked ? "cursor-ew-resize" : ""}`}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div
+            className="h-full transition-all duration-75"
+            style={{
+              width: `${useability * 100}%`,
+              backgroundColor: color,
+            }}
+          />
+        </div>
+
+        {/* Lock checkbox */}
+        <label className="flex items-center gap-2 mt-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={isLocked}
+            onChange={(e) => onLockedChange(e.target.checked)}
+            className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500 focus:ring-offset-0"
+          />
+          <span className="text-xs text-zinc-400 group-hover:text-zinc-300 flex items-center gap-1">
+            {isLocked ? <Lock size={12} /> : <Unlock size={12} />}
+            Set Useability
+          </span>
+        </label>
+        {isLocked && (
+          <p className="text-xs text-zinc-600 mt-1 ml-6">
+            Drag the bar to set preset value
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // --- Hold Features Sidebar Component ---
 interface HoldFeaturesSidebarProps {
   mode: HoldMode;
@@ -225,6 +338,10 @@ interface HoldFeaturesSidebarProps {
   };
   getColor: (u: number) => string;
   onDeleteHold: () => void;
+  useabilityLocked?: boolean;
+  lockedUseability?: number;
+  onUseabilityLockChange?: (locked: boolean) => void;
+  onLockedUseabilityChange?: (value: number) => void;
 }
 
 export function HoldFeaturesSidebar({
@@ -235,6 +352,10 @@ export function HoldFeaturesSidebar({
   dragParams,
   getColor,
   onDeleteHold,
+  useabilityLocked = false,
+  lockedUseability = 0.5,
+  onUseabilityLockChange,
+  onLockedUseabilityChange,
 }: HoldFeaturesSidebarProps) {
   // Determine what to display
   const displayHold = mode === "add" && isDragging ? dragParams : selectedHold;
@@ -252,7 +373,14 @@ export function HoldFeaturesSidebar({
     displayHold.useability !== undefined &&
     displayHold.useability !== null;
 
-  if (!displayHold) {
+  // Show lock controls when in add mode and useability is enabled
+  const showLockControls =
+    mode === "add" &&
+    enabledFeatures.useability &&
+    onUseabilityLockChange &&
+    onLockedUseabilityChange;
+
+  if (!displayHold && !showLockControls) {
     return (
       <aside className="w-80 bg-zinc-900 border-l border-zinc-800 flex items-center justify-center">
         <HotkeysAndInstructions enabledFeatures={enabledFeatures} />
@@ -260,8 +388,8 @@ export function HoldFeaturesSidebar({
     );
   }
 
-  const useability = hasUseability ? displayHold.useability! : 0.5;
-  const color = getColor(useability);
+  const useability = hasUseability ? displayHold!.useability! : 0.5;
+  const color = getColor(useabilityLocked ? lockedUseability : useability);
 
   return (
     <aside className="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col overflow-auto">
@@ -281,30 +409,32 @@ export function HoldFeaturesSidebar({
           )}
         </div>
 
-        {/* Position (always present) */}
+        {/* Position (always present when displayHold exists) */}
         <div className="space-y-3">
-          <div>
-            <label className="text-xs text-zinc-500 uppercase tracking-wider">
-              Position
-            </label>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              <div className="bg-zinc-950 rounded-lg p-3">
-                <div className="text-xs text-zinc-600 mb-1">X</div>
-                <div className="text-lg font-mono text-zinc-300">
-                  {displayHold.x.toFixed(2)} ft
+          {displayHold && (
+            <div>
+              <label className="text-xs text-zinc-500 uppercase tracking-wider">
+                Position
+              </label>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <div className="bg-zinc-950 rounded-lg p-3">
+                  <div className="text-xs text-zinc-600 mb-1">X</div>
+                  <div className="text-lg font-mono text-zinc-300">
+                    {displayHold.x.toFixed(2)} ft
+                  </div>
                 </div>
-              </div>
-              <div className="bg-zinc-950 rounded-lg p-3">
-                <div className="text-xs text-zinc-600 mb-1">Y</div>
-                <div className="text-lg font-mono text-zinc-300">
-                  {displayHold.y.toFixed(2)} ft
+                <div className="bg-zinc-950 rounded-lg p-3">
+                  <div className="text-xs text-zinc-600 mb-1">Y</div>
+                  <div className="text-lg font-mono text-zinc-300">
+                    {displayHold.y.toFixed(2)} ft
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Pull Direction Arrow (only if present) */}
-          {hasDirection && (
+          {hasDirection && displayHold && (
             <PullDirectionArrow
               pullX={displayHold.pull_x!}
               pullY={displayHold.pull_y!}
@@ -313,8 +443,27 @@ export function HoldFeaturesSidebar({
             />
           )}
 
-          {/* Useability (only if present) */}
-          {hasUseability && (
+          {/* Useability with lock controls (in add mode) */}
+          {showLockControls && (
+            <UseabilityBar
+              useability={
+                isDragging && hasUseability
+                  ? displayHold!.useability!
+                  : lockedUseability
+              }
+              color={getColor(
+                isDragging && hasUseability && !useabilityLocked
+                  ? displayHold!.useability!
+                  : lockedUseability
+              )}
+              isLocked={useabilityLocked}
+              onLockedChange={onUseabilityLockChange!}
+              onUseabilityChange={onLockedUseabilityChange!}
+            />
+          )}
+
+          {/* Useability (read-only, in select mode) */}
+          {!showLockControls && hasUseability && (
             <div>
               <label className="text-xs text-zinc-500 uppercase tracking-wider">
                 Useability
