@@ -15,7 +15,7 @@ export interface HoldDetail {
   is_foot: number;
 }
 
-export type HoldMode = "add" | "remove" | "select";
+export type HoldMode = "add" | "remove" | "select" | "edit";
 
 export interface WallMetadata {
   id: string;

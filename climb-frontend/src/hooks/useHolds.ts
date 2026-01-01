@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { HoldDetail } from "@/types";
 
 interface Dimensions {
@@ -11,7 +11,10 @@ export function useHolds(
   wallDimensions: Dimensions
 ) {
   const [holds, setHolds] = useState<HoldDetail[]>([]);
-
+  const maxHoldIndex = useMemo(
+    () => (holds.length > 0 ? Math.max(...holds.map((h) => h.hold_index)) : 0),
+    [holds]
+  );
   // Convert pixel coordinates to feet
   const toFeetCoords = useCallback(
     (pixelX: number, pixelY: number) => {
@@ -41,6 +44,7 @@ export function useHolds(
     (
       pixelX: number,
       pixelY: number,
+      holdIndex?: number,
       pull_x?: number,
       pull_y?: number,
       useability?: number,
@@ -48,9 +52,9 @@ export function useHolds(
     ) => {
       const { x, y } = toFeetCoords(pixelX, pixelY);
       const newHold: HoldDetail = {
-        hold_index: holds.length,
         x,
         y,
+        hold_index: holdIndex ?? maxHoldIndex + 1,
         pull_x: pull_x ?? null,
         pull_y: pull_y ?? null,
         useability: useability ?? null,
@@ -60,6 +64,17 @@ export function useHolds(
       setHolds((prev) => [...prev, newHold]);
     },
     [holds.length, toFeetCoords]
+  );
+
+  const updateHold = useCallback(
+    (holdIndex: number, updates: Partial<HoldDetail>) => {
+      setHolds((prev) =>
+        prev.map((hold) =>
+          hold.hold_index === holdIndex ? { ...hold, ...updates } : hold
+        )
+      );
+    },
+    []
   );
 
   // Remove a hold at pixel coordinates (finds closest)
@@ -80,11 +95,8 @@ export function useHolds(
       if (closestIndex !== -1) {
         setHolds((prev) => {
           const updated = prev.filter((_, i) => i !== closestIndex);
-          // Re-index remaining holds
-          return updated.map((hold, i) => ({
-            ...hold,
-            hold_index: i,
-          }));
+          // DO NOT Re-index remaining holds
+          return updated;
         });
       }
     },
@@ -95,11 +107,8 @@ export function useHolds(
   const removeHoldByIndex = useCallback((holdIndex: number) => {
     setHolds((prev) => {
       const updated = prev.filter((h) => h.hold_index !== holdIndex);
-      // Re-index remaining holds
-      return updated.map((hold, i) => ({
-        ...hold,
-        hold_index: i,
-      }));
+      // DO NOT re-index remaining holds
+      return updated;
     });
   }, []);
 
@@ -144,6 +153,7 @@ export function useHolds(
   return {
     holds,
     addHold,
+    updateHold,
     removeHold,
     removeHoldByIndex,
     removeLastHold,

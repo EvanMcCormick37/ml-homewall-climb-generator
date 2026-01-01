@@ -16,3 +16,4 @@ __pycache__
 
 # Photo Assets
 test_assets/
+*.jpg

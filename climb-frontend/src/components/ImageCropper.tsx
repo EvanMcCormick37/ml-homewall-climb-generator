@@ -159,7 +159,7 @@ export default function ImageCropper({
           top: `${cropArea.y * 100}%`,
           width: `${cropArea.width * 100}%`,
           height: `${cropArea.height * 100}%`,
-          border: "2px dashed #a855f7",
+          border: "1px dashed #a855f7",
           boxShadow: "0 0 0 9999px transparent",
         }}
         onMouseDown={(e) => {

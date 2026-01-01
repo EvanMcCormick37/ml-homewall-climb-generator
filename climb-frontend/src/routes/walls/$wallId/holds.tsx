@@ -3,7 +3,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { getWall, getWallPhotoUrl, setHolds } from "@/api/walls";
 import { useHolds } from "@/hooks/useHolds";
 import { HoldFeaturesSidebar, EnabledFeaturesMenu } from "@/components";
-import { Eraser, PlusCircle, Hand, Settings, Plus } from "lucide-react";
+import { Eraser, PlusCircle, Hand, Settings, Plus, Edit } from "lucide-react";
 import type { HoldDetail, WallDetail, HoldMode } from "@/types";
 
 export const Route = createFileRoute("/walls/$wallId/holds")({
@@ -46,6 +46,7 @@ function HoldsEditorPage() {
   const {
     holds,
     addHold,
+    updateHold,
     removeHold,
     removeHoldByIndex,
     removeLastHold,
@@ -70,6 +71,19 @@ function HoldsEditorPage() {
     isDragging: false,
     holdX: 0,
     holdY: 0,
+    dragX: 0,
+    dragY: 0,
+  });
+
+  const [editHoldState, setEditHoldState] = useState<{
+    isDragging: boolean;
+    dragX: number;
+    dragY: number;
+    originalHold?: HoldDetail;
+    useability?: number;
+    is_foot?: number;
+  }>({
+    isDragging: false,
     dragX: 0,
     dragY: 0,
   });
@@ -135,23 +149,19 @@ function HoldsEditorPage() {
       const magnitude = Math.sqrt(dx * dx + dy * dy);
       const feetCoords = toFeetCoords(holdX, holdY);
 
-      // If direction is enabled but not useability, normalize to unit vector
-      const effectiveMagnitude =
-        enabledFeatures.direction && !enabledFeatures.useability
-          ? 1
-          : magnitude;
-
       return {
         pull_x: magnitude === 0 ? 0 : dx / magnitude,
         pull_y: magnitude === 0 ? -1 : dy / magnitude,
         useability: enabledFeatures.useability
-          ? Math.min(1, magnitude / 250)
-          : undefined,
+          ? useabilityLocked
+            ? lockedUseability
+            : Math.min(1, magnitude / 250)
+          : 0.5,
         x: feetCoords.x,
         y: feetCoords.y,
       };
     },
-    [toFeetCoords, enabledFeatures]
+    [toFeetCoords, enabledFeatures, lockedUseability, useabilityLocked]
   );
 
   // Get color based on hold type
@@ -195,6 +205,7 @@ function HoldsEditorPage() {
         addHold(
           x,
           y,
+          undefined, // default hold index
           undefined, // no pull_x
           undefined, // no pull_y
           undefined, // no useability
@@ -210,6 +221,19 @@ function HoldsEditorPage() {
           dragY: y,
         });
       }
+    } else if (mode === "edit") {
+      // In edit mode, only respond if clicking on an existing hold
+      const hold = findHoldAt(x, y);
+      if (hold) {
+        const pixelCoords = toPixelCoords(hold);
+        setEditHoldState({
+          isDragging: true,
+          dragX: pixelCoords.x,
+          dragY: pixelCoords.y,
+          originalHold: { ...hold },
+        });
+      }
+      // If clicking on empty space, do nothing
     } else if (mode === "remove") {
       removeHold(x, y);
     } else if (mode === "select") {
@@ -232,6 +256,9 @@ function HoldsEditorPage() {
     } else if (addHoldState.isDragging) {
       const { x, y } = getImageCoords(e);
       setAddHoldState((prev) => ({ ...prev, dragX: x, dragY: y }));
+    } else if (editHoldState.isDragging) {
+      const { x, y } = getImageCoords(e);
+      setEditHoldState((prev) => ({ ...prev, dragX: x, dragY: y }));
     }
   };
 
@@ -241,23 +268,39 @@ function HoldsEditorPage() {
       const { holdX, holdY, dragX, dragY } = addHoldState;
       const params = calculateHoldParams(holdX, holdY, dragX, dragY);
 
-      // Use locked useability if enabled, otherwise use calculated value
-      const finalUseability = useabilityLocked
-        ? lockedUseability
-        : params.useability;
-
       addHold(
         holdX,
         holdY,
+        undefined,
         enabledFeatures.direction ? params.pull_x : undefined,
         enabledFeatures.direction ? params.pull_y : undefined,
-        finalUseability,
+        enabledFeatures.useability ? params.useability : undefined,
         enabledFeatures.footholds && isAddFoot ? 1 : 0
       );
       setAddHoldState({
         isDragging: false,
         holdX: 0,
         holdY: 0,
+        dragX: 0,
+        dragY: 0,
+      });
+    } else if (editHoldState.isDragging && editHoldState.originalHold) {
+      // In edit mode, update the hold's properties but keep its original position
+      const originalHold = editHoldState.originalHold;
+      const pixelCoords = toPixelCoords(originalHold);
+      const { dragX, dragY } = editHoldState;
+
+      // Calculate new properties based on drag from hold position
+      const updatedParams = {
+        ...calculateHoldParams(pixelCoords.x, pixelCoords.y, dragX, dragY),
+        is_foot: Number(isAddFoot),
+      };
+
+      // update the hold
+      updateHold(originalHold.hold_index, updatedParams);
+
+      setEditHoldState({
+        isDragging: false,
         dragX: 0,
         dragY: 0,
       });
@@ -347,8 +390,8 @@ function HoldsEditorPage() {
       const color = getHoldColor(useability, isFoot);
 
       // Hold Display Constants
-      const circleSize = 6 * sizeMultiplier;
-      const arrowSize = 4 * sizeMultiplier;
+      const circleSize = 4 * sizeMultiplier;
+      const arrowSize = 3 * sizeMultiplier;
 
       // Selection highlight
       if (mode === "select" && selectedHold?.hold_index === hold.hold_index) {
@@ -420,10 +463,7 @@ function HoldsEditorPage() {
       const params = calculateHoldParams(holdX, holdY, dragX, dragY);
       const sizeMultiplier = isAddFoot ? 0.5 : 1;
       // Use locked useability if enabled, otherwise use calculated value
-      const useability = useabilityLocked
-        ? lockedUseability
-        : (params.useability ?? 0.5);
-      const color = getHoldColor(useability, isAddFoot);
+      const color = getHoldColor(params.useability, isAddFoot);
 
       const circleSize = 6 * sizeMultiplier;
       const arrowSize = 4 * sizeMultiplier;
@@ -446,19 +486,55 @@ function HoldsEditorPage() {
         ctx.stroke();
       }
     }
+
+    // Draw preview while editing
+    if (editHoldState.isDragging && editHoldState.originalHold) {
+      const originalHold = editHoldState.originalHold;
+      const pixelCoords = toPixelCoords(originalHold);
+      const { dragX, dragY } = editHoldState;
+      const params = calculateHoldParams(
+        pixelCoords.x,
+        pixelCoords.y,
+        dragX,
+        dragY
+      );
+      const sizeMultiplier = originalHold.is_foot ? 0.5 : 1;
+      const color = getHoldColor(params.useability, originalHold.is_foot === 1);
+
+      const circleSize = 6 * sizeMultiplier;
+      const arrowSize = 4 * sizeMultiplier;
+
+      ctx.beginPath();
+      ctx.arc(pixelCoords.x, pixelCoords.y, circleSize * 4, 0, Math.PI * 2);
+      ctx.strokeStyle = color;
+      ctx.setLineDash([5, 5]);
+      ctx.lineWidth = circleSize;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Only draw arrow if direction is enabled
+      if (enabledFeatures.direction) {
+        ctx.beginPath();
+        ctx.moveTo(dragX, dragY);
+        ctx.lineTo(pixelCoords.x, pixelCoords.y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = arrowSize;
+        ctx.stroke();
+      }
+    }
   }, [
     image,
     imageDimensions,
     holds,
     addHoldState,
+    editHoldState,
     calculateHoldParams,
     getHoldColor,
     mode,
     selectedHold,
     toPixelCoords,
     enabledFeatures,
-    useabilityLocked,
-    lockedUseability,
+    isAddFoot,
   ]);
 
   // Drag params for sidebar
@@ -470,17 +546,20 @@ function HoldsEditorPage() {
           addHoldState.dragX,
           addHoldState.dragY
         ),
-        // Override useability with locked value if enabled
-        useability: useabilityLocked
-          ? lockedUseability
-          : calculateHoldParams(
-              addHoldState.holdX,
-              addHoldState.holdY,
-              addHoldState.dragX,
-              addHoldState.dragY
-            ).useability,
       }
-    : { pull_x: 0, pull_y: -1, useability: 0, x: 0, y: 0 };
+    : editHoldState.isDragging && editHoldState.originalHold
+      ? {
+          ...(() => {
+            const pixelCoords = toPixelCoords(editHoldState.originalHold);
+            return calculateHoldParams(
+              pixelCoords.x,
+              pixelCoords.y,
+              editHoldState.dragX,
+              editHoldState.dragY
+            );
+          })(),
+        }
+      : { pull_x: 0, pull_y: -1, useability: 0, x: 0, y: 0 };
 
   return (
     <div className="relative h-[calc(100vh-4rem)] flex flex-col bg-zinc-950 overflow-hidden">
@@ -520,6 +599,12 @@ function HoldsEditorPage() {
               ) : (
                 <PlusCircle size={14} />
               )}
+            </button>
+            <button
+              onClick={() => setHoldMode("edit")}
+              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${mode === "edit" ? "bg-amber-600 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <Edit size={14} />
             </button>
             <button
               onClick={() => setHoldMode("remove")}
@@ -612,7 +697,7 @@ function HoldsEditorPage() {
           mode={mode}
           enabledFeatures={enabledFeatures}
           selectedHold={selectedHold}
-          isDragging={addHoldState.isDragging}
+          isDragging={addHoldState.isDragging || editHoldState.isDragging}
           dragParams={dragParams}
           getColor={getUseabilityColor}
           onDeleteHold={() => {
