@@ -65,7 +65,8 @@ def init_db():
                 name TEXT NOT NULL,
                 holds TEXT NOT NULL,  -- serialized list of holds
                 tags TEXT,               -- serialized list of tags
-                grade INTEGER,
+                grade REAL,
+                quality REAL DEFAULT 2.5,
                 ascents INTEGER DEFAULT 0,
                 setter_name TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

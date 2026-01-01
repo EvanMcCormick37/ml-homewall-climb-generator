@@ -21,29 +21,56 @@ class Holdset(BaseModel):
     hand: list[PositiveInt]
     foot: list[PositiveInt]
 
-class ClimbCreate(BaseModel):
-    """Schema for creating a climb."""
-    name: str
-    holdset: Holdset
-    angle: int
-    grade: int | None = Field(None, ge=0, le=180)
-    setter_name: str | None = None
-    tags: list[str] | None = None
-
-
 class Climb(BaseModel):
     """Schema for climb response."""
     id: str
     wall_id: str
     angle: int
     name: str
-    grade: int | None = None
-    setter_name: str | None = None
     holdset: Holdset
-    tags: list[str] | None = None
+    grade: float | None = None
+    quality: float | None = None
     ascents: int
+    setter_name: str | None = None
+    tags: list[str] | None = None
     created_at: datetime
 
+class ClimbCreate(BaseModel):
+    """Schema for creating a climb."""
+    name: str
+    holdset: Holdset
+    angle: int
+    grade: float | None = Field(None, ge=0, le=39)
+    quality: float | None = Field(2.5, ge=0, le=4)
+    ascents: int | None = Field(0, ge=0)
+    setter_name: str | None = None
+    tags: list[str] | None = None
+
+class ClimbBatchCreate(BaseModel):
+    """Schema for batch creating climbs."""
+    climbs: list[ClimbCreate]
+
+class ClimbCreateResponse(BaseModel):
+    """Response after creating a climb."""
+    id: str
+
+class ClimbBatchCreateResult(BaseModel):
+    """Result for a single climb in batch creation."""
+    index: int
+    id: str | None = None
+    status: str  # "success" or "error"
+    error: str | None = None
+
+class ClimbBatchCreateResponse(BaseModel):
+    """Response after batch creating climbs."""
+    total: int
+    successful: int
+    failed: int
+    results: list[ClimbBatchCreateResult]
+
+class ClimbDeleteResponse(BaseModel):
+    """Response after deleting a climb."""
+    id: str
 
 class ClimbListResponse(BaseModel):
     """Response for listing climbs."""
@@ -51,13 +78,3 @@ class ClimbListResponse(BaseModel):
     total: int
     limit: int
     offset: int
-
-
-class ClimbCreateResponse(BaseModel):
-    """Response after creating a climb."""
-    id: str
-
-
-class ClimbDeleteResponse(BaseModel):
-    """Response after deleting a climb."""
-    id: str

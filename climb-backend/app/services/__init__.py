@@ -28,6 +28,7 @@ services = ServiceContainer(
     # Climb functions
     get_climbs=climb_service.get_climbs,
     create_climb=climb_service.create_climb,
+    create_climbs_batch=climb_service.create_climbs_batch,
     delete_climb=climb_service.delete_climb,
     get_climbs_for_training=climb_service.get_climbs_for_training,
     

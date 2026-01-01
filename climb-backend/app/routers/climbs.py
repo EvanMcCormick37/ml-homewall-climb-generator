@@ -15,6 +15,9 @@ from app.schemas import (
     ClimbSortBy,
     ClimbListResponse,
     ClimbCreateResponse,
+    ClimbBatchCreate,
+    ClimbBatchCreateResult,
+    ClimbBatchCreateResponse,
     ClimbDeleteResponse,
 )
 from app.services import services
@@ -135,6 +138,37 @@ def create_climb(wall_id: str, climb_data: ClimbCreate):
     climb_id = services.create_climb(wall_id, climb_data)
     return ClimbCreateResponse(id=climb_id)
 
+@router.post(
+    "/batch",
+    response_model=ClimbBatchCreateResponse,
+    status_code=201,
+    summary="Batch create climbs",
+    description="Add multiple climbs to the wall in a single request.",
+)
+def create_climbs_batch(wall_id: str, batch_data: ClimbBatchCreate):
+    """
+    Create multiple climbs for a wall in a single transaction.
+    
+    This is more efficient than creating climbs one at a time,
+    especially for large uploads.
+    """
+    if not services.wall_exists(wall_id):
+        raise HTTPException(status_code=404, detail="Wall not found")
+    
+    if not batch_data.climbs:
+        raise HTTPException(status_code=400, detail="No climbs provided")
+    
+    results = services.create_climbs_batch(wall_id, batch_data.climbs)
+    
+    successful = sum(1 for r in results if r['status'] == 'success')
+    failed = len(results) - successful
+    
+    return ClimbBatchCreateResponse(
+        total=len(results),
+        successful=successful,
+        failed=failed,
+        results=[ClimbBatchCreateResult(**r) for r in results]
+    )
 
 @router.delete(
     "/{climb_id}",

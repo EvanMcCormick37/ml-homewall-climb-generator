@@ -4,7 +4,7 @@
  * These types mirror the Pydantic schemas in climb-api/app/schemas/climbs.py
  */
 
-export type ClimbSortBy = "date" | "name" | "grade" | "ticks" | "num_moves";
+export type ClimbSortBy = "date" | "name" | "grade" | "ascents";
 
 export interface Holdset {
   start: number[];
@@ -18,11 +18,12 @@ export interface Climb {
   wall_id: string;
   angle: number;
   name: string;
-  grade: number | null;
-  setter_name: string | null;
   holdset: Holdset;
-  tags: string[] | null;
+  grade: number | null;
+  quality: number | null;
   ascents: number;
+  setter_name: string | null;
+  tags: string[] | null;
   created_at: Date;
 }
 

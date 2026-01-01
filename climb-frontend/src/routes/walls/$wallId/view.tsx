@@ -303,7 +303,8 @@ function WallCanvas({
     // Draw all holds
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const radius = 15;
+      const scale = 2;
+      const radius = 15 * scale;
 
       const isUsed = usedHolds.has(hold.hold_index);
       const isStart = startHolds.has(hold.hold_index);
@@ -327,7 +328,11 @@ function WallCanvas({
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
       ctx.strokeStyle = strokeColor;
       ctx.globalAlpha = alpha;
-      ctx.lineWidth = isUsed && selectedClimb ? 4 : 2;
+      ctx.lineWidth = isUsed && selectedClimb ? scale * 2 : 2;
+      if (selectedClimb && isUsed) {
+        ctx.fillStyle = strokeColor;
+        ctx.fill();
+      }
       ctx.stroke();
       ctx.globalAlpha = 1;
 
@@ -376,15 +381,36 @@ function WallCanvas({
     panDragRef.current.isDragging = false;
   }, []);
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    setViewTransform((prev) => ({
-      ...prev,
-      zoom: Math.max(0.1, Math.min(10, prev.zoom * zoomFactor)),
-    }));
+  // Scroll wheel
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!element) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      const rect = element.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      setViewTransform((prev) => {
+        const newZoom = Math.max(0.1, Math.min(10, prev.zoom * zoomFactor));
+        const scale = newZoom / prev.zoom;
+        return {
+          zoom: newZoom,
+          x: mouseX - (mouseX - prev.x) * scale,
+          y: mouseY - (mouseY - prev.y) * scale,
+        };
+      });
+    };
+    element.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      element.removeEventListener("wheel", handleWheel);
+    };
   }, []);
 
+  // Constants for Displayed Components
   const { zoom, x, y } = viewTransform;
   const { width, height } = imageDimensions;
 
@@ -396,7 +422,6 @@ function WallCanvas({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
     >
       <div
         style={{
@@ -433,7 +458,7 @@ function WallViewPage() {
 
   const { climbs, loading, total, selectedClimb, setSelectedClimb } = useClimbs(
     wallId,
-    { limit: 100, sort_by: "date", descending: true }
+    { limit: 100, sort_by: "ascents", descending: true }
   );
 
   const handleImageLoad = useCallback(

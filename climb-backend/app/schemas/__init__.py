@@ -17,6 +17,9 @@ from app.schemas.walls import (
 from app.schemas.climbs import (
     Climb,
     ClimbCreate,
+    ClimbBatchCreate,
+    ClimbBatchCreateResult,
+    ClimbBatchCreateResponse,
     ClimbSortBy,
     ClimbListResponse,
     ClimbCreateResponse,

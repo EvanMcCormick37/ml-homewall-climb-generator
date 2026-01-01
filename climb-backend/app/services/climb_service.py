@@ -17,7 +17,7 @@ from app.schemas import Climb, ClimbCreate, ClimbSortBy, Holdset
 def get_climbs(
     wall_id: str,
     angle: int | None = None,
-    grade_range: list[int] = [0,180],
+    grade_range: list[int] = [0,39],
     include_projects: bool = True,
     setter_name: str | None = None,        
     name_includes: str | None = None,
@@ -138,27 +138,84 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
     Returns:
         The new climb ID
     """
-    climb_id = f"climb-{uuid.uuid4().hex[:12]}"
+    id = f"climb-{uuid.uuid4().hex[:12]}"
     holds = json.dumps(_holdset_to_holds(climb_data.holdset))
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, setter_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, quality, ascents, setter_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                climb_id,
+                id,
                 wall_id,
                 climb_data.angle,
                 climb_data.name,
                 holds,
                 json.dumps(climb_data.tags) if climb_data.tags else None,
                 climb_data.grade,
+                climb_data.quality,
+                climb_data.ascents,
                 climb_data.setter_name,
             ),
         )
     
-    return climb_id
+    return id
+
+def create_climbs_batch(wall_id: str, climbs_data: list[ClimbCreate]) -> list[dict]:
+    """
+    Create multiple climbs in a single transaction.
+    
+    Args:
+        wall_id: The wall ID
+        climbs_data: List of climb data
+        
+    Returns:
+        List of results with index, id, status, and error (if any)
+    """
+    results = []
+    
+    with get_db() as conn:
+        for index, climb_data in enumerate(climbs_data):
+            try:
+                climb_id = f"climb-{uuid.uuid4().hex[:12]}"
+                holds = json.dumps(_holdset_to_holds(climb_data.holdset))
+                
+                conn.execute(
+                    """
+                    INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, quality, ascents, setter_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        climb_id,
+                        wall_id,
+                        climb_data.angle,
+                        climb_data.name,
+                        holds,
+                        json.dumps(climb_data.tags) if climb_data.tags else None,
+                        climb_data.grade,
+                        climb_data.quality,
+                        climb_data.ascents,
+                        climb_data.setter_name,
+                    ),
+                )
+                
+                results.append({
+                    'index': index,
+                    'id': climb_id,
+                    'status': 'success',
+                    'error': None
+                })
+                
+            except Exception as e:
+                results.append({
+                    'index': index,
+                    'id': None,
+                    'status': 'error',
+                    'error': str(e)
+                })
+    
+    return results
 
 def delete_climb(wall_id: str, climb_id: str) -> bool:
     """
@@ -228,11 +285,12 @@ def _row_to_climb(row) -> Climb:
         wall_id=row["wall_id"],
         angle=row["angle"],
         name=row["name"],
-        grade=row["grade"],
-        setter_name=row["setter_name"],
         holdset=holdset,
-        tags=json.loads(row["tags"]) if row["tags"] else None,
+        grade=row["grade"] if row["grade"] else None,
+        quality=row["quality"] if row["quality"] else None,
         ascents=row["ascents"],
+        setter_name=row["setter_name"] if row["setter_name"] else None,
+        tags=json.loads(row["tags"]) if row["tags"] else None,
         created_at=row["created_at"],
     )
 
