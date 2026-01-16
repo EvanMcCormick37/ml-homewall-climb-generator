@@ -139,11 +139,12 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
         The new climb ID
     """
     id = f"climb-{uuid.uuid4().hex[:12]}"
-    holds = json.dumps(_holdset_to_holds(climb_data.holdset))
+    hold_list = _holdset_to_holds(climb_data.holdset)
+    holds = json.dumps(hold_list)
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, quality, ascents, setter_name)
+            INSERT INTO climbs (id, wall_id, angle, name, num_holds, holds, tags, grade, quality, ascents, setter_name)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -151,6 +152,7 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
                 wall_id,
                 climb_data.angle,
                 climb_data.name,
+                len(hold_list),
                 holds,
                 json.dumps(climb_data.tags) if climb_data.tags else None,
                 climb_data.grade,
@@ -179,18 +181,20 @@ def create_climbs_batch(wall_id: str, climbs_data: list[ClimbCreate]) -> list[di
         for index, climb_data in enumerate(climbs_data):
             try:
                 climb_id = f"climb-{uuid.uuid4().hex[:12]}"
-                holds = json.dumps(_holdset_to_holds(climb_data.holdset))
+                hold_list = _holdset_to_holds(climb_data.holdset)
+                holds = json.dumps(hold_list)
                 
                 conn.execute(
                     """
-                    INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, quality, ascents, setter_name)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO climbs (id, wall_id, angle, name, num_holds, holds, tags, grade, quality, ascents, setter_name)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         climb_id,
                         wall_id,
                         climb_data.angle,
                         climb_data.name,
+                        len(hold_list),
                         holds,
                         json.dumps(climb_data.tags) if climb_data.tags else None,
                         climb_data.grade,
@@ -236,7 +240,7 @@ def delete_climb(wall_id: str, climb_id: str) -> bool:
     return cursor.rowcount > 0
 
 def get_climbs_for_training(
-    wall_id: str, 
+    wall_id: str,
     tags: list[str] | None = None,
 ) -> list[dict]:
     """

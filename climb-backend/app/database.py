@@ -63,6 +63,7 @@ def init_db():
                 wall_id TEXT NOT NULL,
                 angle INTEGER NOT NULL,
                 name TEXT NOT NULL,
+                num_holds INTEGER NOT NULL,
                 holds TEXT NOT NULL,  -- serialized list of holds
                 tags TEXT,               -- serialized list of tags
                 grade REAL,
