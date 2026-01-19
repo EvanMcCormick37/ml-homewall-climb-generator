@@ -1,3 +1,6 @@
+aiohappyeyeballs==2.6.1
+aiohttp==3.13.3
+aiosignal==1.4.0
 anyio @ file:///C:/miniconda3/conda-bld/anyio_1758622431960/work
 argon2-cffi @ file:///opt/conda/conda-bld/argon2-cffi_1645000214183/work
 argon2-cffi-bindings @ file:///C:/miniconda3/conda-bld/argon2-cffi-bindings_1757925008107/work
@@ -8,7 +11,7 @@ babel @ file:///C:/miniconda3/conda-bld/babel_1764159347589/work
 beautifulsoup4 @ file:///C:/miniconda3/conda-bld/beautifulsoup4-split_1764159472392/work
 bleach @ file:///C:/miniconda3/conda-bld/bleach_1764153692079/work
 brotlicffi @ file:///C:/miniconda3/conda-bld/brotlicffi_1764961399696/work
-certifi @ file:///C:/miniconda3/conda-bld/certifi_1763135350040/work/certifi
+certifi @ file:///C:/Users/task_176765914684981/croot/certifi_1767659268506/work/certifi
 cffi @ file:///C:/miniconda3/conda-bld/cffi_1761832792995/work
 charset-normalizer @ file:///C:/miniconda3/conda-bld/charset-normalizer_1761744960410/work
 cloudpickle==3.1.2
@@ -24,6 +27,7 @@ Farama-Notifications==0.0.4
 fastjsonschema @ file:///C:/miniconda3/conda-bld/python-fastjsonschema_1763718733511/work
 filelock @ file:///C:/miniconda3/conda-bld/filelock_1762420017486/work
 fonttools==4.61.1
+frozenlist==1.8.0
 fsspec==2025.12.0
 gmpy2 @ file:///C:/miniconda3/conda-bld/gmpy2_1764748183167/work
 gymnasium==1.2.2
@@ -62,6 +66,7 @@ mkl-service==2.4.0
 mkl_fft @ file:///C:/Users/dev-admin/mkl/mkl_fft_1730823082242/work
 mkl_random @ file:///C:/Users/dev-admin/mkl/mkl_random_1730822522280/work
 mpmath @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/mpmath_1699484863771/work
+multidict==6.7.0
 nbclient @ file:///C:/b/abs_a09c4t3h8x/croot/nbclient_1741124030330/work
 nbconvert @ file:///C:/b/abs_c27_60dzt8/croot/nbconvert-meta_1741191385337/work
 nbformat @ file:///C:/b/abs_c2jkw46etm/croot/nbformat_1728050303821/work
@@ -79,6 +84,7 @@ pillow @ file:///C:/miniconda3/conda-bld/pillow_1762528255579/work
 platformdirs @ file:///C:/miniconda3/conda-bld/platformdirs_1762356625676/work
 prometheus_client @ file:///C:/b/abs_8b175q_ub8/croot/prometheus_client_1744271638821/work
 prompt_toolkit @ file:///C:/miniconda3/conda-bld/prompt-toolkit_1761745042157/work
+propcache==0.4.1
 psutil @ file:///C:/miniconda3/conda-bld/psutil_1761896535983/work
 pure_eval @ file:///C:/miniconda3/conda-bld/pure_eval_1757067062212/work
 pycparser @ file:///C:/miniconda3/conda-bld/pycparser_1757496054990/work
@@ -99,6 +105,7 @@ requests @ file:///C:/miniconda3/conda-bld/requests_1762359612354/work
 rfc3339-validator @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/rfc3339-validator_1699543924991/work
 rfc3986-validator @ file:///C:/Users/dev-admin/perseverance-python-buildout/croot/rfc3986-validator_1699543955651/work
 rpds-py @ file:///C:/miniconda3/conda-bld/rpds-py_1762366604816/work
+seaborn==0.13.2
 Send2Trash @ file:///C:/b/abs_7e73ol18dl/croot/send2trash_1736542724140/work
 setuptools==72.1.0
 six @ file:///C:/b/abs_149wuyuo1o/croot/six_1744271521515/work
@@ -110,9 +117,12 @@ sympy==1.13.1
 terminado @ file:///C:/miniconda3/conda-bld/terminado_1757934965665/work
 tinycss2 @ file:///C:/b/abs_df38owi5ma/croot/tinycss2_1738337725183/work
 torch==2.5.1
+torch-geometric==2.7.0
+torch_scatter==2.1.2+pt25cpu
 torchaudio==2.5.1
 torchvision==0.20.1
 tornado @ file:///C:/b/abs_7dzpc171lf/croot/tornado_1748956950306/work
+tqdm==4.67.1
 traitlets @ file:///C:/b/abs_bfsnoxl4pq/croot/traitlets_1718227069245/work
 typing_extensions @ file:///C:/b/abs_ecq8gc0vbm/croot/typing_extensions_1756281142218/work
 tzdata==2025.3
@@ -123,3 +133,5 @@ websocket-client @ file:///C:/b/abs_5dmnxxoci9/croot/websocket-client_1715878351
 wheel==0.45.1
 widgetsnbextension @ file:///C:/miniconda3/conda-bld/widgetsnbextension_1761556762389/work
 win_inet_pton @ file:///C:/miniconda3/conda-bld/win_inet_pton_1761746278813/work
+xxhash==3.6.0
+yarl==1.22.0
