@@ -29,13 +29,6 @@ class ClimbDiffusionConfig:
     loss_weights: LossWeights = LossWeights()
 
 @dataclass
-class ModelPredictions:
-    pred_X: Tensor
-    pred_v: Tensor
-    pred_s: Tensor
-    pred_r: Tensor
-
-@dataclass
 class ClimbPredictions:
     x: Tensor
     v: Tensor
@@ -106,6 +99,7 @@ class GravEGNNConv(nn.Module):
         edge_index: Tensor,
         edge_attr: Tensor | None = None
     ) -> tuple[Tensor, Tensor, Tensor]:
+        """Perform one forward pass through the layer."""
         row, col = edge_index
         
         # Calculate Squared Dist
@@ -193,6 +187,7 @@ class ClimbDiffusionModel(nn.Module):
         t: Tensor,
         batch: Tensor
     ):
+        """Perform one forward pass through the model. Returns a dictionary of climbing predictions."""
         # Embed time, features and combine them in roots.
         t_emb = self.time_mlp(t.unsqueeze(-1))
         t_nodes = t_emb[batch]
@@ -222,7 +217,7 @@ class ClimbDiffusionModel(nn.Module):
             r=r
         )
         
-class ClimbingDiffusionTrainer(nn.Module):
+class ClimbDiffusionTrainer(nn.Module):
     """Trainer for the Climbing Diffusion Model"""
     def __init__(
         self,
@@ -378,16 +373,18 @@ class ClimbDiffusionSampler:
         self.num_steps = num_steps
 
     def _cosine_alpha_bar(self, t):
+        """Compute alpha bar using cosine schedule."""
         o = self.config.schedule_offset
         s = self.config.schedule_scale
-        return torch.cos(((t+o)/s)*torch.pi/2)**2
+
+        return torch.cos((t+o)/s*torch.pi/2)**2
     
     @torch.no_grad()
     def sample(
         self,
         num_samples: int = 1
-    ) -> dict[str, Tensor] | None:
-        """Generate *n* sample climbs using the DDPM model."""
+    ) -> dict[str, Tensor]:
+        """Generate *num_samples* sample climbs using the ClimbDiffusionModel. Vanilla generation which generates climbs in 3d space but doesn't perform projected/guided diffusion."""
         self.model.eval()
 
         num_nodes = self.nodes_per_sample * num_samples
@@ -428,4 +425,5 @@ class ClimbDiffusionSampler:
             r = denoised.r
             r[mask_decision] = self.config.null_token
 
+        assert denoised is not None
         return denoised
