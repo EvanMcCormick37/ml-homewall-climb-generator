@@ -1,13 +1,15 @@
-import numpy as np
 import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_scatter
-from dataclasses import dataclass
-from torch_geometric.data import Batch
+from dataclasses import dataclass, field
 from torch_geometric.nn import knn_graph
 from typing import Protocol
+import numpy as np
+import itertools
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 
 @dataclass
 class LossWeights:
@@ -26,7 +28,7 @@ class ClimbDiffusionConfig:
     k: int = 12
     schedule_offset: float = 0.008
     schedule_scale: float = 1.008
-    loss_weights: LossWeights = LossWeights()
+    loss_weights: LossWeights = field(default_factory=LossWeights)
 
 @dataclass
 class ClimbPredictions:
@@ -116,25 +118,25 @@ class GravEGNNConv(nn.Module):
         row, col = edge_index
         msg = self.msg_mlp(torch.cat([h[row], h[col], squared_dist, z_diff, edge_attr],dim=-1))
         
-        # Compute Updated Weights from message
-        x_weights = self.coord_mlp(msg)
-        v_weights = self.vector_mlp(msg)
+        # Compute Updated Weights from message. Normalize by dividing by the squared distance to prevent "Point ejection"
+        x_weights = self.coord_mlp(msg) / (squared_dist + 1e-8)
+        v_weights = self.vector_mlp(msg) / (squared_dist + 1e-8)
 
         # Aggregate Messages for Scalar feature updates
-        aggr_msg = torch_scatter.scatter(msg, row, dim=0, reduce='mean', dim_size=x.size(0))
+        aggr_msg = torch_scatter.scatter(msg, row, dim=0, reduce='sum', dim_size=x.size(0))
 
         # Update points by relative position (points 'push'/'pull' their neighbors). This update is O(3) equivariant.
         weighted_rel_pos = rel_pos * x_weights
-        x_update = torch_scatter.scatter(weighted_rel_pos, row, dim=0, reduce='mean', dim_size = x.size(0))
+        x_update = torch_scatter.scatter(weighted_rel_pos, row, dim=0, reduce='sum', dim_size = x.size(0))
         x_new = x + x_update
 
         # Update hold directions in the same manner, using the vector weights instead of position weights.
         weighted_rel_pos = rel_pos * v_weights
-        v_update = torch_scatter.scatter(weighted_rel_pos, row, dim=0, reduce='mean', dim_size = v.size(0))
+        v_update = torch_scatter.scatter(weighted_rel_pos, row, dim=0, reduce='sum', dim_size = v.size(0))
         v_new = v + v_update
 
         # Update Scalar Features
-        h_new = self.node_mlp(torch.cat([h+aggr_msg], dim=-1))
+        h_new = h + self.node_mlp(torch.cat([h, aggr_msg], dim=-1))
 
 
         return h_new, x_new, v_new
@@ -347,6 +349,7 @@ class ClimbDiffusionTrainer(nn.Module):
         }
     
 class ClimbDiffusionSampler:
+    
     """
     DDPM generation model for generating climbs as point clouds.
     
@@ -383,7 +386,7 @@ class ClimbDiffusionSampler:
     def sample(
         self,
         num_samples: int = 1
-    ) -> dict[str, Tensor]:
+    ) -> ClimbPredictions:
         """Generate *num_samples* sample climbs using the ClimbDiffusionModel. Vanilla generation which generates climbs in 3d space but doesn't perform projected/guided diffusion."""
         self.model.eval()
 
@@ -409,7 +412,7 @@ class ClimbDiffusionSampler:
             t_next = timesteps[i+1]
             t_batch = t.expand(num_samples)
 
-            # predict denoised climbs
+            # Predict denoised climbs
             denoised = self.model(x, v, s, r, t_batch, batch)
 
             # Calculate alpha bar from t value
@@ -421,9 +424,245 @@ class ClimbDiffusionSampler:
             s = torch.sqrt(a) * denoised.s + torch.sqrt(1-a) * torch.randn_like(denoised.s)
             
             # Randomly remask some nodes to return them to NULL according to schedule
-            mask_decision = torch.randn_like(t_next) < t_next
-            r = denoised.r
+            mask_decision = torch.rand(r.size(0)) < t_next
+            r_logits = denoised.r
+            r_logits[:,self.config.null_token] -= 6
+            r = torch.argmax(r_logits, dim=-1)
             r[mask_decision] = self.config.null_token
 
         assert denoised is not None
         return denoised
+    
+# -----------------------------------------------------------------------------------
+# Square Recognition Model (Toy Model): E(2) EGNN
+# -----------------------------------------------------------------------------------
+
+class E2_EGNN(nn.Module):
+    """Equivariant Graph Neural Network layer"""
+
+    def __init__(self, emb_dim, hidden_dim, activation_func = nn.ReLU()):
+        # h_i + h_j + dist_squared (size 1)
+        message_dim = emb_dim * 2 + 1
+        coord_input_dim = hidden_dim 
+        # Coordinate updates are a scalar force applied along the edge being used to build the edge message
+        coord_update_dim = 1 
+        # h_n + aggregated message functions (size hidden_dim)
+        feature_input_dim = emb_dim + hidden_dim 
+
+        self.msg_mlp = nn.Sequential(
+            nn.Linear(message_dim, hidden_dim),
+            activation_func,
+            nn.Linear(hidden_dim, hidden_dim),
+            activation_func
+        )
+
+        self.coord_mlp = nn.Sequential(
+            nn.Linear(coord_input_dim, hidden_dim),
+            activation_func,
+            nn.Linear(hidden_dim, coord_update_dim)
+        )
+
+        self.node_mlp = nn.Sequential(
+            nn.Linear(feature_input_dim, hidden_dim),
+            activation_func,
+            nn.Linear(hidden_dim, emb_dim)
+        )
+
+    def coord2radial(self, edge_index, coord):
+        """Radial is squared Euclidean distance, fyi"""
+        row, col = edge_index
+        coord_diff = coord[row] - coord[col]
+        radial = torch.sum(coord_diff**2, 1).unsqueeze(1)
+
+        return radial, coord_diff/torch.sqrt(radial + 1e-8)
+
+    def forward(self, x, h, edge_index):
+        """
+        Forward pass
+        
+        :param h: Scalar features
+        :param x: Position (Vector) features (Equivariant over these)
+        :param edge_index: Edge indices for all edges in the graph: [[n1, n2] x # edges]
+        """
+
+        n1, n2 = edge_index
+
+        squared_dist, norm_coord_diff = self.coord2radial(edge_index, x)
+        msgs = self.msg_mlp(torch.cat([h[n1], h[n2], squared_dist],dim=1))
+
+        # Update x based on aggregated coordinate updates
+        coord_updates = norm_coord_diff * self.coord_mlp(msgs)
+        x_new = x + torch_scatter.scatter(coord_updates, n1, dim=0, reduce='sum', dim_size=x.size(0))
+        
+        feature_updates = torch_scatter.scatter(msgs, n1, dim=0, reduce='sum', dim_size=h.size(0))
+        h_new = h + self.node_mlp(torch.cat([feature_updates, h], dim=1))
+
+        return x_new, h_new
+
+class SquaresModel(nn.Module):
+    def __init__(self, n_nodes=4, n_layers=4, emb_dim = 64):
+        super().__init__()
+        self.n_layers = n_layers
+        self.emb_dim = emb_dim
+        self.n_nodes = n_nodes
+
+        # Bidirectional edge indices
+        self.edges = torch.Tensor([[a, b,] for a in range(n_nodes) for b in range(n_nodes) if a !=b ])
+        
+        self.egnn_trunk = nn.ModuleList([E2_EGNN(hidden_dim=emb_dim,emb_dim=emb_dim) for _ in range(n_layers)])
+
+    def get_batched_edges(self, batch_size):
+        num_edges = self.edges.size(0)
+        batches = []
+
+        # Add the edge connections for all of the indices in the next graph in the batch. It should just be the previous node indices + n_nodes.
+        for i in range(batch_size):
+            batches += self.edges.clone() + i*self.num_nodes
+
+        return torch.cat(batches, dim=0)   
+
+    def forward(self, x):
+
+        batch_size = x.size(0)
+        x_flat = x.view(-1,2)
+
+        edge_index = self.get_batched_edges(batch_size)
+
+        # Initial hidden state embeddings
+        h = torch.ones(x_flat.size(0),self.emb_dim, device = x.device)
+        for layer in self.egnn_trunk:
+            x_flat, h = layer(x, h, self.edge_index)
+        return x_flat.view(-1, 4, 2)
+    
+class SquareModelTrainer:
+    def __init__(self, model):
+        self.model = model
+        self.optimizer = torch.optim.Adam(model.parameters(),lr=1e-3)
+
+    def get_loss(self, batch):
+        """
+        Loss function for my Square-Generating model
+        
+        :param batch: Batched Quadrilateral input data.
+        """
+        # cdist returns (Batch, 4, 4) distance matrix
+        dists_matrix = torch.cdist(batch, batch)
+        
+        # Extract unique edges. For 4 nodes, upper triangle indices:
+        # (0,1), (0,2), (0,3), (1,2), (1,3), (2,3)
+        unique_edges = torch.triu_indices(4, 4, offset=1)
+        edge_lengths = dists_matrix[:, unique_edges[0], unique_edges[1]] # (Batch, 6)
+        
+        # Calculate stats per graph
+        mu = edge_lengths.mean(dim=1)     # (Batch,)
+        var = edge_lengths.var(dim=1, unbiased=False) # (Batch,)
+        
+        # Loss per graph
+        loss_per_graph = (var / (mu**2 + 1e-6)) + torch.log(mu)**2
+        
+        return loss_per_graph.mean()
+    
+    def train_step(self, batch):
+        """A single step in the training process"""
+
+        self.optimizer.zero_grad()
+        x_pred = self.model(batch)
+        loss = self.get_loss(x_pred)
+        loss.backward()
+
+        self.optimizer.step()
+        return loss.item(), x_pred
+    
+
+def plot_quadrilaterals_dense(data, num_to_plot=20, title="Squares"):
+    """
+    Plots a dense graph (fully connected) for each set of points.
+    """
+    points = data.reshape(-1, 4, 2) if data.ndim == 2 else data
+    limit = min(len(points), num_to_plot)
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # Color configuration
+    lc = ['00F','FF0','0FF','00F']
+    vertex0_color = '#FFD700' # Gold
+    
+    for i in range(limit):
+        sq = points[i]
+        
+        for p1_idx, p2_idx in itertools.combinations(range(4), 2):
+            p1 = sq[p1_idx]
+            p2 = sq[p2_idx]
+            
+            ax.plot(
+                [p1[0], p2[0]], 
+                [p1[1], p2[1]], 
+                color= f"#{lc[p1_idx]}{lc[p2_idx]}", 
+                linewidth=1.5, 
+                alpha=0.6  # Lower alpha to handle the overlap gracefully
+            )
+
+        # Mark Vertex 0 for reference
+        ax.scatter(sq[0, 0], sq[0, 1], color=vertex0_color, edgecolors='black', s=50, zorder=10)
+
+    # Simplified Legend
+    legend_elements = [
+        mlines.Line2D([0], [0], marker='o', color='w', markerfacecolor=vertex0_color, markersize=8, markeredgecolor='k', label='Vertex 0 (Start)'),
+    ]
+
+    ax.set_aspect('equal')
+    ax.grid(True, linestyle='--', alpha=0.3)
+    ax.set_title(title)
+    ax.legend(handles=legend_elements, loc='upper center')
+    
+    plt.show()
+
+def plot_input_and_output_quads(input_quads: np.ndarray, output_quads: np.ndarray, title="Squarification"):
+    assert input_quads.shape == output_quads.shape
+    n = input_quads.shape[0]
+    fig, ax = plt.subplots(figsize=(8,8))
+
+    lc = ['00F','FF0','0FF','00F']
+    v_color = '#FFD700'
+
+    # Plot the inputs in Red
+    for i in range(n):
+        q = input_quads[i]
+
+        for p1_idx, p2_idx in itertools.combinations(range(4),2):
+            p1, p2 = q[p1_idx], q[p2_idx]
+
+            ax.plot(
+                [p1[0],p2[0]],
+                [p1[1],p2[1]],
+                color='red',
+                linewidth=1.5,
+                alpha=0.4 # Keep the originals relatively more translucent, like ghosts.
+            )
+        
+        ax.scatter(q[0,0], q[0,1], color='gray', edgecolors=None, s=25, zorder=10)
+    
+    for i in range(n):
+        sq = output_quads[i]
+        for p1_idx, p2_idx in itertools.combinations(range(4), 2):
+            p1, p2 = sq[p1_idx], sq[p2_idx]
+
+            ax.plot(
+                [p1[0], p2[0]],
+                [p1[1], p2[1]],
+                color = f"#{lc[p1_idx]}{lc[p2_idx]}",
+                linewidth=1.5,
+                alpha = 0.7
+            )
+        
+        ax.scatter(sq[0, 0], sq[0, 1], color=v_color, edgecolors='black', s=50, zorder=10)
+    
+    legend_elements = [
+        mlines.Line2D([0], [0], marker='o', color='w', markerfacecolor=v_color, markersize=8, markeredgecolor='k', label='Model Output'),
+        mlines.Line2D([0], [0], marker='o', color='w', markerfacecolor='grey', markersize=4, markeredgecolor=None, label='Input Shape'),
+    ]
+
+    ax.set_title(title)
+    ax.set_aspect('equal')
+    ax.grid(True, linestyle='--', alpha=0.2)
+    ax.legend(handles=legend_elements, loc='upper center')
