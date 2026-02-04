@@ -1,4 +1,3 @@
-import torchaudio
 import numpy as np
 import torch
 from torch import nn
@@ -112,6 +111,7 @@ class Noiser(nn.Module):
 class ClimbDDPM(nn.Module):
     def __init__(self, model, predict_noise = False):
         super().__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = model
         self.timesteps = 100
         self.pred_noise = predict_noise
@@ -122,7 +122,7 @@ class ClimbDDPM(nn.Module):
         S = sample_climbs.shape[1]
         H = sample_climbs.shape[2]
         C = cond.shape[1]
-        t = torch.round(torch.rand(B,1), decimals=2)
+        t = torch.round(torch.rand(B,1,device=self.device), decimals=2)
 
         noisy = self._forward_diffusion(sample_climbs, t)
 
@@ -150,7 +150,7 @@ class ClimbDDPM(nn.Module):
     def _forward_diffusion(self, clean: Tensor, t: Tensor)-> Tensor:
         """Perform forward diffusion to add noise to clean data based on noise adding schedule."""
         a = self._cos_alpha_bar(t)
-        return torch.sqrt(a) * clean + torch.sqrt(1-a) * torch.randn_like(clean)
+        return torch.sqrt(a) * clean + torch.sqrt(1-a) * torch.randn_like(clean, device=self.device)
     
     def _cos_alpha_bar(self, t: Tensor)-> Tensor:
         t = t.view(-1,1,1)
@@ -176,10 +176,10 @@ class ClimbDDPM(nn.Module):
         :return: A Tensor containing the denoised generated climbs as hold sets.
         :rtype: Tensor
         """
-        cond = Tensor([[grade/9-0.5 if grade else 0.0, angle/90.0, 1.0, 1.0] for _ in range(n)])
+        cond = torch.tensor([[grade/9-0.5 if grade else 0.0, angle/90.0, 1.0, 1.0] for _ in range(n)], device=self.device)
 
-        gen_climbs = torch.randn((n, 20, 4))
-        t_tensor = torch.ones((n,1))
+        gen_climbs = torch.randn((n, 20, 4), device=self.device)
+        t_tensor = torch.ones((n,1), device=self.device)
 
         for t in range(1, self.timesteps):
             gen_climbs = self.predict(gen_climbs, cond, t_tensor)
@@ -199,7 +199,8 @@ class DDPMTrainer():
         dataset: TensorDataset | None = None,
         default_batch_size: int = 64
     ):
-        self.model = model
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = model.to(self.device)
         self.dataset = dataset
         self.default_batch_size = default_batch_size
         self.optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -247,6 +248,7 @@ class DDPMTrainer():
             for epoch in pbar:
                 total_loss = [0, 0, 0]
                 for x, c in batches:
+                    x, c = x.to(self.device), c.to(self.device)
                     self.optimizer.zero_grad()
                     loss, real_hold_loss, null_hold_loss = self.model.loss(x, c)
                     loss.backward()
