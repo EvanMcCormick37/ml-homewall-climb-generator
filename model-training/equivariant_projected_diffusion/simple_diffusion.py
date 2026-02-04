@@ -1,5 +1,6 @@
 import torchaudio
 import numpy as np
+import torch
 from torch import nn
 from torch import Tensor
 import torch.nn.functional as F
@@ -74,30 +75,89 @@ class Denoiser(nn.Module):
 
         return result
 
+class Noiser(nn.Module):
+    def __init__(self, hidden_dim=128, layers = 5):
+        super().__init__()
+
+        self.cond_mlp = nn.Sequential(
+            nn.Linear(5, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+
+        self.init_conv = ResidualBlock1D(4, hidden_dim, hidden_dim)
+
+        self.residuals = nn.ModuleList([nn.Sequential(
+            ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim)
+        ) for _ in range(layers)])
+
+        self.head = nn.Conv1d(hidden_dim, 4, 1)
+    
+    def forward(self, climbs: Tensor, cond: Tensor, t: Tensor)-> Tensor:
+        """
+        Run denoising pass. Predicts the added noise from the noisy data.
+        
+        :param climbs: Tensor with hold-set positions. [B, S, 4]
+        :param cond: Tensor with conditional variables. [B, 4]
+        :param t: Tensor with timestep of diffusion. [B, 1]
+        """
+        emb_c = self.cond_mlp(torch.cat([cond,t], dim=1))
+        emb_h = self.init_conv(climbs.transpose(1,2), emb_c)
+
+        for layer in self.residuals:
+            emb_h = emb_h + layer(emb_h)
+
+        result = self.head(emb_h).transpose(1,2)
+
+        return result
 
 class ClimbDDPM(nn.Module):
-    def __init__(self, denoiser):
+    def __init__(self, model, predict_noise = False):
         super().__init__()
-        self.denoiser = denoiser
+        self.model = model
         self.timesteps = 100
+        self.pred_noise = predict_noise
     
     def loss(self, sample_climbs, cond):
-        """Perform a diffusion Training step and return the loss resulting from the Denoiser in the training run."""
+        """Perform a diffusion Training step and return the loss resulting from the model in the training run. Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
         B = sample_climbs.shape[0]
         S = sample_climbs.shape[1]
         H = sample_climbs.shape[2]
         C = cond.shape[1]
-        t = torch.round(torch.rand((B,1)), decimals=2)
+        t = torch.round(torch.rand(B,1), decimals=2)
 
         noisy = self._forward_diffusion(sample_climbs, t)
 
-        pred_clean = self.denoiser(noisy, cond, t)
-
-        return F.mse_loss(pred_clean, sample_climbs)
+        pred_clean = self.predict(noisy, cond, t)
+        is_real = (sample_climbs[:,:,3] != -2).float().unsqueeze(-1)
+        is_null = (sample_climbs[:,:,3] == -2).float().unsqueeze(-1)
+        real_hold_loss = self._real_hold_loss(pred_clean, sample_climbs, is_real)
+        null_hold_loss = self._null_hold_loss(pred_clean, is_null)
+        return real_hold_loss + null_hold_loss, real_hold_loss, null_hold_loss
+    
+    def predict(self, noisy, cond, t):
+        """Return predicted clean data (noisy-pred_noise if the model predicts noise)"""
+        prediction = self.model(noisy, cond, t)
+        clean = noisy - prediction if self.pred_noise else prediction
+        return clean
+    
+    def _null_hold_loss(self, pred_clean, null_mask):
+        """Calculate loss over the null holds"""
+        return F.mse_loss(torch.square(pred_clean)*null_mask, null_mask*4)*2
+    
+    def _real_hold_loss(self, pred_clean, sample_climbs, real_mask):
+        """Get loss over the real holds"""
+        return F.mse_loss(pred_clean*real_mask, sample_climbs*real_mask)
     
     def _forward_diffusion(self, clean: Tensor, t: Tensor)-> Tensor:
         """Perform forward diffusion to add noise to clean data based on noise adding schedule."""
-        return torch.sqrt(1-t) * clean + torch.sqrt(t) * torch.randn_like(clean)
+        a = self._cos_alpha_bar(t)
+        return torch.sqrt(a) * clean + torch.sqrt(1-a) * torch.randn_like(clean)
+    
+    def _cos_alpha_bar(self, t: Tensor)-> Tensor:
+        t = t.view(-1,1,1)
+        epsilon = 0.0001
+        return  torch.cos((t+epsilon)/(1+epsilon)*torch.pi/2)**2
     
     def generate(
         self,
@@ -118,23 +178,21 @@ class ClimbDDPM(nn.Module):
         :return: A Tensor containing the denoised generated climbs as hold sets.
         :rtype: Tensor
         """
-        cond = Tensor([[grade/9-0.5 if grade else 0, angle/90] for _ in range(n)])
+        cond = Tensor([[grade/9-0.5 if grade else 0.0, angle/90.0, 1.0, 1.0] for _ in range(n)])
 
-        gen_climbs = torch.randn((n, 20, 5))
-        t_tensor = torch.ones((n, 1))
+        gen_climbs = torch.randn((n, 20, 4))
+        t_tensor = torch.ones((n,1))
 
         for t in range(1, self.timesteps):
-            gen_climbs = self.denoiser(gen_climbs, cond, t_tensor)
-            if t <= 1:
+            gen_climbs = self.predict(gen_climbs, cond, t_tensor)
+            print('.',end='')
+            if t == self.timesteps-1:
                 break
 
+            t_tensor -= .01
             gen_climbs = self._forward_diffusion(gen_climbs, t_tensor)
         
         return gen_climbs
-    
-    def forward(self, x, cond):
-        """Run forward pass. Use denoiser to predict clean data from noisy input and conditional features."""
-        return self.denoiser(x, cond)
 
 class DDPMTrainer():
     def __init__(
@@ -184,22 +242,27 @@ class DDPMTrainer():
 
         with tqdm(range(epochs)) as pbar:
             for epoch in pbar:
-                total_loss = 0
+                total_loss = [0, 0, 0]
                 for x, c in batches:
                     self.optimizer.zero_grad()
-                    loss = self.model.loss(x, c)
+                    loss, real_hold_loss, null_hold_loss = self.model.loss(x, c)
                     loss.backward()
                     self.optimizer.step()
 
-                    total_loss += loss.item()
-                pbar.set_postfix_str(f"Epoch: {epoch}, Batches:{len(batches)} Total Loss: {total_loss:.4f}, Avg Loss: {total_loss/len(batches):.4f}")
+                    # Calc total losses
+                    total_loss[0] += loss.item()
+                    total_loss[1] += real_hold_loss.item()
+                    total_loss[2] += null_hold_loss.item()
+                
+                improvement = total_loss[0] - losses[-1][0] if len(losses) > 0 else 0
+                pbar.set_postfix_str(f"Epoch: {epoch}, Batches:{len(batches)} Total Loss: {total_loss[0]:.2f}, Real Hold Loss: {total_loss[1]:.2f}, Null Hold Loss: {total_loss[2]:.2f}, Improvement: {improvement:.2f}")
                 losses.append(total_loss)
 
-                if save_on_best and total_loss > min(losses):
+                if save_on_best and total_loss > min(losses) and len(losses) % 2 == 0:
                     torch.save(self.model.state_dict(), save_path)
         torch.save(self.model.state_dict(), save_path)
         return self.model, losses
-    
+
 
 class HoldClassifier(nn.Module):
     def __init__(self, classifier: nn.Module):

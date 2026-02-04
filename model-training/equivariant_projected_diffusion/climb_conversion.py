@@ -74,23 +74,27 @@ class ClimbsFeatureArray:
                 fdf['grade'] = self.scaler.fit_transform(fdf[['grade']])
                 fdf['quality'] = self.scaler.fit_transform(fdf[['quality']])
                 fdf['ascents'] = self.scaler.fit_transform(fdf[['ascents']])
+                self.climbs_df = fdf
+                
+                # Initialize walls:
+                walls = [_tuple[0] for _tuple in conn.execute("SELECT id FROM walls").fetchall()]
+                self.holds = {}
 
                 # Load Holds
-                hdf = pd.read_sql_query(
+                for wall_id in walls:
+                    hdf = pd.read_sql_query(
                     "SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot FROM holds WHERE wall_id LIKE ?", 
-                    conn, params=('wall-443c15cd12e0',), index_col='hold_index'
-                )
-                # Apply usability factor
-                hdf['pull_y'] *= hdf['useability']
-                hdf['pull_y'] = -hdf['pull_y']
-                hdf['pull_x'] *= hdf['useability']
-                # Scale climbs to unit scale They will eventually be in range (-1,1), so divide by 1/2 wall size (12x12).
-                hdf['x'] /= 6
-                hdf['y'] /= 6
-                hdf.drop(columns='useability', inplace=True)
-        
-        self.holds_df = hdf
-        self.climbs_df = fdf
+                    conn, params=(wall_id,), index_col='hold_index'
+                    )
+                    # Apply usability factor
+                    mult = hdf['useability']/((3*hdf['is_foot'])+1)
+                    hdf['pull_y'] *= mult
+                    hdf['pull_x'] *= mult
+                    # Scale climbs to unit scale They will eventually be in range (-1,1), so divide by 1/2 wall size (12x12).
+                    hdf['x'] /= 6
+                    hdf['y'] /= 6
+                    hdf.drop(columns=['useability','is_foot'], inplace=True)
+                    self.holds[wall_id] = hdf
         self.to_length = to_length
         self.db_path = db_path
 
@@ -118,7 +122,7 @@ class ClimbsFeatureArray:
                 continue
         return Tensor(np.array(x_features)), Tensor(np.array(cond_features))
     
-    def get_features_2d(self, continuous_only = False):
+    def get_features_2d(self, continuous_only = False, augment_reflections = True):
         """Converts a list of hold indices + roles to a 3d-point cloud and pads the sequence by adding NULL holds."""
         x_features = []
         cond_features = []
@@ -129,10 +133,15 @@ class ClimbsFeatureArray:
                 cond_features.append(cond)
             except:
                 continue
+
+        if augment_reflections:
+            refl = np.array([-1,1,-1,1]) * x_features
+            x_features = np.concatenate([x_features, refl], axis=0)
+            cond_features = np.tile(cond_features,(2,1))
         return Tensor(np.array(x_features)), Tensor(np.array(cond_features))
 
     def embed_features_2d(self, row, to_length, continuous_only):
-        """Converts a list of hold indices + roles to a 2d-point cloud and pads the sequence by adding random NULL holds."""
+        """Converts a list of hold indices + roles to a 2d-point cloud and pads the sequence by adding random NULL holds. Currently sorts by y, then x value."""
         pad_length = to_length-len(row["holds"])
         assert pad_length >= 0
 
@@ -140,7 +149,7 @@ class ClimbsFeatureArray:
         one_hot_encoder = np.eye(5)
 
         for hold in row["holds"]:
-            features = [f for f in self.holds_df.loc[hold[0]]]
+            features = [f for f in self.holds[row['wall_id']].loc[hold[0]]]
 
             if not continuous_only:
                 features.extend([ohr for ohr in list(one_hot_encoder[hold[1]])])
@@ -148,15 +157,16 @@ class ClimbsFeatureArray:
 
         features_arr = np.array(_2d_features, dtype=np.float32)
         features_arr = self._zero_center_of_mass(features_arr)
-        features_arr = np.array(sorted(features_arr, key=(lambda arr: np.sqrt(arr[0]**2+arr[1]**2))))
-        null_holds = np.ones((pad_length, features_arr.shape[1]))*-2
-        hold_features = np.concatenate([features_arr,null_holds], axis=0, dtype=np.float32)
+        features_arr = np.array(sorted(features_arr, key=(lambda arr: arr[0]+10*arr[1])))
+        if pad_length > 0:
+            null_holds = np.tile(np.array([0,-2,0,-2]),(pad_length,1))
+            features_arr = np.concatenate([features_arr,null_holds], axis=0, dtype=np.float32)
         
         # Add conditioning features (Grade, Rating, Ascents)
         conditional_features = np.array([row['grade'],row['angle']/90, row['quality'],row['ascents']], dtype=np.float32)
-        return (hold_features, conditional_features)
+        return (features_arr, conditional_features)
     
-    def embed_features_3d(self, row, to_length, continuous_only):
+    def embed_features_3d(self, row, to_length, continuous_only, augment_reflections = True):
         """Embed a single row of the climbs dataframe into 3d features."""
         pad_length = to_length-len(row["holds"])
         assert pad_length >= 0
@@ -166,7 +176,7 @@ class ClimbsFeatureArray:
         # Initial embeddings.
         for hold in row["holds"]:
             role_encoding = list(eye_encoder[hold[1]])
-            features = self.holds_df.loc[hold[0]]
+            features = self.holds[row['wall_id']].loc[hold[0]]
             x, y, pull_x, pull_y, is_foot = [f for f in features]
             y, z = self.apply_wall_angle(row["angle"], y)
             pull_y, pull_z = self.apply_wall_angle(row["angle"], pull_y)
@@ -186,3 +196,4 @@ class ClimbsFeatureArray:
         # Add conditioning features (Grade, Rating, Ascents)
         conditional_features = np.array([row['grade'], row['quality'],row['ascents'],row['angle']/90], dtype=np.float32)
         return (hold_features, conditional_features)
+
