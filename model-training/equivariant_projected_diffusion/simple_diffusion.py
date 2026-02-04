@@ -209,6 +209,7 @@ class DDPMTrainer():
         epochs: int,
         save_path: str,
         batch_size: int | None = None,
+        num_workers: int | None = None,
         dataset: TensorDataset | None = None,
         save_on_best: bool = False,
     )-> tuple[nn.Module, list]:
@@ -234,8 +235,10 @@ class DDPMTrainer():
             raise ValueError("Dataset is None. Cannot train on no dataset")
         if batch_size is None:
             batch_size = self.default_batch_size
+        if num_workers is None:
+            num_workers = 0
 
-        batches = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+        batches = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True)
         losses = []
 
         with tqdm(range(epochs)) as pbar:
