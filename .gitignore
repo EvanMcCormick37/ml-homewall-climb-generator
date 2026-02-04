@@ -4,8 +4,6 @@
 *climb*.json
 *-data.json
 *.pth
-*.db
-data/
 assets/
 boardlib/
 
