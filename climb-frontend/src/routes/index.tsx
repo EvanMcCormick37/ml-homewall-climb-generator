@@ -9,7 +9,6 @@ export const Route = createFileRoute("/")({
 // Coming soon walls (hardcoded for now)
 const COMING_SOON_WALLS = [
   { name: "Kilter Board", id: "kilter" },
-  { name: "Tension Board 2", id: "tension" },
   { name: "Decoy Board", id: "decoy" },
 ];
 

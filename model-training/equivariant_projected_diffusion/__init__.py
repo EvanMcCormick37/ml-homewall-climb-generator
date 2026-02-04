@@ -1,5 +1,6 @@
 from .climb_conversion import ClimbingDataset, ClimbsFeatureArray
 from .climb_diffusion_model import ClimbBatch, ClimbEGNNDiffusionConfig, ClimbEGNNDiffusionSampler, ClimbEGNNDiffusionTrainer, ClimbEGNNDiffusionModel, ClimbPredictions
+from .simple_diffusion import Denoiser, ResidualBlock1D
 
 __all__ = [
     'ClimbBatch',
@@ -9,5 +10,7 @@ __all__ = [
     'ClimbEGNNDiffusionModel',
     'ClimbPredictions',
     'ClimbingDataset',
-    'ClimbsFeatureArray'
+    'ClimbsFeatureArray',
+    'Denoiser',
+    'ResidualBlock1D'
 ]
