@@ -87,9 +87,7 @@ class Noiser(nn.Module):
 
         self.init_conv = ResidualBlock1D(4, hidden_dim, hidden_dim)
 
-        self.residuals = nn.ModuleList([nn.Sequential(
-            ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim)
-        ) for _ in range(layers)])
+        self.residuals = nn.ModuleList([ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim) for _ in range(layers)])
 
         self.head = nn.Conv1d(hidden_dim, 4, 1)
     
@@ -105,7 +103,7 @@ class Noiser(nn.Module):
         emb_h = self.init_conv(climbs.transpose(1,2), emb_c)
 
         for layer in self.residuals:
-            emb_h = emb_h + layer(emb_h)
+            layer(emb_h, emb_c)
 
         result = self.head(emb_h).transpose(1,2)
 
@@ -143,7 +141,7 @@ class ClimbDDPM(nn.Module):
     
     def _null_hold_loss(self, pred_clean, null_mask):
         """Calculate loss over the null holds"""
-        return F.mse_loss(torch.square(pred_clean)*null_mask, null_mask*4)*2
+        return F.mse_loss(torch.square(pred_clean)*null_mask, null_mask*4)
     
     def _real_hold_loss(self, pred_clean, sample_climbs, real_mask):
         """Get loss over the real holds"""
