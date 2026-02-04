@@ -222,6 +222,8 @@ class DDPMTrainer():
         :type save_path: str
         :param batch_size: Training batch size
         :type batch_size: int | None
+        :param num_workers: Number of workers
+        :type num_workers: int | None
         :param dataset: Training Dataset; defaults to model.dataset
         :type dataset: TensorDataset | None
         :param save_on_best: boolean indicating whether to save model weights every time a minimum loss is reached.
