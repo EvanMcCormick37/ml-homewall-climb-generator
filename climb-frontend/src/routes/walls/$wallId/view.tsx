@@ -266,7 +266,7 @@ function WallCanvas({
         y: (1 - hold.y / wallH) * imgH,
       };
     },
-    [imageDimensions, wallDimensions]
+    [imageDimensions, wallDimensions],
   );
 
   // Draw canvas
@@ -303,8 +303,8 @@ function WallCanvas({
     // Draw all holds
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const scale = 2;
-      const radius = 15 * scale;
+      const scale = height / 1000;
+      const radius = 10 * scale;
 
       const isUsed = usedHolds.has(hold.hold_index);
       const isStart = startHolds.has(hold.hold_index);
@@ -360,7 +360,7 @@ function WallCanvas({
         startViewY: viewTransform.y,
       };
     },
-    [viewTransform]
+    [viewTransform],
   );
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -458,14 +458,14 @@ function WallViewPage() {
 
   const { climbs, loading, total, selectedClimb, setSelectedClimb } = useClimbs(
     wallId,
-    { limit: 100, sort_by: "ascents", descending: true }
+    { limit: 100, sort_by: "ascents", descending: true },
   );
 
   const handleImageLoad = useCallback(
     (dimensions: { width: number; height: number }) => {
       setImageDimensions(dimensions);
     },
-    []
+    [],
   );
 
   return (

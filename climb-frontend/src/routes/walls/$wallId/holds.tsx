@@ -131,14 +131,14 @@ function HoldsEditorPage() {
       const rect = canvas.getBoundingClientRect();
       return {
         x: Math.round(
-          (e.clientX - rect.left) * (imageDimensions.width / rect.width)
+          (e.clientX - rect.left) * (imageDimensions.width / rect.width),
         ),
         y: Math.round(
-          (e.clientY - rect.top) * (imageDimensions.height / rect.height)
+          (e.clientY - rect.top) * (imageDimensions.height / rect.height),
         ),
       };
     },
-    [imageDimensions]
+    [imageDimensions],
   );
 
   // Calculate hold params from drag gesture (in pixels, then convert to feet for display)
@@ -161,7 +161,7 @@ function HoldsEditorPage() {
         y: feetCoords.y,
       };
     },
-    [toFeetCoords, enabledFeatures, lockedUseability, useabilityLocked]
+    [toFeetCoords, enabledFeatures, lockedUseability, useabilityLocked],
   );
 
   // Get color based on hold type
@@ -183,7 +183,7 @@ function HoldsEditorPage() {
   // Legacy function for backward compatibility
   const getUseabilityColor = useCallback(
     (u: number) => getHoldColor(u, false),
-    [getHoldColor]
+    [getHoldColor],
   );
 
   // Handlers
@@ -209,7 +209,7 @@ function HoldsEditorPage() {
           undefined, // no pull_x
           undefined, // no pull_y
           undefined, // no useability
-          enabledFeatures.footholds && isAddFoot ? 1 : 0
+          enabledFeatures.footholds && isAddFoot ? 1 : 0,
         );
       } else {
         // Start drag for direction/useability
@@ -275,7 +275,7 @@ function HoldsEditorPage() {
         enabledFeatures.direction ? params.pull_x : undefined,
         enabledFeatures.direction ? params.pull_y : undefined,
         enabledFeatures.useability ? params.useability : undefined,
-        enabledFeatures.footholds && isAddFoot ? 1 : 0
+        enabledFeatures.footholds && isAddFoot ? 1 : 0,
       );
       setAddHoldState({
         isDragging: false,
@@ -385,13 +385,14 @@ function HoldsEditorPage() {
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
       const isFoot = !!hold.is_foot;
-      const sizeMultiplier = isFoot ? 0.6 : 1;
+      const scale = height / 3000;
+      const sizeMultiplier = isFoot ? 0.5 * scale : scale;
       const useability = hold.useability ?? 0.5;
       const color = getHoldColor(useability, isFoot);
 
       // Hold Display Constants
       const circleSize = 4 * sizeMultiplier;
-      const arrowSize = 3 * sizeMultiplier;
+      const arrowSize = 2 * sizeMultiplier;
 
       // Selection highlight
       if (mode === "select" && selectedHold?.hold_index === hold.hold_index) {
@@ -432,19 +433,19 @@ function HoldsEditorPage() {
         ctx.beginPath();
         ctx.moveTo(
           endX + (arrowSize / 2.0) * Math.cos(angle - Math.PI / 4),
-          endY + (arrowSize / 2.0) * Math.sin(angle - Math.PI / 4)
+          endY + (arrowSize / 2.0) * Math.sin(angle - Math.PI / 4),
         );
         ctx.lineTo(
           endX - headLength * Math.cos(angle - Math.PI / 4),
-          endY - headLength * Math.sin(angle - Math.PI / 4)
+          endY - headLength * Math.sin(angle - Math.PI / 4),
         );
         ctx.moveTo(
           endX + (arrowSize / 2.0) * Math.cos(angle + Math.PI / 4),
-          endY + (arrowSize / 2.0) * Math.sin(angle + Math.PI / 4)
+          endY + (arrowSize / 2.0) * Math.sin(angle + Math.PI / 4),
         );
         ctx.lineTo(
           endX - headLength * Math.cos(angle + Math.PI / 4),
-          endY - headLength * Math.sin(angle + Math.PI / 4)
+          endY - headLength * Math.sin(angle + Math.PI / 4),
         );
         ctx.stroke();
       }
@@ -496,7 +497,7 @@ function HoldsEditorPage() {
         pixelCoords.x,
         pixelCoords.y,
         dragX,
-        dragY
+        dragY,
       );
       const sizeMultiplier = originalHold.is_foot ? 0.5 : 1;
       const color = getHoldColor(params.useability, originalHold.is_foot === 1);
@@ -544,7 +545,7 @@ function HoldsEditorPage() {
           addHoldState.holdX,
           addHoldState.holdY,
           addHoldState.dragX,
-          addHoldState.dragY
+          addHoldState.dragY,
         ),
       }
     : editHoldState.isDragging && editHoldState.originalHold
@@ -555,7 +556,7 @@ function HoldsEditorPage() {
               pixelCoords.x,
               pixelCoords.y,
               editHoldState.dragX,
-              editHoldState.dragY
+              editHoldState.dragY,
             );
           })(),
         }
@@ -646,7 +647,7 @@ function HoldsEditorPage() {
                 navigate({ to: `/walls/${wallId}` });
               } catch (err) {
                 setError(
-                  err instanceof Error ? err.message : "Failed to save holds"
+                  err instanceof Error ? err.message : "Failed to save holds",
                 );
               } finally {
                 setIsSubmitting(false);
