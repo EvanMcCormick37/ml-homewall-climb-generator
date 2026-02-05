@@ -40,12 +40,10 @@ class ClimbPredictions:
 class ClimbBatch(Protocol):
     """Extends torch_geometry Batch class for representing climbs as point clouds. Each climb is padded to 30 nodes by adding random holds with NULL role."""
     pos: Tensor
-    vec: Tensor
     scalars: Tensor
-    roles: Tensor
     batch: Tensor
     num_graphs: int
-    nodes_per_graph: int = 30
+    nodes_per_graph: int = 20
     
 class GravEGNNConv(nn.Module):
     """Equivariant Graph Neural Network layer conditioned for Gravity Sensitivity. O(2)+R^3 Equivariant (Translations in 3D space + Rotations and Reflections around the Z-axis."""
