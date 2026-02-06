@@ -197,13 +197,14 @@ class DDPMTrainer():
         self,
         model: nn.Module,
         dataset: TensorDataset | None = None,
-        default_batch_size: int = 64
+        default_batch_size: int = 64,
+        lr: float = 1e-3
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
         self.dataset = dataset
         self.default_batch_size = default_batch_size
-        self.optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        self.optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     
     def train(
         self,
@@ -259,7 +260,7 @@ class DDPMTrainer():
                     total_loss[1] += real_hold_loss.item()
                     total_loss[2] += null_hold_loss.item()
                 
-                improvement = total_loss[0] - losses[-1][0] if len(losses) > 0 else 0
+                improvement = losses[-1][0] - total_loss[0] if len(losses) > 0 else 0
                 pbar.set_postfix_str(f"Epoch: {epoch}, Batches:{len(batches)} Total Loss: {total_loss[0]:.2f}, Real Hold Loss: {total_loss[1]:.2f}, Null Hold Loss: {total_loss[2]:.2f}, Improvement: {improvement:.2f}")
                 losses.append(total_loss)
 
