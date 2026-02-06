@@ -112,7 +112,6 @@ class Noiser(nn.Module):
 
         return result
 
-
 class ClimbDDPM(nn.Module):
     def __init__(self, model, predict_noise = False):
         super().__init__()
@@ -164,6 +163,9 @@ class ClimbDDPM(nn.Module):
         epsilon = 0.0001
         return  torch.cos((t+epsilon)/(1+epsilon)*torch.pi/2)**2
     
+    def forward(self, noisy, cond, t):
+        return self.predict(noisy, cond, t)
+    
     @torch.no_grad()
     def generate(
         self,
@@ -198,7 +200,6 @@ class ClimbDDPM(nn.Module):
 
             t_tensor -= .01
             gen_climbs = self.forward_diffusion(gen_climbs, t_tensor, x_0 if deterministic else None)
-
 
 class DDPMTrainer():
     def __init__(
@@ -276,8 +277,7 @@ class DDPMTrainer():
         torch.save(self.model.state_dict(), save_path)
         return self.model, losses
 
-
-class ClimbDDPMGenerator(nn.Module):
+class ClimbDDPMGenerator():
     """Moving Climb Generation logic over here to implement automatic conditional feature scaling. Need to implement Projected Diffusion."""
     def __init__(
             self,
@@ -291,10 +291,18 @@ class ClimbDDPMGenerator(nn.Module):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.scaler = scaler
         self.model = model
+        self.timesteps = self.model.timesteps
+
+        if model_weights_path:
+            model.load_state_dict(state_dict=clear_compile_keys(model_weights_path),strict=True)
+        if scaler_weights_path:
+            self.scaler.load_weights(scaler_weights_path)
 
         with sqlite3.connect(db_path) as conn:
             holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds WHERE wall_id = ?",conn,params=(wall_id,))
-            self.holds = self.scaler.transform_hold_features(holds, to_df=True).to_dict('index')
+            self.holds_df = holds.copy()
+            self.hold_lookup = self.scaler.transform_hold_features(holds.copy(), to_df=True).to_dict('index')
+            self.hold_features_arr = self.scaler.transform_hold_features(holds.copy(), to_df=False)
 
         self.grade_to_diff = {
             'font': {
@@ -359,11 +367,6 @@ class ClimbDDPMGenerator(nn.Module):
                 'V16': 33
             }
         }
-
-        if model_weights_path:
-            model.load_state_dict(state_dict=clear_compile_keys(model_weights_path),strict=True)
-        if scaler_weights_path:
-            self.scaler.load_weights(scaler_weights_path)
     
     def _build_cond_tensor(self, n, grade, diff_scale, angle):
         diff = self.grade_to_diff[diff_scale][grade]
@@ -375,7 +378,7 @@ class ClimbDDPMGenerator(nn.Module):
         })
 
         cond = self.scaler.transform_climb_features(df_cond)
-        return torch.tensor(cond, device=self.device)
+        return torch.tensor(cond, device=self.device, dtype=torch.float32)
     
     @torch.no_grad()
     def generate(
@@ -383,7 +386,7 @@ class ClimbDDPMGenerator(nn.Module):
         n: int = 1 ,
         angle: int = 45,
         grade: str = 'V4',
-        diff_scale: str = 'v_scale',
+        diff_scale: str = 'v_grade',
         deterministic: bool = False,
         show_steps: bool = False
     )->Tensor:
@@ -412,6 +415,8 @@ class ClimbDDPMGenerator(nn.Module):
 
             t_tensor -= .01
             gen_climbs = self.model.forward_diffusion(gen_climbs, t_tensor, x_0 if deterministic else None)
+        
+        return gen_climbs
 
 #-----------------------------------------------------------------------
 # HOLD ROLE CLASSIFICATION

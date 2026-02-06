@@ -54,7 +54,7 @@ class ClimbingDataset(InMemoryDataset):
         self.data, self.slices = self.collate(data_list)
 
 
-class ClimbsFeatureArray:
+class ClimbsFeatureArrayV1:
     def __init__(
             self,
             db_path: str = "data/storage.db",
@@ -167,7 +167,7 @@ class ClimbsFeatureArray:
         
         return torch.FloatTensor(x_out), torch.FloatTensor(cond_out)
 
-class ClimbsFeatureArrayV2:
+class ClimbsFeatureArray:
     def __init__(
             self,
             db_path: str = "data/storage.db",
@@ -187,7 +187,7 @@ class ClimbsFeatureArrayV2:
             holds_to_fit = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds",conn)
             
             scaled_climbs, scaled_holds = self.scaler.fit_transform(climbs_to_fit, holds_to_fit)
-
+            self.hold_features_df = scaled_holds
             self.holds_lookup = {
                 wall_id: group.drop(columns=['wall_id','useability', 'is_foot', 'mult']).to_dict('index')
                 for wall_id, group in scaled_holds.groupby('wall_id')
@@ -304,7 +304,8 @@ class ClimbsFeatureScaler:
         scaled_climbs = self._apply_log_transforms(scaled_climbs)
         scaled_climbs[['grade','quality','ascents','angle']] = self.cond_features_scaler.fit_transform(scaled_climbs[['grade','quality','ascents','angle']])
         # For holds DF
-        scaled_holds = self._apply_hold_transforms(holds_to_fit.copy())
+        scaled_holds = holds_to_fit.copy()
+        scaled_holds = self._apply_hold_transforms(scaled_holds)
         scaled_holds[['x','y','pull_x','pull_y']] = self.hold_features_scaler.fit_transform(scaled_holds[['x','y','pull_x','pull_y']])
         
         return (scaled_climbs, scaled_holds)
@@ -324,8 +325,9 @@ class ClimbsFeatureScaler:
         dfh['pull_y'] *= dfh['mult']
         return dfh
     
-    def transform_climb_features(self, dfc: pd.DataFrame, to_df: bool = False):
+    def transform_climb_features(self, climbs_to_transform: pd.DataFrame, to_df: bool = False):
         """Turn a series of conditional climb features into normalized features for the DDPM."""
+        dfc = climbs_to_transform.copy()
         dfc = self._apply_log_transforms(dfc)
         if to_df:
             dfc[['grade','quality','ascents','angle']] = self.cond_features_scaler.transform(dfc[['grade','quality','ascents','angle']])
@@ -334,8 +336,9 @@ class ClimbsFeatureScaler:
 
         return dfc
     
-    def transform_hold_features(self, dfh: pd.DataFrame, to_df:bool=False):
+    def transform_hold_features(self, holds_to_transform: pd.DataFrame, to_df:bool=False):
         """Turn a series of hold features into normalized features for the DDPM."""
+        dfh = holds_to_transform.copy()
         dfh = self._apply_hold_transforms(dfh)
         if to_df:
             dfh[['x','y','pull_x','pull_y']] = self.hold_features_scaler.transform(dfh[['x','y','pull_x','pull_y']])
