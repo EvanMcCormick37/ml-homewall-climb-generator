@@ -77,7 +77,6 @@ class Denoiser(nn.Module):
 
         return result
 
-
 class Noiser(nn.Module):
     def __init__(self, hidden_dim=128, layers = 5):
         super().__init__()
