@@ -564,7 +564,7 @@ function Canvas({
       ctx.font = "bold 11px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      // ctx.fillText(hold.hold_index.toString(), x, y);
+      ctx.fillText(hold.hold_index.toString(), x, y);
     });
   }, [image, imageDimensions, holds, selectedHoldsMap, toPixelCoords]);
 

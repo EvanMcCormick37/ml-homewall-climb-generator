@@ -112,6 +112,142 @@ class Noiser(nn.Module):
 
         return result
 
+class SinusoidalPositionEmbeddings(nn.Module):
+    """
+    Standard sinusoidal positional embeddings for time steps.
+    Helps the model understand 'where' it is in the diffusion process.
+    """
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, time):
+        # time: (batch_size, 1)
+        device = time.device
+        half_dim = self.dim // 2
+        embeddings = math.log(10000) / (half_dim - 1)
+        embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
+        embeddings = time[:, 0].unsqueeze(1) * embeddings.unsqueeze(0)
+        embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
+        return embeddings
+
+class AttentionBlock1D(nn.Module):
+    """
+    Self-Attention block for 1D sequence data.
+    Allows every hold to 'attend' to every other hold, capturing global dependencies.
+    """
+    def __init__(self, channels, num_heads=4):
+        super().__init__()
+        self.num_heads = num_heads
+        self.norm = nn.GroupNorm(8, channels)
+        self.attention = nn.MultiheadAttention(embed_dim=channels, num_heads=num_heads, batch_first=True)
+        
+    def forward(self, x):
+        # x: (Batch, Channels, Length)
+        B, C, L = x.shape
+        
+        # Norm and rearrange for Attention: (Batch, Length, Channels)
+        h = self.norm(x).permute(0, 2, 1)
+        
+        # Self-Attention
+        # attn_output: (Batch, Length, Channels)
+        attn_output, _ = self.attention(h, h, h)
+        
+        # Rearrange back to (Batch, Channels, Length)
+        h = attn_output.permute(0, 2, 1)
+        
+        # Residual connection
+        return x + h
+
+class ImprovedNoiser(nn.Module):
+    def __init__(self, hidden_dim=256, layers=6, input_channels=4, cond_dim=4):
+        super().__init__()
+        
+        # 1. Time Embeddings
+        time_dim = hidden_dim // 4
+        self.time_mlp = nn.Sequential(
+            SinusoidalPositionEmbeddings(time_dim),
+            nn.Linear(time_dim, time_dim),
+            nn.SiLU(),
+            nn.Linear(time_dim, time_dim)
+        )
+        
+        # 2. Condition Embeddings (Condition + Time)
+        # We project the physical conditions (grade, angle, etc.) and fuse them with time
+        self.cond_mlp = nn.Sequential(
+            nn.Linear(cond_dim + time_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+
+        # 3. Initial Convolution
+        # Lifts input (x, y, px, py) to hidden dimension
+        self.init_conv = nn.Conv1d(input_channels, hidden_dim, kernel_size=3, padding=1)
+
+        # 4. Down-sampling / Encoding Blocks
+        self.downs = nn.ModuleList([])
+        for _ in range(layers // 2):
+            self.downs.append(ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim))
+
+        # 5. Middle Block with ATTENTION
+        # This is where the model understands global structure
+        self.mid_block1 = ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim)
+        self.attn_block = AttentionBlock1D(hidden_dim, num_heads=8)
+        self.mid_block2 = ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim)
+
+        # 6. Up-sampling / Decoding Blocks
+        self.ups = nn.ModuleList([])
+        for _ in range(layers // 2):
+            self.ups.append(ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim))
+
+        # 7. Final Head
+        self.final_norm = nn.GroupNorm(8, hidden_dim)
+        self.final_act = nn.SiLU()
+        self.head = nn.Conv1d(hidden_dim, input_channels, kernel_size=1)
+
+    def forward(self, climbs, cond, t):
+        """
+        :param climbs: [Batch, Sequence_Length, 4] (x, y, pull_x, pull_y)
+        :param cond:   [Batch, 4] (grade, quality, ascents, angle)
+        :param t:      [Batch, 1] (timesteps 0.0 to 1.0)
+        """
+        
+        # --- Pre-process Inputs ---
+        # 1. Process Time
+        t_emb = self.time_mlp(t) # [B, time_dim]
+        
+        # 2. Process Condition + Time
+        # Concatenate condition features with time embeddings
+        cond_input = torch.cat([cond, t_emb], dim=1)
+        emb_c = self.cond_mlp(cond_input) # [B, hidden_dim] - This is fed to ResBlocks
+
+        # 3. Process Climbs
+        # Transpose for Conv1d: [B, S, 4] -> [B, 4, S]
+        h = self.init_conv(climbs.transpose(1, 2))
+
+        # --- Forward Pass ---
+        
+        # Encoder
+        for layer in self.downs:
+            h = layer(h, emb_c)
+
+        # Bottleneck (Attention)
+        h = self.mid_block1(h, emb_c)
+        h = self.attn_block(h) # Self-attention happens here
+        h = self.mid_block2(h, emb_c)
+
+        # Decoder
+        for layer in self.ups:
+            h = layer(h, emb_c)
+
+        # --- Output ---
+        h = self.final_norm(h)
+        h = self.final_act(h)
+        output = self.head(h)
+        
+        # Transpose back: [B, 4, S] -> [B, S, 4]
+        return output.transpose(1, 2)
+
 class ClimbDDPM(nn.Module):
     def __init__(self, model, predict_noise = False):
         super().__init__()
@@ -119,6 +255,11 @@ class ClimbDDPM(nn.Module):
         self.model = model
         self.timesteps = 100
         self.pred_noise = predict_noise
+    
+    def _cos_alpha_bar(self, t: Tensor)-> Tensor:
+        t = t.view(-1,1,1)
+        epsilon = 0.0004
+        return  torch.cos((t+epsilon)/(1+2*epsilon)*torch.pi/2)**2
     
     def loss(self, sample_climbs, cond):
         """Perform a diffusion Training step and return the loss resulting from the model in the training run. Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
@@ -138,9 +279,13 @@ class ClimbDDPM(nn.Module):
         return real_hold_loss + null_hold_loss, real_hold_loss, null_hold_loss
     
     def predict(self, noisy, cond, t):
-        """Return predicted clean data (noisy-pred_noise if the model predicts noise)"""
+        """Return predicted clean data."""
+        a = self._cos_alpha_bar(t)
         prediction = self.model(noisy, cond, t)
-        clean = noisy - prediction if self.pred_noise else prediction
+        if self.pred_noise:
+            clean = (noisy - torch.sqrt(1-a)*prediction)/torch.sqrt(a)
+        else:
+            clean = prediction
         return clean
     
     def _null_hold_loss(self, pred_clean, null_mask):
@@ -158,48 +303,8 @@ class ClimbDDPM(nn.Module):
         a = self._cos_alpha_bar(t)
         return torch.sqrt(a) * clean + torch.sqrt(1-a) * x_0
     
-    def _cos_alpha_bar(self, t: Tensor)-> Tensor:
-        t = t.view(-1,1,1)
-        epsilon = 0.0001
-        return  torch.cos((t+epsilon)/(1+epsilon)*torch.pi/2)**2
-    
     def forward(self, noisy, cond, t):
         return self.predict(noisy, cond, t)
-    
-    @torch.no_grad()
-    def generate(
-        self,
-        n: int,
-        angle: int,
-        grade: int | None = None,
-        deterministic: bool = False,
-        show_steps: bool = False
-    )->Tensor:
-        """
-        Generate a climb or batch of climbs with the given conditions using the standard DDPM iterative denoising process.
-        
-        :param n: Number of climbs to generate
-        :type n: int
-        :param angle: Angle of the wall
-        :type angle: int
-        :param grade: Desired difficulty (V-grade)
-        :type grade: int | None
-        :return: A Tensor containing the denoised generated climbs as hold sets.
-        :rtype: Tensor
-        """
-        cond = torch.tensor([[grade/9-0.5 if grade else 0.0, 0.8, -0.8, angle/90.0] for _ in range(n)], device=self.device)
-
-        x_0 = torch.randn((n, 20, 4), device=self.device)
-        t_tensor = torch.ones((n,1), device=self.device)
-
-        for t in range(1, self.timesteps):
-            gen_climbs = self.predict(x_0, cond, t_tensor)
-            print('.',end='')
-            if t == self.timesteps-1:
-                return gen_climbs
-
-            t_tensor -= .01
-            gen_climbs = self.forward_diffusion(gen_climbs, t_tensor, x_0 if deterministic else None)
 
 class DDPMTrainer():
     def __init__(
@@ -260,7 +365,7 @@ class DDPMTrainer():
                     x, c = x.to(self.device), c.to(self.device)
                     self.optimizer.zero_grad()
                     loss, real_hold_loss, null_hold_loss = self.model.loss(x, c)
-                    loss.backward()
+                    real_hold_loss.backward()
                     self.optimizer.step()
 
                     # Calc total losses
@@ -428,12 +533,13 @@ class ClimbDDPMGenerator():
         """
         cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
         x_t = torch.randn((n, 20, 4), device=self.device)
+        noisy = x_t.clone()
         t_tensor = torch.ones((n,1), device=self.device)
 
         for t in range(0, self.timesteps):
             print(t_tensor,end='')
 
-            gen_climbs = self.model(x_t, cond_t, t_tensor)
+            gen_climbs = self.model(noisy, cond_t, t_tensor)
 
             if projected:
                 alpha_p = self._projection_strength(t_tensor)
@@ -441,7 +547,7 @@ class ClimbDDPMGenerator():
                 gen_climbs = alpha_p*(projected_climbs) + 1-alpha_p*(gen_climbs)
             
             t_tensor -= 1.0/self.timesteps
-            gen_climbs = self.model.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else None)
+            noisy = self.model.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else None)
         
         return gen_climbs
 

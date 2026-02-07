@@ -4,56 +4,13 @@ import sqlite3
 import json
 import math
 import torch
-from torch import Tensor
 from dataclasses import dataclass
 from torch_geometric.data import Data, InMemoryDataset
 from sklearn.preprocessing import MinMaxScaler
 import os
 import joblib
 
-@dataclass
-class PreprocessingOptions:
-    min_ascents: int = 1
-    pad_length: int = 20
-
-@dataclass
-class FeatureIndices:
-    pos: list[int]
-    vec: list[int]
-    scalars: list[int]
-    role: int
-
-class ClimbingDataset(InMemoryDataset):
-    def __init__(self, features_array: np.ndarray, indices: FeatureIndices):
-        super().__init__(root=None, transform=None, pre_transform=None)
-        
-        data_list = []
-        for climb in features_array:
-            tensor = torch.from_numpy(climb).float()
-            
-            # Map columns to ClimbBatch protocol expectations
-            pos = tensor[:, indices.pos]       # x, y, z
-            vec = tensor[:, indices.vec]       # pull_x, pull_y, pull_z
-            
-            # SCALARS: Currently only 'is_foot' (index 6). 
-            scalars = tensor[:, indices.scalars]   
-            
-            # ROLES: Index 7. Must be Long type for Embedding layers
-            roles = tensor[:, indices.role].long() 
-
-            # Create PyG Data object
-            data = Data(
-                pos=pos,
-                vec=vec,
-                scalars=scalars,
-                roles=roles,
-                num_nodes=features_array.shape[1]
-            )
-            data_list.append(data)
-            
-        self.data, self.slices = self.collate(data_list)
-
-
+@DeprecationWarning
 class ClimbsFeatureArrayV1:
     def __init__(
             self,
@@ -178,13 +135,14 @@ class ClimbsFeatureArray:
         self.db_path = db_path
         self.to_length = to_length
         self.scaler = ClimbsFeatureScaler(weights_path=scaler_weights_path)
+        self.null_token = [-2,0,-2,0]
 
         with sqlite3.connect(db_path) as conn:
             climbs_to_fit = pd.read_sql_query("SELECT * FROM climbs WHERE ascents > 1", conn, index_col='id')
             climbs_to_fit['holds'] = climbs_to_fit['holds'].apply(json.loads)
             climbs_to_fit = climbs_to_fit[climbs_to_fit['holds'].map(len) <= to_length]
 
-            holds_to_fit = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds",conn)
+            holds_to_fit = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds", conn)
             
             scaled_climbs, scaled_holds = self.scaler.fit_transform(climbs_to_fit, holds_to_fit)
             self.hold_features_df = scaled_holds
@@ -259,7 +217,7 @@ class ClimbsFeatureArray:
 
                 pad_length = self.to_length - len(f_arr)
                 if pad_length > 0:
-                    null_holds = np.tile(np.array([-2,-2,-2,-2]),(pad_length,1))
+                    null_holds = np.tile(np.array(self.null_token),(pad_length,1))
                     f_arr = np.concatenate([f_arr,null_holds], axis=0, dtype=np.float32)
 
                 x_out.append(f_arr)
