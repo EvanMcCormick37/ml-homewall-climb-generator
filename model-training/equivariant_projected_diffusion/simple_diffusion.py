@@ -8,6 +8,7 @@ from tqdm import tqdm
 import pandas as pd
 from .climb_conversion import ClimbsFeatureScaler
 import sqlite3
+import math
 
 # Input Data Format:
 # climbs: Tensor [Batch_length, 20, 5]
@@ -299,9 +300,8 @@ class ClimbDDPMGenerator():
 
         with sqlite3.connect(db_path) as conn:
             holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds WHERE wall_id = ?",conn,params=(wall_id,))
-            self.holds_df = holds.copy()
-            self.hold_lookup = self.scaler.transform_hold_features(holds.copy(), to_df=True).to_dict('index')
-            self.hold_features_arr = self.scaler.transform_hold_features(holds.copy(), to_df=False)
+            self.hold_lookup = self.scaler.transform_hold_features(holds, to_df=True).to_dict('index')
+            self.holds_manifold = torch.tensor(self.scaler.transform_hold_features(holds, to_df=False), dtype=torch.float32)
 
         self.grade_to_diff = {
             'font': {
@@ -379,6 +379,30 @@ class ClimbDDPMGenerator():
         cond = self.scaler.transform_climb_features(df_cond)
         return torch.tensor(cond, device=self.device, dtype=torch.float32)
     
+    def _project_onto_manifold(self, gen_climbs: Tensor, hold_manifold: Tensor)-> Tensor:
+        """
+            Project each generated hold to its nearest neighbor on the hold manifold.
+            
+            Args:
+                climbs: (B, S, H) predicted clean holds
+                hold_manifold: (num_holds, H) all valid hold features + null hold
+            Returns:
+                projected: (B, S, H) each hold snapped to nearest manifold point
+        """
+        B, S, H = gen_climbs.shape
+        flat_climbs = gen_climbs.reshape(-1,H)
+        dists = torch.cdist(flat_climbs, hold_manifold)
+        idx = dists.argmin(dim=1)
+        projected_holds = hold_manifold[idx]
+
+        return projected_holds.reshape(B, S, H)
+    
+    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.7):
+        """Calculate the weight to assign to the projected holds based on the timestep."""
+        a = (t_start_projection-t)/t_start_projection
+        strength = 1 - torch.cos(a*torch.pi/2)
+        return torch.where(t > t_start_projection, torch.zeros_like(t),strength)
+    
     @torch.no_grad()
     def generate(
         self,
@@ -387,6 +411,7 @@ class ClimbDDPMGenerator():
         grade: str = 'V4',
         diff_scale: str = 'v_grade',
         deterministic: bool = False,
+        projected: bool = True,
         show_steps: bool = False
     )->Tensor:
         """
@@ -402,20 +427,24 @@ class ClimbDDPMGenerator():
         :rtype: Tensor
         """
         cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
-
-        x_0 = torch.randn((n, 20, 4), device=self.device)
+        x_t = torch.randn((n, 20, 4), device=self.device)
         t_tensor = torch.ones((n,1), device=self.device)
 
-        for t in range(1, self.timesteps):
-            gen_climbs = self.model(x_0, cond_t, t_tensor)
-            print('.',end='')
-            if t == self.timesteps-1:
-                return gen_climbs
+        for t in range(0, self.timesteps):
+            print(t_tensor,end='')
 
-            t_tensor -= .01
-            gen_climbs = self.model.forward_diffusion(gen_climbs, t_tensor, x_0 if deterministic else None)
+            gen_climbs = self.model(x_t, cond_t, t_tensor)
+
+            if projected:
+                alpha_p = self._projection_strength(t_tensor)
+                projected_climbs = self._project_onto_manifold(gen_climbs,self.holds_manifold)
+                gen_climbs = alpha_p*(projected_climbs) + 1-alpha_p*(gen_climbs)
+            
+            t_tensor -= 1.0/self.timesteps
+            gen_climbs = self.model.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else None)
         
         return gen_climbs
+
 
 #-----------------------------------------------------------------------
 # HOLD ROLE CLASSIFICATION

@@ -41,10 +41,42 @@ const HOLD_STROKE_COLOR = "#00b679";
 // V-grade options for the dropdown
 const GRADE_OPTIONS = [
   { value: null, label: "Project (Ungraded)" },
-  ...Array.from({ length: 18 }, (_, i) => ({
-    value: i * 10,
-    label: `V${i}`,
-  })),
+  ...[
+    "V0-",
+    "V0",
+    "V0+",
+    "V1",
+    "V1+",
+    "V2",
+    "V2+",
+    "V3",
+    "V3+",
+    "V4",
+    "V4+",
+    "V5",
+    "V5+",
+    "V6",
+    "V6+",
+    "V7",
+    "V7+",
+    "V8",
+    "V8+",
+    "V9",
+    "V9+",
+    "V10",
+    "V10+",
+    "V11",
+    "V11+",
+    "V12",
+    "V12+",
+    "V13",
+    "V13+",
+    "V14",
+    "V14+",
+    "V15",
+    "V15+",
+    "V16",
+  ].map((v) => ({ value: v, label: v })),
 ];
 
 const ANGLES = [
@@ -475,7 +507,7 @@ function Canvas({
         y: (1 - hold.y / wallH) * imgH,
       };
     },
-    [imageDimensions, wallDimensions]
+    [imageDimensions, wallDimensions],
   );
 
   // Draw canvas
@@ -500,12 +532,13 @@ function Canvas({
     // Draw holds
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const radius = 18;
+      const size = height / 1800;
+      const radius = hold.is_foot ? 10 * size : 18 * size;
       const category = selectedHoldsMap.get(hold.hold_index);
       const isSelected = category !== undefined;
 
-      // Draw selection ring if selected
-      if (isSelected) {
+      // Draw selection ring if selected and is not a foot.
+      if (isSelected && !hold.is_foot) {
         ctx.beginPath();
         ctx.arc(x, y, radius + 4, 0, 2 * Math.PI);
         ctx.strokeStyle = CATEGORY_COLORS[category];
@@ -519,6 +552,10 @@ function Canvas({
       ctx.strokeStyle = isSelected
         ? CATEGORY_COLORS[category]
         : HOLD_STROKE_COLOR;
+      if (isSelected) {
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fill();
+      }
       ctx.lineWidth = 2;
       ctx.stroke();
 
@@ -527,7 +564,7 @@ function Canvas({
       ctx.font = "bold 11px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(hold.hold_index.toString(), x, y);
+      // ctx.fillText(hold.hold_index.toString(), x, y);
     });
   }, [image, imageDimensions, holds, selectedHoldsMap, toPixelCoords]);
 
@@ -542,7 +579,7 @@ function Canvas({
         y: (e.clientY - rect.top) * (imageDimensions.height / rect.height),
       };
     },
-    [imageDimensions]
+    [imageDimensions],
   );
 
   // Find hold at position
@@ -556,7 +593,7 @@ function Canvas({
       }
       return null;
     },
-    [holds, toPixelCoords]
+    [holds, toPixelCoords],
   );
 
   // Handle click
@@ -569,7 +606,7 @@ function Canvas({
         onHoldClick(hold.hold_index);
       }
     },
-    [getImageCoords, findHoldAt, onHoldClick]
+    [getImageCoords, findHoldAt, onHoldClick],
   );
 
   // Pan handlers
@@ -585,7 +622,7 @@ function Canvas({
         };
       }
     },
-    [viewTransform]
+    [viewTransform],
   );
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -692,7 +729,7 @@ function CreateClimbPage() {
     (dimensions: { width: number; height: number }) => {
       setImageDimensions(dimensions);
     },
-    []
+    [],
   );
 
   // Handle form reset
@@ -740,7 +777,7 @@ function CreateClimbPage() {
         if (startCount >= 2 && existing.category !== "start") {
           // Skip to finish if start is full
           const finishCount = prev.filter(
-            (h) => h.category === "finish"
+            (h) => h.category === "finish",
           ).length;
           if (finishCount >= 2) {
             // Both full, remove the hold
@@ -749,7 +786,7 @@ function CreateClimbPage() {
           return prev.map((h) =>
             h.holdIndex === holdIndex
               ? { ...h, category: "finish" as HoldCategory }
-              : h
+              : h,
           );
         }
       }
@@ -764,7 +801,7 @@ function CreateClimbPage() {
 
       // Update to next category
       return prev.map((h) =>
-        h.holdIndex === holdIndex ? { ...h, category: nextCategory } : h
+        h.holdIndex === holdIndex ? { ...h, category: nextCategory } : h,
       );
     });
   }, []);

@@ -333,7 +333,7 @@ class ClimbsFeatureScaler:
             dfc[['grade','quality','ascents','angle']] = self.cond_features_scaler.transform(dfc[['grade','quality','ascents','angle']])
         else:
             dfc = self.cond_features_scaler.transform(dfc[['grade','quality','ascents','angle']])
-
+            dfc = dfc.T
         return dfc
     
     def transform_hold_features(self, holds_to_transform: pd.DataFrame, to_df:bool=False):
@@ -344,5 +344,6 @@ class ClimbsFeatureScaler:
             dfh[['x','y','pull_x','pull_y']] = self.hold_features_scaler.transform(dfh[['x','y','pull_x','pull_y']])
         else:
             dfh = self.hold_features_scaler.transform(dfh[['x','y','pull_x','pull_y']])
+            dfh = dfh.T
 
         return dfh
