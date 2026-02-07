@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 import pandas as pd
-from .climb_conversion import ClimbsFeatureScaler
+from climb_conversion import ClimbsFeatureScaler
 import sqlite3
 import math
 
