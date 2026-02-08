@@ -7,6 +7,7 @@ import torch
 from dataclasses import dataclass
 from torch_geometric.data import Data, InMemoryDataset
 from sklearn.preprocessing import MinMaxScaler
+from torch.utils.data import TensorDataset
 import os
 import joblib
 
@@ -245,7 +246,7 @@ class ClimbsFeatureArray:
             x_out = np.concatenate([x_out,refl],axis=0)
             cond_out = np.tile(cond_out,(2,1))
         
-        return torch.FloatTensor(x_out), torch.FloatTensor(cond_out)
+        return TensorDataset(torch.FloatTensor(x_out), torch.FloatTensor(cond_out))
 
 class ClimbsFeatureScaler:
     def __init__(self, weights_path: str | None = None):

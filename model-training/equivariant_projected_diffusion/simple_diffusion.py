@@ -125,7 +125,7 @@ class AttentionBlock1D(nn.Module):
         return x + h
 
 class Noiser(nn.Module):
-    def __init__(self, hidden_dim=64, layers = 3, feature_dim = 4, cond_dim = 4, sinusoidal = False):
+    def __init__(self, hidden_dim=64, layers = 5, feature_dim = 4, cond_dim = 4, sinusoidal = True):
         super().__init__()
 
         self.time_mlp = nn.Sequential(
@@ -442,9 +442,9 @@ class DDPMTrainer():
                     self.optimizer.step()
 
                     total_loss+=loss.item()
-                
+                total_loss /= len(batches)
                 improvement = (total_loss - losses[-1]) if len(losses) > 0 else 0
-                pbar.set_postfix_str(f"Epoch: {epoch}, Loss: {total_loss:.2f}, Improvement: {improvement:.2f}, Min Loss: {min(losses) if len(losses) > 0 else 0}, Batches:{len(batches)}")
+                pbar.set_postfix_str(f"Epoch: {epoch}, Batch Loss: {total_loss:.2f}, Improvement: {improvement:.2f}, Min Loss: {min(losses) if len(losses) > 0 else 0}, Batches:{len(batches)}")
                 losses.append(total_loss)
 
                 if save_on_best and total_loss > min(losses) and len(losses) % 2 == 0:
