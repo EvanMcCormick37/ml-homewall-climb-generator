@@ -113,7 +113,7 @@ interface HoldSelection {
 interface ClimbFormData {
   name: string;
   angle: number | null;
-  grade: number | null;
+  grade: string | null;
   setter_name: string;
   tags: string[];
 }
