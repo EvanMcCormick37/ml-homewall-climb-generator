@@ -154,7 +154,7 @@ class Noiser(nn.Module):
         self.down_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i+2), hidden_dim) for i in range(layers)])
         self.up_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i), hidden_dim) for i in range(layers,0,-1)])
 
-        self.head = nn.Conv1d(hidden_dim, 4, 1)
+        self.head = nn.Conv1d(hidden_dim, feature_dim, 1)
     
     def forward(self, climbs: Tensor, cond: Tensor, t: Tensor)-> Tensor:
         """
@@ -272,12 +272,11 @@ class ImprovedNoiser(nn.Module):
         return output.transpose(1, 2)
 
 class ClimbDDPM(nn.Module):
-    def __init__(self, model, predict_noise = False):
+    def __init__(self, model):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = model
         self.timesteps = 100
-        self.pred_noise = predict_noise
     
     def _cos_alpha_bar(self, t: Tensor)-> Tensor:
         t = t.view(-1,1,1)
@@ -288,13 +287,12 @@ class ClimbDDPM(nn.Module):
         """Perform a diffusion Training step and return the loss resulting from the model in the training run. Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
         B, S, H = sample_climbs.shape
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
-
-        noisy = self.forward_diffusion(sample_climbs, t)
-        pred_clean = self.predict(noisy, cond, t)
-        is_real = (sample_climbs[:,:,3] != -2).float().unsqueeze(-1)
-        return F.mse_loss(pred_clean*is_real, sample_climbs*is_real)
+        x_0 = torch.randn((B, S, H))
+        noisy = self.forward_diffusion(sample_climbs, t, x_0)
+        pred_x_0 = self.model(noisy, cond, t)
+        return F.mse_loss(pred_x_0, x_0)
     
-    def predict(self, noisy, cond, t):
+    def predict_clean(self, noisy, cond, t):
         """Return predicted clean data."""
         a = self._cos_alpha_bar(t)
         prediction = self.model(noisy, cond, t)
@@ -304,21 +302,19 @@ class ClimbDDPM(nn.Module):
             clean = prediction
         return clean
     
-    def forward_diffusion(self, clean: Tensor, t: Tensor, x_0: Tensor | None = None)-> Tensor:
+    def forward_diffusion(self, clean: Tensor, t: Tensor, x_0: Tensor)-> Tensor:
         """Perform forward diffusion to add noise to clean data based on noise adding schedule."""
-        if x_0 is None:
-            x_0 = torch.randn_like(clean, device=self.device)
         a = self._cos_alpha_bar(t)
         return torch.sqrt(a) * clean + torch.sqrt(1-a) * x_0
     
     def forward(self, noisy, cond, t):
-        return self.predict(noisy, cond, t)
+        return self.predict_clean(noisy, cond, t)
 
 class ClimbDASD(nn.Module):
     def __init__(self, hidden_dim=128, layers=3, sinusoidal=False):
         super().__init__()
         self.model = Noiser(hidden_dim,layers, feature_dim=9, sinusoidal=sinusoidal)
-        self.discrete_features_head = nn.Softmax(dim=2)
+        self.roles_head = nn.Softmax(dim=2)
 
     def _cos_alpha_bar(self, t: Tensor)-> Tensor:
         t = t.view(-1,1,1)
@@ -327,31 +323,31 @@ class ClimbDASD(nn.Module):
         
     def predict(self, noisy, cond, t):
         """Return prediction for noise."""
-        pred_noise = self.model(noisy, cond, t)
-        pred_roles = self.discrete_features_head(pred_noise[:,:,4:])
+        pred = self.model(noisy, cond, t)
+        pred_noise = pred[:,:,:4]
+        pred_roles = self.discrete_features_head(pred[:,:,4:])
 
         a = self._cos_alpha_bar(t)
 
-        pred_cont = (noisy - torch.sqrt(1-a)*pred_noise[:,:,:4])/torch.sqrt(a)
+        pred_clean_cont = (noisy - torch.sqrt(1-a)*pred_noise)/torch.sqrt(a)
 
-        return pred_cont, pred_roles
+        return pred_clean_cont, pred_roles
     
     def loss(self, clean, cond):
         """Get the model's loss from training on a dataset of clean (denoised) data."""
         B, H, S = clean.shape
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
+        x_0 = torch.randn((B, H, S))
+        noisy = self.forward_diffusion(clean, t, x_0)
 
-        noisy = self.forward_diffusion(clean, t)
-
-        pred_cont, pred_roles = self.predict(noisy, cond, t)
-        is_real = (clean[:,:,8] == 0).float().unsqueeze(-1)
-
-        continuous_loss = F.mse_loss(pred_cont*is_real, clean[:,:,:4]*is_real)
+        pred = self.model(noisy, cond, t)
+        pred_roles = self.roles_head(pred[:,:,4:])
+        continuous_loss = F.mse_loss(pred[:,:,:4], x_0[:,:,:4])
         discrete_loss = F.cross_entropy(pred_roles, clean[:,:,4:])
 
         return continuous_loss + discrete_loss, continuous_loss, discrete_loss
     
-    def forward_diffusion(self, clean, t, x_0: Tensor | None = None):
+    def forward_diffusion(self, clean, t, x_0: Tensor):
         """
         Perform the forward Diffusion process in two stages:
             *Continuous Diffusion over Continuous Features [0:4]
@@ -367,7 +363,7 @@ class ClimbDASD(nn.Module):
         disc_feat = clean[:,:,4:]
         a = self._cos_alpha_bar(t)
 
-        diff_cont = torch.sqrt(a)*cont_feat + torch.sqrt(1-a)*(x_0 if x_0 else torch.randn_like(cont_feat))
+        diff_cont = torch.sqrt(a)*cont_feat + torch.sqrt(1-a)*(x_0)
 
         das_mask = (a > torch.rand_like(a)).float()
         diff_disc = disc_feat*das_mask
