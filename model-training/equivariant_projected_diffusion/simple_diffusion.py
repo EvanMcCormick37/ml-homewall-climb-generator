@@ -487,16 +487,23 @@ class ClimbDDPMGenerator():
                 projected: (B, S, H) each hold snapped to nearest manifold point
         """
         B, S, H = gen_climbs.shape
-        flat_climbs = gen_climbs.reshape(-1,H)
-        dists = torch.cdist(flat_climbs, self.holds_manifold)
-        idx = dists.argmin(dim=1)
         if return_indices:
-            idx = idx.detach().numpy()
-            print(idx)
-            return self.holds_lookup[idx]
+            climbs = []
+            for gen_climb in gen_climbs:
+                flat_climb = gen_climb.reshape(-1,H)
+                dists = torch.cdist(flat_climb, self.holds_manifold)
+                idx = dists.argmin(dim=1)
+                idx = idx.detach().numpy()
+                holds = self.holds_lookup[idx]
+                climb = list(set(holds[holds > 0].tolist()))
+                climbs.append(climb)
+            return climbs
         else:
+            flat_climbs = gen_climbs.reshape(-1,H)
+            dists = torch.cdist(flat_climbs, self.holds_manifold)
+            idx = dists.argmin(dim=1)
             return self.holds_manifold[idx].reshape(B, S, -1)
-    
+        
     def _projection_strength(self, t: Tensor, t_start_projection: float = 0.5):
         """Calculate the weight to assign to the projected holds based on the timestep."""
         a = (t_start_projection-t)/t_start_projection
