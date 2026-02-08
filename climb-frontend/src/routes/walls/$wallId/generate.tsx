@@ -101,7 +101,6 @@ interface GenerateFormProps {
   onGenerate: (params: {
     grade: string;
     gradeScale: GradeScale;
-    numClimbs: number;
     angle: number | null;
   }) => void;
   isGenerating: boolean;
@@ -114,10 +113,8 @@ function GenerateForm({
 }: GenerateFormProps) {
   const [gradeScale, setGradeScale] = useState<GradeScale>("v_grade");
   const [grade, setGrade] = useState("V4");
-  const [numClimbs, setNumClimbs] = useState(5);
   const [angleOverride, setAngleOverride] = useState<number | null>(null);
   const [isGradeOpen, setIsGradeOpen] = useState(false);
-  const [isNumOpen, setIsNumOpen] = useState(false);
 
   const gradeOptions =
     gradeScale === "v_grade" ? V_GRADE_OPTIONS : FONT_GRADE_OPTIONS;
@@ -204,45 +201,6 @@ function GenerateForm({
         </div>
       </div>
 
-      {/* Number of Climbs */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-400 mb-1">
-          Number of Climbs
-        </label>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsNumOpen(!isNumOpen)}
-            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg
-                       text-zinc-100 text-left flex items-center justify-between"
-          >
-            {numClimbs}
-            <ChevronDown className="w-4 h-4 text-zinc-500" />
-          </button>
-          {isNumOpen && (
-            <div
-              className="absolute top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700
-                            rounded-lg shadow-lg max-h-48 overflow-y-auto z-10"
-            >
-              {NUM_CLIMBS_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => {
-                    setNumClimbs(n);
-                    setIsNumOpen(false);
-                  }}
-                  className={`w-full px-3 py-2 text-left hover:bg-zinc-700 transition-colors
-                    ${numClimbs === n ? "bg-zinc-700 text-cyan-400" : "text-zinc-300"}`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Angle */}
       <div>
         <label className="block text-sm font-medium text-zinc-400 mb-1">
@@ -275,8 +233,7 @@ function GenerateForm({
           onGenerate({
             grade,
             gradeScale,
-            numClimbs,
-            angle: displayAngle,
+            angle: displayAngle ?? 45,
           })
         }
         disabled={isGenerating}
@@ -476,7 +433,7 @@ function WallCanvas({
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
       ctx.strokeStyle = strokeColor;
       ctx.globalAlpha = alpha;
-      ctx.lineWidth = isUsed && selectedClimb ? scale * 2 : 2;
+      ctx.lineWidth = isUsed && selectedClimb ? size * 2 : 2;
       if (selectedClimb && isUsed) {
         ctx.fillStyle = strokeColor;
         ctx.fill();
@@ -605,7 +562,6 @@ function GenerateClimbsPage() {
     async (params: {
       grade: string;
       gradeScale: GradeScale;
-      numClimbs: number;
       angle: number | null;
     }) => {
       setIsGenerating(true);
@@ -613,14 +569,14 @@ function GenerateClimbsPage() {
 
       try {
         const response = await generateClimbs(wallId, {
-          num_climbs: params.numClimbs,
+          num_climbs: 1,
           grade: params.grade,
           grade_scale: params.gradeScale,
           angle: params.angle,
           deterministic: false,
         });
 
-        setGeneratedClimbs(response.climbs);
+        setGeneratedClimbs((prev) => [...prev, ...response.climbs]);
         setLastGrade(params.grade);
         setSelectedIndex(response.climbs.length > 0 ? 0 : null);
       } catch (err) {

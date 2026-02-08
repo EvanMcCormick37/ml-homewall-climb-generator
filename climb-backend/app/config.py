@@ -28,12 +28,8 @@ class Settings(BaseSettings):
     DB_PATH: Path = DATA_DIR / "storage.db"
     
     # DDPM model paths & hyperparams
-    DDPM_WEIGHTS_PATH: Path = Path("data/models/ddpm_weights.pth")
-    DDPM_SCALER_PATH: Path = Path("data/models/ddpm_scaler.joblib")
-    DDPM_HIDDEN_DIM: int = 128
-    DDPM_LAYERS: int = 5
-    DDPM_TIMESTEPS: int = 100
-    DDPM_SINUSOIDAL: bool = True
+    DDPM_WEIGHTS_PATH: Path = DATA_DIR / "models/ddpm-weights.pth"
+    SCALER_WEIGHTS_PATH: Path = DATA_DIR / "models/scaler-weights.joblib"
     
     # Pagination defaults
     LIMIT: int = 50
