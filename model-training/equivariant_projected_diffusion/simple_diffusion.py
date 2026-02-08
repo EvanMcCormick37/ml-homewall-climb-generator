@@ -125,7 +125,7 @@ class AttentionBlock1D(nn.Module):
         return x + h
 
 class Noiser(nn.Module):
-    def __init__(self, hidden_dim=64, layers = 5, feature_dim = 4, cond_dim = 4, sinusoidal = True):
+    def __init__(self, hidden_dim=128, layers = 5, feature_dim = 4, cond_dim = 4, sinusoidal = True):
         super().__init__()
 
         self.time_mlp = nn.Sequential(
@@ -182,95 +182,6 @@ class Noiser(nn.Module):
 
         return result
 
-class ImprovedNoiser(nn.Module):
-    def __init__(self, hidden_dim=256, layers=6, input_channels=4, cond_dim=4):
-        super().__init__()
-        
-        # 1. Time Embeddings
-        time_dim = hidden_dim // 4
-        self.time_mlp = nn.Sequential(
-            SinusoidalPositionEmbeddings(time_dim),
-            nn.Linear(time_dim, time_dim),
-            nn.SiLU(),
-            nn.Linear(time_dim, time_dim)
-        )
-        
-        # 2. Condition Embeddings (Condition + Time)
-        # We project the physical conditions (grade, angle, etc.) and fuse them with time
-        self.cond_mlp = nn.Sequential(
-            nn.Linear(cond_dim + time_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim)
-        )
-
-        # 3. Initial Convolution
-        # Lifts input (x, y, px, py) to hidden dimension
-        self.init_conv = nn.Conv1d(input_channels, hidden_dim, kernel_size=3, padding=1)
-
-        # 4. Down-sampling / Encoding Blocks
-        self.downs = nn.ModuleList([])
-        for _ in range(layers // 2):
-            self.downs.append(ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim))
-
-        # 5. Middle Block with ATTENTION
-        # This is where the model understands global structure
-        self.mid_block1 = ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim)
-        self.attn_block = AttentionBlock1D(hidden_dim, num_heads=8)
-        self.mid_block2 = ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim)
-
-        # 6. Up-sampling / Decoding Blocks
-        self.ups = nn.ModuleList([])
-        for _ in range(layers // 2):
-            self.ups.append(ResidualBlock1D(hidden_dim, hidden_dim, hidden_dim))
-
-        # 7. Final Head
-        self.final_norm = nn.GroupNorm(8, hidden_dim)
-        self.final_act = nn.SiLU()
-        self.head = nn.Conv1d(hidden_dim, input_channels, kernel_size=1)
-
-    def forward(self, climbs, cond, t):
-        """
-        :param climbs: [Batch, Sequence_Length, 4] (x, y, pull_x, pull_y)
-        :param cond:   [Batch, 4] (grade, quality, ascents, angle)
-        :param t:      [Batch, 1] (timesteps 0.0 to 1.0)
-        """
-        
-        # --- Pre-process Inputs ---
-        # 1. Process Time
-        t_emb = self.time_mlp(t) # [B, time_dim]
-        
-        # 2. Process Condition + Time
-        # Concatenate condition features with time embeddings
-        cond_input = torch.cat([cond, t_emb], dim=1)
-        emb_c = self.cond_mlp(cond_input) # [B, hidden_dim] - This is fed to ResBlocks
-
-        # 3. Process Climbs
-        # Transpose for Conv1d: [B, S, 4] -> [B, 4, S]
-        h = self.init_conv(climbs.transpose(1, 2))
-
-        # --- Forward Pass ---
-        
-        # Encoder
-        for layer in self.downs:
-            h = layer(h, emb_c)
-
-        # Bottleneck (Attention)
-        h = self.mid_block1(h, emb_c)
-        h = self.attn_block(h) # Self-attention happens here
-        h = self.mid_block2(h, emb_c)
-
-        # Decoder
-        for layer in self.ups:
-            h = layer(h, emb_c)
-
-        # --- Output ---
-        h = self.final_norm(h)
-        h = self.final_act(h)
-        output = self.head(h)
-        
-        # Transpose back: [B, 4, S] -> [B, S, 4]
-        return output.transpose(1, 2)
-
 class ClimbDDPM(nn.Module):
     def __init__(self, model):
         super().__init__()
@@ -296,10 +207,7 @@ class ClimbDDPM(nn.Module):
         """Return predicted clean data."""
         a = self._cos_alpha_bar(t)
         prediction = self.model(noisy, cond, t)
-        if self.pred_noise:
-            clean = (noisy - torch.sqrt(1-a)*prediction)/torch.sqrt(a)
-        else:
-            clean = prediction
+        clean = (noisy - torch.sqrt(1-a)*prediction)/torch.sqrt(a)
         return clean
     
     def forward_diffusion(self, clean: Tensor, t: Tensor, x_0: Tensor)-> Tensor:
@@ -313,6 +221,8 @@ class ClimbDDPM(nn.Module):
 class ClimbDASD(nn.Module):
     def __init__(self, hidden_dim=128, layers=3, sinusoidal=False):
         super().__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.timesteps = 100
         self.model = Noiser(hidden_dim,layers, feature_dim=9, sinusoidal=sinusoidal)
         self.roles_head = nn.Softmax(dim=2)
 
@@ -337,7 +247,7 @@ class ClimbDASD(nn.Module):
         """Get the model's loss from training on a dataset of clean (denoised) data."""
         B, H, S = clean.shape
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
-        x_0 = torch.randn((B, H, S))
+        x_0 = torch.randn((B, H, S-5))
         noisy = self.forward_diffusion(clean, t, x_0)
 
         pred = self.model(noisy, cond, t)
@@ -372,7 +282,6 @@ class ClimbDASD(nn.Module):
     
     def forward(self, noisy, cond, t):
         return self.predict(noisy, cond, t)
-
 
 class DDPMTrainer():
     def __init__(
@@ -476,8 +385,20 @@ class ClimbDDPMGenerator():
 
         with sqlite3.connect(db_path) as conn:
             holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds WHERE wall_id = ?",conn,params=(wall_id,))
-            self.hold_lookup = self.scaler.transform_hold_features(holds, to_df=True).to_dict('index')
-            self.holds_manifold = torch.tensor(self.scaler.transform_hold_features(holds, to_df=False), dtype=torch.float32)
+            scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
+            self.holds_manifold = torch.tensor(scaled_holds[['x','y','pull_x','pull_y']].values, dtype=torch.float32)
+            self.holds_lookup = scaled_holds['hold_index'].values
+        
+        self.holds_lookup = np.concatenate([self.holds_lookup, np.array([-1, -1, -1, -1])])
+        
+        self.holds_manifold = torch.cat([
+            self.holds_manifold,
+            torch.tensor(
+                [[-2.0, 0.0, -2.0, 0.0],
+                [2.0, 0.0, -2.0, 0.0],
+                [-2.0, 0.0, 2.0, 0.0],
+                [2.0, 0.0, 2.0, 0.0]],dtype=torch.float32)
+            ],dim=0)
 
         self.grade_to_diff = {
             'font': {
@@ -552,32 +473,35 @@ class ClimbDDPMGenerator():
             "angle": [angle]*n
         })
 
-        cond = self.scaler.transform_climb_features(df_cond)
+        cond = self.scaler.transform_climb_features(df_cond).T
         return torch.tensor(cond, device=self.device, dtype=torch.float32)
     
-    def _project_onto_manifold(self, gen_climbs: Tensor, hold_manifold: Tensor)-> Tensor:
+    def _project_onto_manifold(self, gen_climbs: Tensor, return_indices=False)-> Tensor:
         """
             Project each generated hold to its nearest neighbor on the hold manifold.
             
             Args:
-                climbs: (B, S, H) predicted clean holds
-                hold_manifold: (num_holds, H) all valid hold features + null hold
+                gen_climbs: (B, S, H) predicted clean holds
+                return_indices: (boolean) Whether to return the hold indices or hold feature coordinates
             Returns:
                 projected: (B, S, H) each hold snapped to nearest manifold point
         """
         B, S, H = gen_climbs.shape
         flat_climbs = gen_climbs.reshape(-1,H)
-        dists = torch.cdist(flat_climbs, hold_manifold)
+        dists = torch.cdist(flat_climbs, self.holds_manifold)
         idx = dists.argmin(dim=1)
-        projected_holds = hold_manifold[idx]
-
-        return projected_holds.reshape(B, S, H)
+        if return_indices:
+            idx = idx.detach().numpy()
+            print(idx)
+            return self.holds_lookup[idx]
+        else:
+            return self.holds_manifold[idx].reshape(B, S, -1)
     
-    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.7):
+    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.5):
         """Calculate the weight to assign to the projected holds based on the timestep."""
         a = (t_start_projection-t)/t_start_projection
         strength = 1 - torch.cos(a*torch.pi/2)
-        return torch.where(t > t_start_projection, torch.zeros_like(t),strength)
+        return torch.where(t > t_start_projection, torch.zeros_like(t), strength)
     
     @torch.no_grad()
     def generate(
@@ -588,7 +512,8 @@ class ClimbDDPMGenerator():
         diff_scale: str = 'v_grade',
         deterministic: bool = False,
         projected: bool = True,
-        show_steps: bool = False
+        show_steps: bool = False,
+        return_indices = True
     )->Tensor:
         """
         Generate a climb or batch of climbs with the given conditions using the standard DDPM iterative denoising process.
@@ -608,20 +533,22 @@ class ClimbDDPMGenerator():
         t_tensor = torch.ones((n,1), device=self.device)
 
         for t in range(0, self.timesteps):
-            print(t_tensor,end='')
+            print('.',end='')
 
             gen_climbs = self.model(noisy, cond_t, t_tensor)
 
             if projected:
                 alpha_p = self._projection_strength(t_tensor)
-                projected_climbs = self._project_onto_manifold(gen_climbs,self.holds_manifold)
-                gen_climbs = alpha_p*(projected_climbs) + 1-alpha_p*(gen_climbs)
+                projected_climbs = self._project_onto_manifold(gen_climbs)
+                gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
             
             t_tensor -= 1.0/self.timesteps
-            noisy = self.model.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else None)
-        
-        return gen_climbs
+            noisy = self.model.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
 
+        if projected:
+            return self._project_onto_manifold(gen_climbs, return_indices=return_indices)
+        else:
+            return gen_climbs
 
 #-----------------------------------------------------------------------
 # HOLD ROLE CLASSIFICATION
@@ -686,3 +613,91 @@ def clear_compile_keys(filepath: str, map_loc: str = "cpu")->dict:
         else:
             new_state_dict[k] = v
     return new_state_dict
+
+def plot_climb(climb_data, title="Generated Climb"):
+    """
+    Visualizes a climb generated by a neural network.
+    
+    Args:
+        climb_data (np.array): Shape [20, 4]. 
+                               Features: [x, y, pull_x, pull_y, role_emb]
+        title (str): Title for the plot.
+    """
+    # role = np.argmax(climb_data[:,5:], axis=1)
+    real_holds = climb_data[climb_data[:,0] > -1.1]
+    x, y, pull_x, pull_y = real_holds.T
+
+    # 2. Setup the Plot
+    # Climbing walls are vertical, so we use a tall figsize
+    fig, ax = plt.subplots(figsize=(6, 8))
+    
+    # 3. Plot Hand Holds (Circles, Blue)
+    # We filter using the inverted boolean mask
+    ax.scatter(x, y, c='blue', s=90)
+
+    # 5. Plot Pull Vectors (Arrows)
+    # quiver(x, y, u, v) plots arrows at (x,y) with direction (u,v)
+    ax.quiver(x, y, pull_x, pull_y, 
+              color='green', alpha=0.6, 
+              angles='xy', scale_units='xy', scale=1, 
+              width=0.005, headwidth=4,
+              label='Pull Direction', zorder=1)
+
+    # 6. Formatting
+    ax.set_title(title)
+    ax.set_xlabel("X Position (Normalized)")
+    ax.set_ylabel("Y Position (Normalized)")
+    ax.set_ylim(-1,1)
+    ax.set_xlim(-1,1)
+    
+    # Important: set aspect to 'equal' so the wall doesn't look stretched
+    ax.set_aspect('equal')
+    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.legend(loc='upper right')
+
+
+    plt.show()
+
+#Test single-batch memorization to ensure both model architectures are working properly.
+def test_single_batch(model: nn.Module, dataset: TensorDataset, steps: int = 1000, lr = 1e-3, decay=0.0):
+    if decay == 0:
+        optimizer = torch.optim.Adam(params=model.parameters(), lr=lr)
+    else:
+        optimizer = torch.optim.AdamW(params = model.parameters(), lr=lr, weight_decay=decay)
+
+    loader = DataLoader(dataset=dataset, batch_size=64)
+    x, c = next(iter(loader))
+    losses = []
+    with tqdm(range(steps)) as pbar:
+        for epoch in pbar:
+            optimizer.zero_grad()
+            loss = model.loss(x, c)
+            loss.backward()
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            losses.append(loss.item())
+            if epoch % 10 == 0:
+                pbar.set_postfix_str(f"Loss: {loss.item():.4f}, Improvement:{losses[-1]-loss.item():.4f}, Grad Norm:{grad_norm:.4f}, Min loss:{min(losses) if len(losses) > 0 else 0:.5f}")
+    print(f"Min loss:{min(losses):.5f}")
+    return losses
+
+def moving_average(values, window, gaussian = False):
+    """
+    Smooth values by doing a moving average
+    :param values: (numpy array)
+    :param window: (int)
+    :return: (numpy array)
+    """
+    #We create the vector to multiply each value by to get the moving average. Essentially a vector of length n
+    # in which each weight is 1/n.
+    kernel = np.repeat(1.0, window) / window
+    if (gaussian == True) :
+        if window % 2 == 0:
+            window+=1
+        x = np.arange(-(window // 2), window // 2 + 1)
+        kernel = np.exp(-(x ** 2) / (2 * window ** 2))
+        kernel = kernel / np.sum(kernel)
+    
+    #The convolve function iteratively multiplies the first n values in the values array by the weights array.
+    # with the given weights array, it essentially takes the moving average of each N values in the values array.
+    return np.convolve(values, kernel, "valid")

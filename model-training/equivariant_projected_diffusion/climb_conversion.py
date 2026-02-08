@@ -136,7 +136,7 @@ class ClimbsFeatureArray:
         self.db_path = db_path
         self.to_length = to_length
         self.scaler = ClimbsFeatureScaler(weights_path=scaler_weights_path)
-        self.null_token = [-2,0,-2,0,0,0,0,0,1]
+        self.null_token = [0,-2,0,-2,0,0,0,0,1]
 
         with sqlite3.connect(db_path) as conn:
             climbs_to_fit = pd.read_sql_query("SELECT * FROM climbs WHERE ascents > 1", conn, index_col='id')
