@@ -287,7 +287,7 @@ class ClimbDDPM(nn.Module):
         """Perform a diffusion Training step and return the loss resulting from the model in the training run. Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
         B, S, H = sample_climbs.shape
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
-        x_0 = torch.randn((B, S, H))
+        x_0 = torch.randn((B, S, H), device = self.device)
         noisy = self.forward_diffusion(sample_climbs, t, x_0)
         pred_x_0 = self.model(noisy, cond, t)
         return F.mse_loss(pred_x_0, x_0)
