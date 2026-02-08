@@ -363,7 +363,7 @@ class DDPMTrainer():
         return self.model, losses
 
 class ClimbDDPMGenerator():
-    """Moving Climb Generation logic over here to implement automatic conditional feature scaling. Need to implement Projected Diffusion."""
+    """Moving Climb Generation logic over here to implement automatic conditional feature scaling."""
     def __init__(
             self,
             wall_id: str,
