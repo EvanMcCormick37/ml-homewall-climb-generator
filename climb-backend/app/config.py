@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     
     # App metadata
     NAME: str = "Beta Zero API"
-    VERSION: str = "0.1.0"
+    VERSION: str = "0.2.0"
     DEBUG: bool = False
     
     # Paths
@@ -27,23 +27,16 @@ class Settings(BaseSettings):
     WALLS_DIR: Path = DATA_DIR / "walls"
     DB_PATH: Path = DATA_DIR / "storage.db"
     
+    # DDPM model paths & hyperparams
+    DDPM_WEIGHTS_PATH: Path = Path("data/models/ddpm_weights.pth")
+    DDPM_SCALER_PATH: Path = Path("data/models/ddpm_scaler.joblib")
+    DDPM_HIDDEN_DIM: int = 128
+    DDPM_LAYERS: int = 5
+    DDPM_TIMESTEPS: int = 100
+    DDPM_SINUSOIDAL: bool = True
+    
     # Pagination defaults
     LIMIT: int = 50
-    
-    # Model defaults
-    NUM_LIMBS: int = 2
-    NUM_FEATURES: int = 5
-    N_HIDDEN_LAYERS: int = 3
-    HIDDEN_DIM: int = 256
-
-    # Training defaults
-    AUGMENT_DATA: bool = True
-    VAL_SPLIT: float = 0.2
-    EPOCHS: int = 100
-    MAX_EPOCHS: int = 1000
-    BATCH_SIZE: int = 32
-    LR: float = 0.001
-    DEVICE: str = "cpu"
 
     # Test settings
     TEST_ASSETS_DIR: Path = Path("test_assets")

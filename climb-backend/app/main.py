@@ -4,13 +4,13 @@ Climb Generator API - Main Application
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import walls, climbs, models, jobs
+from app.routers import walls, climbs, generate
 from app.database import init_db
 
 app = FastAPI(
     title="Climb Generator API",
-    description="API for managing climbing walls, climbs, and ML-based climb generation",
-    version="0.1.0",
+    description="API for managing climbing walls, climbs, and DDPM-based climb generation",
+    version="0.2.0",
 )
 
 # CORS middleware for frontend access
@@ -25,8 +25,7 @@ app.add_middleware(
 # Include routers
 app.include_router(walls.router, prefix="/api/v1/walls", tags=["walls"])
 app.include_router(climbs.router, prefix="/api/v1/walls/{wall_id}/climbs", tags=["climbs"])
-app.include_router(models.router, prefix="/api/v1/walls/{wall_id}/models", tags=["models"])
-app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
+app.include_router(generate.router, prefix="/api/v1/walls/{wall_id}/generate", tags=["generate"])
 
 
 @app.on_event("startup")

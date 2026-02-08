@@ -26,23 +26,11 @@ from app.schemas.climbs import (
     ClimbDeleteResponse,
     Holdset,
 )
-from app.schemas.models import (
-    ModelType,
-    ModelStatus,
-    FeatureConfig,
-    ModelCreate,
-    ModelSummary,
-    ModelCreateResponse,
-    ModelListResponse,
-    ModelDeleteResponse,
+from app.schemas.generate import (
+    GradeScale,
     GenerateRequest,
     GeneratedClimb,
     GenerateResponse,
-)
-from app.schemas.jobs import (
-    Job,
-    JobStatus,
-    JobType,
 )
 
 __all__ = [
@@ -56,27 +44,21 @@ __all__ = [
     "WallMetadata",
     "WallListResponse",
     "WallCreateResponse",
+    "SetHoldsResponse",
     # Climbs
     "Climb",
     "ClimbCreate",
+    "ClimbBatchCreate",
+    "ClimbBatchCreateResult",
+    "ClimbBatchCreateResponse",
     "ClimbSortBy",
     "ClimbListResponse",
     "ClimbCreateResponse",
     "ClimbDeleteResponse",
-    # Models
-    "ModelType",
-    "ModelStatus",
-    "FeatureConfig",
-    "ModelCreate",
-    "ModelSummary",
-    "ModelCreateResponse",
-    "ModelListResponse",
-    "ModelDeleteResponse",
+    "Holdset",
+    # Generation
+    "GradeScale",
     "GenerateRequest",
     "GeneratedClimb",
     "GenerateResponse",
-    # Jobs
-    "Job",
-    "JobStatus",
-    "JobType",
 ]
