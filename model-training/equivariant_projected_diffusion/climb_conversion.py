@@ -135,7 +135,7 @@ class ClimbsFeatureArray:
         self.db_path = db_path
         self.to_length = to_length
         self.scaler = ClimbsFeatureScaler(weights_path=scaler_weights_path)
-        self.null_token = [-2,0,-2,0]
+        self.null_token = [-2,0,-2,0,0,0,0,0,1]
 
         with sqlite3.connect(db_path) as conn:
             climbs_to_fit = pd.read_sql_query("SELECT * FROM climbs WHERE ascents > 1", conn, index_col='id')
@@ -147,7 +147,7 @@ class ClimbsFeatureArray:
             scaled_climbs, scaled_holds = self.scaler.fit_transform(climbs_to_fit, holds_to_fit)
             self.hold_features_df = scaled_holds
             self.holds_lookup = {
-                wall_id: group.drop(columns=['wall_id','useability', 'is_foot', 'mult']).to_dict('index')
+                wall_id: group.drop(columns=['wall_id','useability', 'is_foot', 'mult']).set_index('hold_index').to_dict('index')
                 for wall_id, group in scaled_holds.groupby('wall_id')
             }
             self.climbs_df = scaled_climbs
@@ -160,10 +160,10 @@ class ClimbsFeatureArray:
         print(val, rads)
         return val * math.cos(rads), val * math.sin(rads)
 
-    def _zero_center_of_mass(self, arr, dim=2, start_holds=None):
+    def _zero_center_of_mass(self, arr, dim=2, start_holds: list | None = None):
         """Return the center-of-mass of the climbing hold positions"""
         if start_holds is not None:
-            com = np.mean(arr[start_holds,:dim], axis=0)
+            com = np.mean(np.array(start_holds)[:,:dim], axis=0)
         else:
             com = np.mean(arr[:,:dim], axis=0)
         arr[:,:dim] -= com
@@ -178,23 +178,26 @@ class ClimbsFeatureArray:
         py, pz = self.apply_wall_angle(h_data['pull_y'], angle)
         return [h_data['x'], y, z, h_data['pull_x'], py, pz]
     
-    def get_features(self, dim=2, continuous_only = True, augment_reflections=True):
+    def get_features(self, dim=2, limit: int | None = None, continuous_only = True, augment_reflections=True):
         """Extract features from climbs"""
         assert dim in [2,3]
 
         x_out, cond_out = [], []
 
-        for _, row in self.climbs_df.iterrows():
+        df = self.climbs_df.copy()
+        if limit is not None:
+            df = df.iloc[:limit,:]
+
+        for _, row in df.iterrows():
             climb_holds = row['holds']
             wall_id = row['wall_id']
             angle = row['angle']
-            start_holds=[]
             try:
                 wall_holds = self.holds_lookup[wall_id]
-                features = []
-                for i, (h_idx, role) in enumerate(climb_holds):
-                    if role == 0:
-                        start_holds.append(i)
+                start_holds=[]
+                middle_holds=[]
+                finish_holds=[]
+                for h_idx, role in climb_holds:
                     h_data = wall_holds[h_idx]
                     feat = []
                     if dim==3:
@@ -206,22 +209,31 @@ class ClimbsFeatureArray:
                         role_vec[role]=1.0
                         feat.extend(role_vec)
                     
-                    if len(feat) > 0:
-                        features.append(feat)
-                
-                f_arr = np.array(features)
-                f_arr = self._zero_center_of_mass(f_arr, start_holds=start_holds)
-                f_arr = np.array(sorted(f_arr, key=(lambda x: x[0]+x[1])))
+                    match role:
+                        case 0:
+                            start_holds.append(feat)
+                        case 1:
+                            finish_holds.append(feat)
+                        case _:
+                            middle_holds.append(feat)
+                if len(start_holds) > 2 or len(finish_holds) > 2:
+                    raise ValueError(f"Start/Finish Hold list > 2 holds: {start_holds, finish_holds}")
+                f_arr = np.array([
+                    h
+                    for hl in [start_holds, middle_holds, finish_holds]
+                    for h in sorted(hl, key=(lambda x: x[0]+x[1]))
+                ])
 
                 f_arr = self._zero_center_of_mass(f_arr)
-
+                
                 pad_length = self.to_length - len(f_arr)
                 if pad_length > 0:
-                    null_holds = np.tile(np.array(self.null_token),(pad_length,1))
+                    null_token = self.null_token[:4] if continuous_only else self.null_token
+                    null_holds = np.tile(np.array(null_token),(pad_length,1))
                     f_arr = np.concatenate([f_arr,null_holds], axis=0, dtype=np.float32)
 
                 x_out.append(f_arr)
-                cond_out.append([row['grade'], row['quality'], row['ascents'], angle/90])
+                cond_out.append([row['grade'], row['quality'], row['ascents'], angle])
             except KeyError:
                 continue
         

@@ -335,17 +335,6 @@ function WallCanvas({
       }
       ctx.stroke();
       ctx.globalAlpha = 1;
-
-      // Draw hold index
-      if (!selectedClimb || isUsed) {
-        ctx.fillStyle = "white";
-        ctx.font = "bold 10px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.globalAlpha = alpha;
-        ctx.fillText(hold.hold_index.toString(), x, y);
-        ctx.globalAlpha = 1;
-      }
     });
   }, [image, imageDimensions, holds, selectedClimb, toPixelCoords]);
 
