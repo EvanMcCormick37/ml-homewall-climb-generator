@@ -30,26 +30,66 @@ const HOLD_STROKE_COLOR = "#00b679";
 
 // V-grade options that match the DDPM's grade lookup
 const V_GRADE_OPTIONS = [
-  "V0-", "V0", "V0+",
-  "V1", "V1+", "V2",
-  "V3", "V3+", "V4", "V4+",
-  "V5", "V5+", "V6", "V6+",
-  "V7", "V7+", "V8", "V8+",
-  "V9", "V9+", "V10", "V10+",
-  "V11", "V11+", "V12", "V12+",
-  "V13", "V13+", "V14", "V14+",
-  "V15", "V15+", "V16",
+  "V0-",
+  "V0",
+  "V0+",
+  "V1",
+  "V1+",
+  "V2",
+  "V3",
+  "V3+",
+  "V4",
+  "V4+",
+  "V5",
+  "V5+",
+  "V6",
+  "V6+",
+  "V7",
+  "V7+",
+  "V8",
+  "V8+",
+  "V9",
+  "V9+",
+  "V10",
+  "V10+",
+  "V11",
+  "V11+",
+  "V12",
+  "V12+",
+  "V13",
+  "V13+",
+  "V14",
+  "V14+",
+  "V15",
+  "V15+",
+  "V16",
 ];
 
 const FONT_GRADE_OPTIONS = [
-  "4a", "4b", "4c",
-  "5a", "5b", "5c",
-  "6a", "6a+", "6b", "6b+",
-  "6c", "6c+",
-  "7a", "7a+", "7b", "7b+",
-  "7c", "7c+",
-  "8a", "8a+", "8b", "8b+",
-  "8c", "8c+",
+  "4a",
+  "4b",
+  "4c",
+  "5a",
+  "5b",
+  "5c",
+  "6a",
+  "6a+",
+  "6b",
+  "6b+",
+  "6c",
+  "6c+",
+  "7a",
+  "7a+",
+  "7b",
+  "7b+",
+  "7c",
+  "7c+",
+  "8a",
+  "8a+",
+  "8b",
+  "8b+",
+  "8c",
+  "8c+",
 ];
 
 const NUM_CLIMBS_OPTIONS = [1, 3, 5, 10, 15, 20];
@@ -67,7 +107,11 @@ interface GenerateFormProps {
   isGenerating: boolean;
 }
 
-function GenerateForm({ wallAngle, onGenerate, isGenerating }: GenerateFormProps) {
+function GenerateForm({
+  wallAngle,
+  onGenerate,
+  isGenerating,
+}: GenerateFormProps) {
   const [gradeScale, setGradeScale] = useState<GradeScale>("v_grade");
   const [grade, setGrade] = useState("V4");
   const [numClimbs, setNumClimbs] = useState(5);
@@ -75,7 +119,8 @@ function GenerateForm({ wallAngle, onGenerate, isGenerating }: GenerateFormProps
   const [isGradeOpen, setIsGradeOpen] = useState(false);
   const [isNumOpen, setIsNumOpen] = useState(false);
 
-  const gradeOptions = gradeScale === "v_grade" ? V_GRADE_OPTIONS : FONT_GRADE_OPTIONS;
+  const gradeOptions =
+    gradeScale === "v_grade" ? V_GRADE_OPTIONS : FONT_GRADE_OPTIONS;
 
   // Reset grade when switching scales
   const handleScaleChange = (scale: GradeScale) => {
@@ -97,9 +142,10 @@ function GenerateForm({ wallAngle, onGenerate, isGenerating }: GenerateFormProps
             type="button"
             onClick={() => handleScaleChange("v_grade")}
             className={`flex-1 px-3 py-2 text-sm font-medium transition-colors
-              ${gradeScale === "v_grade"
-                ? "bg-cyan-600 text-white"
-                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-750"
+              ${
+                gradeScale === "v_grade"
+                  ? "bg-cyan-600 text-white"
+                  : "bg-zinc-800 text-zinc-400 hover:bg-zinc-750"
               }`}
           >
             V-Grade
@@ -108,9 +154,10 @@ function GenerateForm({ wallAngle, onGenerate, isGenerating }: GenerateFormProps
             type="button"
             onClick={() => handleScaleChange("font")}
             className={`flex-1 px-3 py-2 text-sm font-medium transition-colors
-              ${gradeScale === "font"
-                ? "bg-cyan-600 text-white"
-                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-750"
+              ${
+                gradeScale === "font"
+                  ? "bg-cyan-600 text-white"
+                  : "bg-zinc-800 text-zinc-400 hover:bg-zinc-750"
               }`}
           >
             Font
@@ -311,9 +358,7 @@ function GeneratedClimbList({
                   {grade}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-zinc-100">
-                    Climb {i + 1}
-                  </div>
+                  <div className="font-medium text-zinc-100">Climb {i + 1}</div>
                   <div className="text-xs text-zinc-500 flex items-center gap-2 mt-0.5">
                     <Hash className="w-3 h-3" />
                     <span>{climb.num_holds} holds</span>
@@ -416,8 +461,8 @@ function WallCanvas({
 
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const scale = height / 1000;
-      const radius = 10 * scale;
+      const size = height / 1800;
+      const radius = hold.is_foot ? 10 * size : 18 * size;
 
       const isUsed = generatedHolds.has(hold.hold_index);
 
@@ -592,7 +637,7 @@ function GenerateClimbsPage() {
   );
 
   const selectedClimb =
-    selectedIndex !== null ? generatedClimbs[selectedIndex] ?? null : null;
+    selectedIndex !== null ? (generatedClimbs[selectedIndex] ?? null) : null;
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950">

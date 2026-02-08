@@ -303,8 +303,8 @@ function WallCanvas({
     // Draw all holds
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const scale = height / 1000;
-      const radius = 10 * scale;
+      const size = height / 1800;
+      const radius = hold.is_foot ? 10 * size : 18 * size;
 
       const isUsed = usedHolds.has(hold.hold_index);
       const isStart = startHolds.has(hold.hold_index);
@@ -328,7 +328,7 @@ function WallCanvas({
       ctx.arc(x, y, radius, 0, 2 * Math.PI);
       ctx.strokeStyle = strokeColor;
       ctx.globalAlpha = alpha;
-      ctx.lineWidth = isUsed && selectedClimb ? scale * 2 : 2;
+      ctx.lineWidth = isUsed && selectedClimb ? size * 2 : 2;
       if (selectedClimb && isUsed) {
         ctx.fillStyle = strokeColor;
         ctx.fill();

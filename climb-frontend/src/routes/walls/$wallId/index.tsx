@@ -6,6 +6,7 @@ import {
   Eye,
   Plus,
   Pencil,
+  Sparkles,
   Trash2,
   Grid3X3,
   Mountain,
@@ -148,7 +149,7 @@ function WallDetailPage() {
             <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-4">
               Quick Actions
             </h2>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <Link
                 to="/walls/$wallId/view"
                 params={{ wallId: metadata.id }}
@@ -179,6 +180,25 @@ function WallDetailPage() {
                   <div className="font-medium text-zinc-100">Create Climb</div>
                   <div className="text-xs text-zinc-500 mt-1">
                     Set a new climb on this wall
+                  </div>
+                </div>
+              </Link>
+
+              <Link
+                to="/walls/$wallId/generate"
+                params={{ wallId: metadata.id }}
+                className="flex flex-col items-center gap-3 p-6 bg-zinc-950 border border-zinc-800 rounded-lg 
+                           hover:border-cyan-500/50 hover:bg-cyan-500/5 transition-all group"
+              >
+                <div className="w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
+                  <Sparkles className="w-6 h-6 text-cyan-400" />
+                </div>
+                <div className="text-center">
+                  <div className="font-medium text-zinc-100">
+                    Generate Climbs
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-1">
+                    Use Diffusion Model to Generate Climbs
                   </div>
                 </div>
               </Link>
