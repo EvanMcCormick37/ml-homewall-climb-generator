@@ -9,6 +9,7 @@ Contains:
 - ClimbDDPMGenerator (generation with manifold projection)
 """
 import math
+import random
 import numpy as np
 import pandas as pd
 import sqlite3
@@ -207,7 +208,7 @@ class ClimbsFeatureScaler:
             )
         else:
             dfc = self.cond_features_scaler.transform(dfc[["grade", "quality", "ascents", "angle"]])
-            dfc = dfc.T
+            dfc = dfc
         return dfc
 
     def transform_hold_features(self, holds_to_transform: pd.DataFrame, to_df: bool = False):
@@ -219,7 +220,7 @@ class ClimbsFeatureScaler:
             )
         else:
             dfh = self.hold_features_scaler.transform(dfh[["x", "y", "pull_x", "pull_y"]])
-            dfh = dfh.T
+            dfh = dfh
         return dfh
 
 
@@ -351,8 +352,8 @@ class ClimbDDPMGenerator:
         df_cond = pd.DataFrame(
             {
                 "grade": [diff] * n,
-                "quality": [2.9] * n,
-                "ascents": [100] * n,
+                "quality": [random.uniform(2.6,3.0)] * n,
+                "ascents": [random.randint(10,1000)] * n,
                 "angle": [angle] * n,
             }
         )
@@ -363,25 +364,29 @@ class ClimbDDPMGenerator:
         self,
         gen_climbs: Tensor,
         holds_manifold: Tensor,
-        holds_lookup: np.ndarray,
-        return_indices: bool = False,
-    ) -> Tensor | list[list[int]]:
+    ) -> Tensor:
         B, S, H = gen_climbs.shape
-        if return_indices:
-            climbs = []
-            for gen_climb in gen_climbs:
-                flat_climb = gen_climb.reshape(-1, H)
-                dists = torch.cdist(flat_climb, holds_manifold)
-                idx = dists.argmin(dim=1).detach().numpy()
-                holds = holds_lookup[idx]
-                climb = list(set(int(h) for h in holds if h > 0))
-                climbs.append(climb)
-            return climbs
-        else:
-            flat_climbs = gen_climbs.reshape(-1, H)
-            dists = torch.cdist(flat_climbs, holds_manifold)
-            idx = dists.argmin(dim=1)
-            return holds_manifold[idx].reshape(B, S, -1)
+        flat_climbs = gen_climbs.reshape(-1, H)
+        dists = torch.cdist(flat_climbs, holds_manifold)
+        idx = dists.argmin(dim=1)
+        return holds_manifold[idx].reshape(B, S, -1)
+    
+    def _project_onto_indices(
+        self,
+        gen_climbs: Tensor,
+        holds_manifold: Tensor,
+        holds_lookup: np.ndarray          
+    ) -> list[list[int]]:
+        B, S, H = gen_climbs.shape
+        climbs = []
+        for gen_climb in gen_climbs:
+            flat_climb = gen_climb.reshape(-1, H)
+            dists = torch.cdist(flat_climb, holds_manifold)
+            idx = dists.argmin(dim=1).detach().numpy()
+            holds = holds_lookup[idx]
+            climb = list(set(int(h) for h in holds if h > 0))
+            climbs.append(climb)
+        return climbs
 
     def _projection_strength(self, t: Tensor, t_start_projection: float = 0.5) -> Tensor:
         a = (t_start_projection - t) / t_start_projection
@@ -396,8 +401,7 @@ class ClimbDDPMGenerator:
         angle: int = 45,
         grade: str = "V4",
         diff_scale: str = "v_grade",
-        deterministic: bool = False,
-        projected: bool = True,
+        deterministic: bool = False
     ) -> list[list[int]]:
         """
         Generate climbs for a given wall.
@@ -424,12 +428,9 @@ class ClimbDDPMGenerator:
         for _ in range(self.timesteps):
             gen_climbs = self.model(noisy, cond_t, t_tensor)
 
-            if projected:
-                alpha_p = self._projection_strength(t_tensor)
-                projected_climbs = self._project_onto_manifold(
-                    gen_climbs, holds_manifold, holds_lookup
-                )
-                gen_climbs = alpha_p * projected_climbs + (1 - alpha_p) * gen_climbs
+            alpha_p = self._projection_strength(t_tensor)
+            projected_climbs = self._project_onto_manifold(gen_climbs, holds_manifold)
+            gen_climbs = alpha_p * projected_climbs + (1 - alpha_p) * gen_climbs
 
             t_tensor -= 1.0 / self.timesteps
             noisy = self.model.forward_diffusion(
@@ -438,8 +439,5 @@ class ClimbDDPMGenerator:
                 x_t if deterministic else torch.randn_like(x_t),
             )
 
-        if projected:
-            return self._project_onto_manifold(
-                gen_climbs, holds_manifold, holds_lookup, return_indices=True
-            )
-        return gen_climbs
+        climbs: list[list[int]] = self._project_onto_indices(gen_climbs, holds_manifold, holds_lookup)
+        return climbs

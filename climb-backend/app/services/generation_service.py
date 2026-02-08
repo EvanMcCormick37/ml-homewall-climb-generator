@@ -74,10 +74,10 @@ def generate_climbs(
     """
     generator = _get_generator()
 
-    # Resolve angle: use request override, else wall's stored angle, else 45
+    # Resolve angle: use request override, else wall's stored angle
     angle = request.angle
     if angle is None:
-        angle = _get_wall_angle(wall_id) or 45
+        angle = _get_wall_angle(wall_id)
 
     raw_climbs = generator.generate(
         wall_id=wall_id,
@@ -85,8 +85,7 @@ def generate_climbs(
         angle=angle,
         grade=request.grade,
         diff_scale=request.grade_scale.value,
-        deterministic=request.deterministic,
-        projected=True,
+        deterministic=request.deterministic
     )
 
     return [
