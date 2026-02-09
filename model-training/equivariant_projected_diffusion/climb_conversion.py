@@ -131,13 +131,13 @@ class ClimbsFeatureArray:
             db_path: str = "data/storage.db",
             to_length: int = 20,
             load_weights_path: str | None = None,
-            save_weights_path: str | None = None,
+            save_weights_path: str | None = None
         ):
         """Gets climbs from the climbs database and converts them into featured Sequence data for our DDPM."""
         self.db_path = db_path
         self.to_length = to_length
         self.scaler = ClimbsFeatureScaler(weights_path=load_weights_path)
-        self.null_token = [0,-2,0,-2,0,0,0,0,1]
+        self.null_token = [-2,0,-2,0,0,0,0,1]
 
         with sqlite3.connect(db_path) as conn:
             climbs_to_fit = pd.read_sql_query("SELECT * FROM climbs WHERE ascents > 1", conn, index_col='id')
@@ -154,8 +154,8 @@ class ClimbsFeatureArray:
             }
             self.climbs_df = scaled_climbs
         
-        if scaler_weights_path:
-            self.scaler.save_weights(scaler_weights_path)
+        if save_weights_path:
+            self.scaler.save_weights(save_weights_path)
 
     def apply_wall_angle(self, angle, val):
         rads = math.radians(angle)

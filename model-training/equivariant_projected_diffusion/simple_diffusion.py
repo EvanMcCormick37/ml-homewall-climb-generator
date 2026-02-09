@@ -666,13 +666,20 @@ def plot_climb(climb_data, title="Generated Climb"):
     plt.show()
 
 #Test single-batch memorization to ensure both model architectures are working properly.
-def test_single_batch(model: nn.Module, dataset: TensorDataset, steps: int = 1000, lr = 1e-3, decay=0.0):
+def test_single_batch(
+    model: nn.Module,
+    dataset: TensorDataset,
+    batch_size: int = 128,
+    steps: int = 1000,
+    lr = 1e-3,
+    decay=0.0
+):
     if decay == 0:
         optimizer = torch.optim.Adam(params=model.parameters(), lr=lr)
     else:
         optimizer = torch.optim.AdamW(params = model.parameters(), lr=lr, weight_decay=decay)
 
-    loader = DataLoader(dataset=dataset, batch_size=64)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size)
     x, c = next(iter(loader))
     losses = []
     with tqdm(range(steps)) as pbar:
