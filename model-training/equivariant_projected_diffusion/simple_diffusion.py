@@ -610,7 +610,7 @@ class HCTrainer():
 # UTILITY FUNCTIONS
 #-----------------------------------------------------------------------
 def clear_compile_keys(filepath: str, map_loc: str = "cpu")->dict:
-    state_dict = torch.load(filepath, map_location=map_loc)
+    state_dict = torch.load(filepath, map_location=map_loc, weights_only=False)
     new_state_dict = {}
     compile_prefix = "_orig_mod."
     for k, v in state_dict.items():
