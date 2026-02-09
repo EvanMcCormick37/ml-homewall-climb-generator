@@ -154,7 +154,8 @@ class ClimbsFeatureArray:
             }
             self.climbs_df = scaled_climbs
         
-        if save_weights_path:
+        
+        if save_weights_path is not None:
             self.scaler.save_weights(save_weights_path)
 
     def apply_wall_angle(self, angle, val):
