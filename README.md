@@ -8,8 +8,8 @@ This is an open-source application which leverages ML models to set custom climb
 
 * Upload your homewall and climb geometry
 * Add climbs to the database
-* Train MLP, RNN, and LSTM models on your wall's climbs
 * Filter climbs by grade and style
+* Generate Climbs for your wall using the DDPM Generator model
 
 ## Making Climbs for the Sideways Wall
 
