@@ -23,4 +23,5 @@ This is a simple React-Vite application which allows the user to upload a photog
 
 ### Model-Training (DDPM)
 
-The latest version uses a Denoising Diffusion Probabalistic Model (DDPM) to generate climbs as point clouds, where each point corresponds to a hold used in the climb. It then guides the generated points to actual valid holds via Manifold Guidance. My utility classes for DDPM climb generation and model training can be found in the 'equivariant_diffusion' folder of the 'model-training' directory.
+The latest version uses a Denoising Diffusion Probabilistic Model (DDPM) to generate climbs as point clouds, where each point corresponds to a hold used in the climb. It then guides the generated points to actual valid holds via Manifold Guidance. My utility classes for DDPM climb generation and model training can be found in the 'equivariant_diffusion' folder of the 'model-training' directory.
+![EditingHolds](https://github.com/user-attachments/assets/878edd1c-b98b-4dd1-bf37-b0cb4e22e3fa)
