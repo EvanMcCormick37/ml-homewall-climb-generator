@@ -368,10 +368,10 @@ class ClimbDDPMGenerator():
             self,
             wall_id: str,
             db_path: str,
-            scaler: ClimbsFeatureScaler,
-            model: ClimbDDPM,
-            model_weights_path: str | None,
-            scaler_weights_path: str | None
+            scaler: ClimbsFeatureScaler = ClimbsFeatureScaler(),
+            model: ClimbDDPM = ClimbDDPM(Noiser()),
+            model_weights_path: str | None = None,
+            scaler_weights_path: str | None = None,
         ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.scaler = scaler
