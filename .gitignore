@@ -3,7 +3,6 @@
 *wall*.json
 *climb*.json
 *-data.json
-*.pth
 assets/
 boardlib/
 
