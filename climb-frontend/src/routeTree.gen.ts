@@ -16,7 +16,6 @@ import { Route as WallsWallIdIndexRouteImport } from './routes/walls/$wallId/ind
 import { Route as WallsWallIdViewRouteImport } from './routes/walls/$wallId/view'
 import { Route as WallsWallIdHoldsRouteImport } from './routes/walls/$wallId/holds'
 import { Route as WallsWallIdGenerateRouteImport } from './routes/walls/$wallId/generate'
-import { Route as WallsWallIdCreateRouteImport } from './routes/walls/$wallId/create'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -53,17 +52,11 @@ const WallsWallIdGenerateRoute = WallsWallIdGenerateRouteImport.update({
   path: '/walls/$wallId/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallsWallIdCreateRoute = WallsWallIdCreateRouteImport.update({
-  id: '/walls/$wallId/create',
-  path: '/walls/$wallId/create',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/walls/new': typeof WallsNewRoute
   '/walls': typeof WallsIndexRoute
-  '/walls/$wallId/create': typeof WallsWallIdCreateRoute
   '/walls/$wallId/generate': typeof WallsWallIdGenerateRoute
   '/walls/$wallId/holds': typeof WallsWallIdHoldsRoute
   '/walls/$wallId/view': typeof WallsWallIdViewRoute
@@ -73,7 +66,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/walls/new': typeof WallsNewRoute
   '/walls': typeof WallsIndexRoute
-  '/walls/$wallId/create': typeof WallsWallIdCreateRoute
   '/walls/$wallId/generate': typeof WallsWallIdGenerateRoute
   '/walls/$wallId/holds': typeof WallsWallIdHoldsRoute
   '/walls/$wallId/view': typeof WallsWallIdViewRoute
@@ -84,7 +76,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/walls/new': typeof WallsNewRoute
   '/walls/': typeof WallsIndexRoute
-  '/walls/$wallId/create': typeof WallsWallIdCreateRoute
   '/walls/$wallId/generate': typeof WallsWallIdGenerateRoute
   '/walls/$wallId/holds': typeof WallsWallIdHoldsRoute
   '/walls/$wallId/view': typeof WallsWallIdViewRoute
@@ -96,7 +87,6 @@ export interface FileRouteTypes {
     | '/'
     | '/walls/new'
     | '/walls'
-    | '/walls/$wallId/create'
     | '/walls/$wallId/generate'
     | '/walls/$wallId/holds'
     | '/walls/$wallId/view'
@@ -106,7 +96,6 @@ export interface FileRouteTypes {
     | '/'
     | '/walls/new'
     | '/walls'
-    | '/walls/$wallId/create'
     | '/walls/$wallId/generate'
     | '/walls/$wallId/holds'
     | '/walls/$wallId/view'
@@ -116,7 +105,6 @@ export interface FileRouteTypes {
     | '/'
     | '/walls/new'
     | '/walls/'
-    | '/walls/$wallId/create'
     | '/walls/$wallId/generate'
     | '/walls/$wallId/holds'
     | '/walls/$wallId/view'
@@ -127,7 +115,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   WallsNewRoute: typeof WallsNewRoute
   WallsIndexRoute: typeof WallsIndexRoute
-  WallsWallIdCreateRoute: typeof WallsWallIdCreateRoute
   WallsWallIdGenerateRoute: typeof WallsWallIdGenerateRoute
   WallsWallIdHoldsRoute: typeof WallsWallIdHoldsRoute
   WallsWallIdViewRoute: typeof WallsWallIdViewRoute
@@ -185,13 +172,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WallsWallIdGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/walls/$wallId/create': {
-      id: '/walls/$wallId/create'
-      path: '/walls/$wallId/create'
-      fullPath: '/walls/$wallId/create'
-      preLoaderRoute: typeof WallsWallIdCreateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -199,7 +179,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   WallsNewRoute: WallsNewRoute,
   WallsIndexRoute: WallsIndexRoute,
-  WallsWallIdCreateRoute: WallsWallIdCreateRoute,
   WallsWallIdGenerateRoute: WallsWallIdGenerateRoute,
   WallsWallIdHoldsRoute: WallsWallIdHoldsRoute,
   WallsWallIdViewRoute: WallsWallIdViewRoute,

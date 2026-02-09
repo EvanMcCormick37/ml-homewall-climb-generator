@@ -31,7 +31,7 @@ export interface ClimbCreate {
   name: string;
   holdset: Holdset;
   angle: number;
-  grade: number | null;
+  grade: string | null;
   setter_name: string | null;
   tags: string[] | null;
 }

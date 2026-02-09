@@ -130,12 +130,13 @@ class ClimbsFeatureArray:
             self,
             db_path: str = "data/storage.db",
             to_length: int = 20,
-            scaler_weights_path: str | None = None,
+            load_weights_path: str | None = None,
+            save_weights_path: str | None = None,
         ):
         """Gets climbs from the climbs database and converts them into featured Sequence data for our DDPM."""
         self.db_path = db_path
         self.to_length = to_length
-        self.scaler = ClimbsFeatureScaler(weights_path=scaler_weights_path)
+        self.scaler = ClimbsFeatureScaler(weights_path=load_weights_path)
         self.null_token = [0,-2,0,-2,0,0,0,0,1]
 
         with sqlite3.connect(db_path) as conn:
@@ -145,7 +146,7 @@ class ClimbsFeatureArray:
 
             holds_to_fit = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds", conn)
             
-            scaled_climbs, scaled_holds = self.scaler.fit_transform(climbs_to_fit, holds_to_fit)
+            scaled_climbs, scaled_holds = self.scaler.transform(climbs_to_fit, holds_to_fit)
             self.hold_features_df = scaled_holds
             self.holds_lookup = {
                 wall_id: group.drop(columns=['wall_id','useability', 'is_foot', 'mult']).set_index('hold_index').to_dict('index')
@@ -250,6 +251,7 @@ class ClimbsFeatureArray:
 
 class ClimbsFeatureScaler:
     def __init__(self, weights_path: str | None = None):
+        self.set_weights = False
         self.cond_features_scaler = MinMaxScaler(feature_range=(-1,1))
         self.hold_features_scaler = MinMaxScaler(feature_range=(-1,1))
         if weights_path and os.path.exists(weights_path):
@@ -267,17 +269,24 @@ class ClimbsFeatureScaler:
         state = joblib.load(path)
         self.cond_features_scaler = state['cond_scaler']
         self.hold_features_scaler = state['hold_scaler']
+        self.set_weights = True
         
-    def fit_transform(self, climbs_to_fit: pd.DataFrame, holds_to_fit: pd.DataFrame):
+    def transform(self, climbs_to_fit: pd.DataFrame, holds_to_fit: pd.DataFrame):
         """Function for fitting the MinMax scalers to the climbs and holds dataframes and returning the transformed climbs and holds df"""
         # Fit preprocessing steps for climbs DF
         scaled_climbs = climbs_to_fit.copy()
         scaled_climbs = self._apply_log_transforms(scaled_climbs)
-        scaled_climbs[['grade','quality','ascents','angle']] = self.cond_features_scaler.fit_transform(scaled_climbs[['grade','quality','ascents','angle']])
         # For holds DF
         scaled_holds = holds_to_fit.copy()
         scaled_holds = self._apply_hold_transforms(scaled_holds)
-        scaled_holds[['x','y','pull_x','pull_y']] = self.hold_features_scaler.fit_transform(scaled_holds[['x','y','pull_x','pull_y']])
+        
+        if self.set_weights:
+            scaled_climbs[['grade','quality','ascents','angle']] = self.cond_features_scaler.transform(scaled_climbs[['grade','quality','ascents','angle']])
+            scaled_holds[['x','y','pull_x','pull_y']] = self.hold_features_scaler.transform(scaled_holds[['x','y','pull_x','pull_y']])
+        else:
+            scaled_climbs[['grade','quality','ascents','angle']] = self.cond_features_scaler.fit_transform(scaled_climbs[['grade','quality','ascents','angle']])
+            scaled_holds[['x','y','pull_x','pull_y']] = self.hold_features_scaler.fit_transform(scaled_holds[['x','y','pull_x','pull_y']])
+            self.set_weights = True
         
         return (scaled_climbs, scaled_holds)
     

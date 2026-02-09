@@ -92,8 +92,6 @@ const FONT_GRADE_OPTIONS = [
   "8c+",
 ];
 
-const NUM_CLIMBS_OPTIONS = [1, 3, 5, 10, 15, 20];
-
 // --- GenerateForm Component ---
 
 interface GenerateFormProps {

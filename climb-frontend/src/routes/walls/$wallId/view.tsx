@@ -3,7 +3,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { getWall, getWallPhotoUrl } from "@/api/walls";
 import { useClimbs } from "@/hooks/useClimbs";
 import { ArrowLeft, Calendar, User, Tag, Hash, Layers } from "lucide-react";
-import type { Climb, WallDetail, HoldDetail, Holdset } from "@/types";
+import type { Climb, WallDetail, HoldDetail } from "@/types";
 import { gradeToString, gradeToColor } from "@/utils/climbs";
 
 // --- Route Definition ---
