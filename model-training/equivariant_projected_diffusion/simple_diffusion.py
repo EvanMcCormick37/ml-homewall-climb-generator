@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 import pandas as pd
 from climb_conversion import ClimbsFeatureScaler
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import sqlite3
 import math
 
