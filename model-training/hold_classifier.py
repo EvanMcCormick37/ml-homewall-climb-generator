@@ -5,6 +5,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from simple_diffusion import zero_com
 
 #-----------------------------------------------------------------------
 # DATA BATCHING AND PREPROCESSING
