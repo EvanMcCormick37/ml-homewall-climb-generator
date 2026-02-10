@@ -559,55 +559,6 @@ class ClimbDDPMGenerator():
             return gen_climbs
 
 #-----------------------------------------------------------------------
-# HOLD ROLE CLASSIFICATION
-#-----------------------------------------------------------------------
-class HoldClassifier(nn.Module):
-    def __init__(self, classifier: nn.Module):
-        super().__init__()
-        self.classifier = classifier
-    
-    def loss(self, pred_roles: Tensor, true_roles: Tensor):
-        """Get the loss from the model's predictions, via cross-entropy loss."""
-        return F.cross_entropy(pred_roles, true_roles)
-    
-    def forward(self, holds: Tensor, cond: Tensor)-> Tensor:
-        """Run the forward pass. Predicts the roles for a given (possibly batched) set of holds, given (possibly batched) wall conditions."""
-    
-    def visualize(self, holdset: Tensor):
-        """
-        Plot a visualization of the colored holdset.
-
-        :param holdset: Input holdset
-        :type holdset: Tensor
-        """
-
-
-class HCTrainer():
-    def __init__(self, model: nn.Module, dataset: TensorDataset | None = None, default_batch_size: int = 64):
-        self.model = model
-        self.dataset = dataset
-        self.default_batch_size = default_batch_size
-    
-    def train(
-        self,
-        epochs: int,
-        save_path: str,
-        batch_size: int | None = None
-    )-> tuple[nn.Module, np.array]:
-        """
-        Train the hold classifier.
-        
-        :param epochs: Number of training epochs.
-        :type epochs: int
-        :param save_path: Save path
-        :type save_path: str
-        :param batch_size: Batch size.
-        :type batch_size: int | None
-        :return: Tuple of (Best Model, training_history)
-        :rtype: tuple[Module, Any]
-        """
-
-#-----------------------------------------------------------------------
 # UTILITY FUNCTIONS
 #-----------------------------------------------------------------------
 def clear_compile_keys(filepath: str, map_loc: str = "cpu")->dict:

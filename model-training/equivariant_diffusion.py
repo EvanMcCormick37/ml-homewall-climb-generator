@@ -1,15 +1,11 @@
+from dataclasses import dataclass, field
+from typing import Protocol
 import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_scatter
-from dataclasses import dataclass, field
 from torch_geometric.nn import knn_graph
-from typing import Protocol
-import numpy as np
-import itertools
-import matplotlib.pyplot as plt
-import matplotlib.lines as mlines
 
 @dataclass
 class LossWeights:
@@ -217,7 +213,7 @@ class ClimbEGNNDiffusionModel(nn.Module):
             r=r
         )
         
-class ClimbEGNNDiffusionTrainer(nn.Module):
+class ClimbEGNNDiffusionTrainer():
     """Trainer for the Climbing Diffusion Model"""
     def __init__(
         self,
