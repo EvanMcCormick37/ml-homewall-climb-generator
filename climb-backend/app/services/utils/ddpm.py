@@ -347,7 +347,7 @@ class ClimbDDPMGenerator():
         
         return climbs
     
-    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.5):
+    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.3):
         """Calculate the weight to assign to the projected holds based on the timestep."""
         a = (t_start_projection-t)/t_start_projection
         strength = 1 - torch.cos(a*torch.pi/2)
