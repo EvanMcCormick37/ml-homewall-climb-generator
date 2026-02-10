@@ -4,6 +4,7 @@ import { getWall, getWallPhotoUrl, deleteWall } from "@/api/walls";
 import {
   ArrowLeft,
   Eye,
+  Plus,
   Pencil,
   Sparkles,
   Trash2,
@@ -166,7 +167,7 @@ function WallDetailPage() {
                 </div>
               </Link>
 
-              {/* <Link
+              <Link
                 to="/walls/$wallId/create"
                 params={{ wallId: metadata.id }}
                 className="flex flex-col items-center gap-3 p-6 bg-zinc-950 border border-zinc-800 rounded-lg 
@@ -181,7 +182,7 @@ function WallDetailPage() {
                     Set a new climb on this wall
                   </div>
                 </div>
-              </Link> */}
+              </Link>
 
               <Link
                 to="/walls/$wallId/generate"

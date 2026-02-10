@@ -7,10 +7,16 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 import pandas as pd
 from climb_conversion import ClimbsFeatureScaler
+from pathlib import Path
 import matplotlib.pyplot as plt
 import sqlite3
 import math
 
+DB_PATH = "data/storage.db"
+SCALER_WEIGHTS_PATH = 'data/weights/climbs-feature-scaler.joblib'
+DDPM_WEIGHTS_PATH = 'data/weights/simple-diffusion-large.pth'
+DB_PATH = 'data/storage.db'
+HC_WEIGHTS_PATH = 'data/weights/lstm-hold-classifier.pth'
 # Input Data Format:
 # climbs: Tensor [Batch_length, 20, 5]
 # conditions: Tensor [Batch_length, 4]
@@ -39,6 +45,33 @@ class ResidualBlock1D(nn.Module):
 
         return h + self.shortcut(x)
 
+# Adds an additional activation function call after the conditional features injection for improved representational capacity.
+class ResidualBlock1D_V2(nn.Module):
+    def __init__(self, in_channels, out_channels, cond_dim, padding=1):
+        super().__init__()
+        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=3, padding=padding)
+        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=padding)
+        self.norm1 = nn.GroupNorm(8, out_channels)
+        self.norm2 = nn.GroupNorm(8, out_channels)
+        self.act = nn.SiLU()
+
+        self.cond_proj = nn.Linear(cond_dim, out_channels*2)
+        self.shortcut = nn.Conv1d(in_channels,out_channels,1) if in_channels != out_channels else nn.Identity()
+
+    def forward(self, x, cond):
+        h = self.conv1(x)
+        h = self.norm1(h)
+
+        gamma, beta = self.cond_proj(cond).unsqueeze(-1).chunk(2, dim=1)
+        h = h*(1+gamma) + beta
+        h = self.act(h)
+
+        h = self.conv2(h)
+        h = self.norm2(h)
+        h = self.act(h)
+
+        return h + self.shortcut(x)
+    
 class Denoiser(nn.Module):
     def __init__(self, hidden_dim=64, layers = 4):
         super().__init__()
@@ -183,12 +216,72 @@ class Noiser(nn.Module):
 
         return result
 
-class ClimbDDPM(nn.Module):
-    def __init__(self, model):
+class Noiser_V2(nn.Module):
+    """Noiser class with improved ResidualBlock architecture, and zero-COM input projection."""
+    def __init__(self, hidden_dim=128, layers = 5, feature_dim = 4, cond_dim = 4, sinusoidal = True):
         super().__init__()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.time_mlp = nn.Sequential(
+            (SinusoidalPositionEmbeddings(hidden_dim) if sinusoidal else nn.Linear(1,hidden_dim)),
+            nn.Linear(hidden_dim,hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim,hidden_dim)
+        )
+
+        self.cond_mlp = nn.Sequential(
+            nn.Linear(cond_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+        
+        self.combine_t_mlp = nn.Sequential(
+            nn.Linear(hidden_dim*2,hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+
+        self.init_conv = ResidualBlock1D_V2(feature_dim, hidden_dim, hidden_dim)
+
+        self.down_blocks = nn.ModuleList([ResidualBlock1D_V2(hidden_dim*(i+1), hidden_dim*(i+2), hidden_dim) for i in range(layers)])
+        self.up_blocks = nn.ModuleList([ResidualBlock1D_V2(hidden_dim*(i+1), hidden_dim*(i), hidden_dim) for i in range(layers,0,-1)])
+
+        self.head = nn.Conv1d(hidden_dim, feature_dim, 1)
+    
+    def forward(self, climbs: Tensor, cond: Tensor, t: Tensor)-> Tensor:
+        """
+        Run denoising pass. Predicts the added noise from the noisy data.
+        
+        :param climbs: Tensor with hold-set positions. [B, S, 4]
+        :param cond: Tensor with conditional variables. [B, 4]
+        :param t: Tensor with timestep of diffusion. [B, 1]
+        """
+        climbs = zero_com(climbs,2)
+        emb_t = self.time_mlp(t)
+        emb_c = self.cond_mlp(cond)
+        emb_c = self.combine_t_mlp(torch.cat([emb_t, emb_c],dim=1))
+        emb_h = self.init_conv(climbs.transpose(1,2), emb_c)
+        
+        residuals = []
+        for layer in self.down_blocks:
+            residuals.append(emb_h)
+            emb_h = layer(emb_h, emb_c)
+        
+        for layer in self.up_blocks:
+            residual = residuals.pop()
+            emb_h = residual + layer(emb_h, emb_c)
+        
+        result = self.head(emb_h).transpose(1,2)
+
+        return result
+
+class ClimbDDPM(nn.Module):
+    def __init__(self, model: nn.Module, weights_path: Path, timesteps: int = 100):
+        super().__init__()
         self.model = model
-        self.timesteps = 100
+        self.load_state_dict(clear_compile_keys(weights_path))
+        self.timesteps = timesteps
     
     def _cos_alpha_bar(self, t: Tensor)-> Tensor:
         t = t.view(-1,1,1)
@@ -399,7 +492,7 @@ class ClimbDDPMGenerator():
         self.model = model
         self.timesteps = 100
 
-        with sqlite3.connect(settings.DB_PATH) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds WHERE wall_id = ?",conn,params=(wall_id,))
             scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
             self.holds_manifold = torch.tensor(scaled_holds[['x','y','pull_x','pull_y']].values, dtype=torch.float32)
@@ -515,7 +608,7 @@ class ClimbDDPMGenerator():
 #-----------------------------------------------------------------------
 # UTILITY FUNCTIONS
 #-----------------------------------------------------------------------
-def clear_compile_keys(filepath: str, map_loc: str = "cpu")->dict:
+def clear_compile_keys(filepath: Path | str, map_loc: str = "cpu")->dict:
     state_dict = torch.load(filepath, map_location=map_loc)
     new_state_dict = {}
     compile_prefix = "_orig_mod."
@@ -560,6 +653,13 @@ def plot_climb(climb_data, title="Generated Climb"):
 
 
     plt.show()
+
+def zero_com(climbs: Tensor, dim: int)->Tensor:
+    """Perform Zero-Center-Of-Mass transformation on a batched input climbs Tensor of shape [B,S,dim], allowing the model being trained to be translation-invariant."""
+    new = climbs.clone()
+    com = new[:,:,:dim].mean(dim=1, keepdim=True)
+    new[:,:,:dim] -= com
+    return new
 
 #Test single-batch memorization to ensure both model architectures are working properly.
 def test_single_batch(

@@ -346,7 +346,7 @@ class ClimbDDPMGenerator():
         
         return climbs
     
-    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.3):
+    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.8):
         """Calculate the weight to assign to the projected holds based on the timestep."""
         a = (t_start_projection-t)/t_start_projection
         strength = 1 - torch.cos(a*torch.pi/2)
@@ -381,7 +381,7 @@ class ClimbDDPMGenerator():
         # Randomly offset the holds-manifold to allow for climbs to be generated at different x-coordinates around the wall.
         x_offset = np.random.randn()
         offset_manifold = self.holds_manifold.clone()
-        offset_manifold[:,0] += x_offset
+        offset_manifold[:,0] += x_offset*0.1
 
         for t in range(0, self.timesteps):
             print('.',end='')

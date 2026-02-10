@@ -27,7 +27,7 @@ class ClimbsFeatureArray:
         self.to_length = to_length
         self.scaler = ClimbsFeatureScaler(weights_path=load_weights_path)
 
-        self.null_token = [-2,0,-2,0,0,0,0,1] 
+        self.null_token = [-2,0,-2,0,0,0,0,0,1] 
 
         with sqlite3.connect(db_path) as conn:
             # Load climbs
@@ -78,7 +78,7 @@ class ClimbsFeatureArray:
         return [h_data['x'], y, z, h_data['pull_x'], py, pz]
 
     # --- Core Extraction Logic ---
-    def _extract_sequences(self, dim: int, limit: int | None, continuous_only: bool):
+    def _extract_sequences(self, dim: int, limit: int | None, roles: bool):
         """
         Iterates through the dataframe and extracts raw lists of features, conditions, targets, and lengths.
         Returns: (x_list, cond_list, targets_list, lengths_list)
@@ -108,7 +108,7 @@ class ClimbsFeatureArray:
                     else:
                         feat = self._2d_features(h_data)
                     
-                    if not continuous_only:
+                    if roles:
                         role_vec = [0.0]*5
                         role_vec[role] = 1.0
                         feat.extend(role_vec)
@@ -117,15 +117,6 @@ class ClimbsFeatureArray:
                         case 0: start_holds.append(feat)
                         case 1: finish_holds.append(feat)
                         case _: middle_holds.append(feat)
-
-                # 3. Validation & Targets
-                n_start, n_finish = len(start_holds), len(finish_holds)
-                if n_start > 2 or n_finish > 2:
-                    # Depending on strictness, you might log a warning here
-                    continue 
-                
-                # Target: [is_dual_start, is_dual_finish] -> 1.0 for True, 0.0 for False
-                target = [1.0 if n_start == 2 else 0.0, 1.0 if n_finish == 2 else 0.0]
 
                 # 4. Sort & Flatten
                 # Sorting by Y (vertical) or X+Y helps the model learn sequential patterns
@@ -141,8 +132,7 @@ class ClimbsFeatureArray:
                 pad_length = self.to_length - actual_length
 
                 if pad_length > 0:
-                    null_feat_len = len(f_arr[0])
-                    # Ensure null token matches feature dimension (handling continuous_only)
+                    null_feat_len = 9 if roles else 4
                     curr_null = self.null_token[:null_feat_len]
                     null_holds = np.tile(np.array(curr_null), (pad_length, 1))
                     f_arr = np.concatenate([f_arr, null_holds], axis=0, dtype=np.float32)
@@ -152,22 +142,18 @@ class ClimbsFeatureArray:
                 # 6. Append
                 x_out.append(f_arr)
                 cond_out.append([row['grade'], row['quality'], row['ascents'], angle])
-                targets_out.append(target)
-                lengths_out.append(actual_length)
 
             except KeyError:
                 continue
 
-        return x_out, cond_out, targets_out, lengths_out
+        return x_out, cond_out
 
-    def _augment_and_tensorize(self, x_list, cond_list, target_list, len_list, augment=True, dim=2):
+    def _augment_and_tensorize(self, x_list, cond_list, augment=True, dim=2):
         """
         Converts lists to Numpy, performs reflection augmentation, and returns Numpy arrays.
         """
         x_arr = np.array(x_list, dtype=np.float32)
         cond_arr = np.array(cond_list, dtype=np.float32)
-        target_arr = np.array(target_list, dtype=np.float32)
-        len_arr = np.array(len_list, dtype=np.int64)
 
         if augment:
             refl_x = x_arr.copy()
@@ -176,46 +162,27 @@ class ClimbsFeatureArray:
             
             x_arr = np.concatenate([x_arr, refl_x], axis=0)
             cond_arr = np.tile(cond_arr, (2, 1))
-            target_arr = np.tile(target_arr, (2, 1))
-            len_arr = np.tile(len_arr, (2,))
 
-        return x_arr, cond_arr, target_arr, len_arr
+        return x_arr, cond_arr
 
-    def get_features(self, dim=2, limit: int | None = None, continuous_only = True, augment_reflections=True):
+    def get_features(self, dim=2, limit: int | None = None, roles = False, augment_reflections=True):
         """
         Original method for Diffusion models.
         Returns: TensorDataset(x_seq, cond)
         """
         # 1. Extract
-        x, c, t, l = self._extract_sequences(dim, limit, continuous_only)
+        x, c = self._extract_sequences(dim, limit, roles)
         
         # 2. Augment
-        x_arr, c_arr, _, _ = self._augment_and_tensorize(x, c, t, l, augment=augment_reflections, dim=dim)
+        x_arr, c_arr = self._augment_and_tensorize(x, c, augment=augment_reflections, dim=dim)
         
         # 3. Return Subset
+        if roles:
+            roles_arr = x_arr[:,:,4:]
+            x_arr = x_arr[:,:,:4]
+            return TensorDataset(torch.from_numpy(x_arr), torch.from_numpy(c_arr), torch.from_numpy(roles_arr))
+        
         return TensorDataset(torch.from_numpy(x_arr), torch.from_numpy(c_arr))
-
-    def get_classifier_dataset(self, dim=2, limit: int | None = None, continuous_only=True, augment_reflections=True):
-        """
-        New method for Classifier models.
-        Returns: TensorDataset(x_seq, cond, targets, lengths)
-        """
-        # 1. Extract
-        x, c, t, l = self._extract_sequences(dim, limit, continuous_only)
-        
-        # 2. Augment
-        x_arr, c_arr, t_arr, l_arr = self._augment_and_tensorize(x, c, t, l, augment=augment_reflections, dim=dim)
-
-        c_ext = c_arr.reshape((-1,1,4))
-        c_ext = np.tile(c_ext, (1,20,1))
-        x_c_arr = np.concatenate([x_arr, c_ext], axis=2)
-        
-        # 3. Return Full Set
-        return TensorDataset(
-            torch.from_numpy(x_c_arr),
-            torch.from_numpy(t_arr),
-            torch.from_numpy(l_arr)
-        )
 
 class ClimbsFeatureScaler:
     def __init__(self, weights_path: str | None = None):

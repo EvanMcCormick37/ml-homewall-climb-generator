@@ -574,7 +574,7 @@ function GenerateClimbsPage() {
           deterministic: false,
         });
 
-        setGeneratedClimbs((prev) => [...prev, ...response.climbs]);
+        setGeneratedClimbs((prev) => [...response.climbs, ...prev]);
         setLastGrade(params.grade);
         setSelectedIndex(response.climbs.length > 0 ? 0 : null);
       } catch (err) {
