@@ -219,8 +219,8 @@ def train_unet_hold_classifier_logits(
     with tqdm(range(epochs)) as pbar:
         for epoch in pbar:
             batch_losses = []
-            for x, cond, target_role_probs in batches:
-                x, cond = x.to(device), cond.to(device)
+            for x, cond, t in batches:
+                x, cond, target_role_probs = x.to(device), cond.to(device), t.to(device)
                 optimizer.zero_grad()
 
                 pred_logits = hold_classifier(x, cond)
