@@ -273,7 +273,6 @@ GRADE_TO_DIFF = {
 # ---------------------------------------------------------------------------
 
 class ClimbDDPMGenerator():
-    """Moving Climb Generation logic over here to implement automatic conditional feature scaling. Need to implement Projected Diffusion."""
     def __init__(
             self,
             wall_id: str,
@@ -314,7 +313,7 @@ class ClimbDDPMGenerator():
         cond = self.scaler.transform_climb_features(df_cond)
         return torch.tensor(cond, device=self.device, dtype=torch.float32)
     
-    def _project_onto_manifold(self, gen_climbs: Tensor)-> Tensor:
+    def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
         """
             Project each generated hold to its nearest neighbor on the hold manifold.
             
@@ -326,11 +325,11 @@ class ClimbDDPMGenerator():
         """
         B, S, H = gen_climbs.shape
         flat_climbs = gen_climbs.reshape(-1,H)
-        dists = torch.cdist(flat_climbs, self.holds_manifold)
+        dists = torch.cdist(flat_climbs, offset_manifold)
         idx = dists.argmin(dim=1)
         return self.holds_manifold[idx].reshape(B, S, -1)
         
-    def _project_onto_indices(self, gen_climbs: Tensor) -> list[list[int]]:
+    def _project_onto_indices(self, gen_climbs: Tensor, offset_manifold: Tensor) -> list[list[int]]:
         """Project climb onto the final hold indices (and remove null holds)"""
         
         B, S, H = gen_climbs.shape
@@ -338,7 +337,7 @@ class ClimbDDPMGenerator():
         climbs = []
         for gen_climb in gen_climbs:
             flat_climb = gen_climb.reshape(-1,H)
-            dists = torch.cdist(flat_climb, self.holds_manifold)
+            dists = torch.cdist(flat_climb, offset_manifold)
             idx = dists.argmin(dim=1)
             idx = idx.detach().numpy()
             holds = self.holds_lookup[idx]
@@ -374,12 +373,15 @@ class ClimbDDPMGenerator():
         :return: A Tensor containing the denoised generated climbs as hold sets.
         :rtype: Tensor
         """
-        print("Angle: ",angle)
         cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
         x_t = torch.randn((n, 20, 4), device=self.device)
         noisy = x_t.clone()
         t_tensor = torch.ones((n,1), device=self.device)
-        print("Angle: ",angle)
+        
+        # Randomly offset the holds-manifold to allow for climbs to be generated at different x-coordinates around the wall.
+        x_offset = np.random.randn()
+        offset_manifold = self.holds_manifold.clone()
+        offset_manifold[:,0] += x_offset
 
         for t in range(0, self.timesteps):
             print('.',end='')
@@ -387,10 +389,10 @@ class ClimbDDPMGenerator():
             gen_climbs = self.model(noisy, cond_t, t_tensor)
 
             alpha_p = self._projection_strength(t_tensor)
-            projected_climbs = self._project_onto_manifold(gen_climbs)
+            projected_climbs = self._project_onto_manifold(gen_climbs, offset_manifold)
             gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
             
             t_tensor -= 1.0/self.timesteps
             noisy = self.model.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
         
-        return self._project_onto_indices(gen_climbs)
+        return self._project_onto_indices(gen_climbs, offset_manifold)

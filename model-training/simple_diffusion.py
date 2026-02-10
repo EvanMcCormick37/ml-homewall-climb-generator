@@ -363,28 +363,43 @@ class DDPMTrainer():
         torch.save(self.model.state_dict(), save_path)
         return self.model, losses
 
+GRADE_TO_DIFF = {
+    "font": {
+        "4a": 10, "4b": 11, "4c": 12,
+        "5a": 13, "5b": 14, "5c": 15,
+        "6a": 16, "6a+": 17, "6b": 18, "6b+": 19,
+        "6c": 20, "6c+": 21,
+        "7a": 22, "7a+": 23, "7b": 24, "7b+": 25,
+        "7c": 26, "7c+": 27,
+        "8a": 28, "8a+": 29, "8b": 30, "8b+": 31,
+        "8c": 32, "8c+": 33,
+    },
+    "v_grade": {
+        "V0-": 10, "V0": 11, "V0+": 12,
+        "V1": 13, "V1+": 14, "V2": 15,
+        "V3": 16, "V3+": 17, "V4": 18, "V4+": 19,
+        "V5": 20, "V5+": 21, "V6": 22, "V6+": 22.5,
+        "V7": 23, "V7+": 23.5, "V8": 24, "V8+": 25,
+        "V9": 26, "V9+": 26.5, "V10": 27, "V10+": 27.5,
+        "V11": 28, "V11+": 28.5, "V12": 29, "V12+": 29.5,
+        "V13": 30, "V13+": 30.5, "V14": 31, "V14+": 31.5,
+        "V15": 32, "V15+": 32.5, "V16": 33,
+    },
+}
+
 class ClimbDDPMGenerator():
-    """Moving Climb Generation logic over here to implement automatic conditional feature scaling."""
     def __init__(
             self,
             wall_id: str,
-            db_path: str,
-            scaler: ClimbsFeatureScaler = ClimbsFeatureScaler(),
-            model: ClimbDDPM = ClimbDDPM(Noiser()),
-            model_weights_path: str | None = None,
-            scaler_weights_path: str | None = None,
+            scaler: ClimbsFeatureScaler,
+            model: ClimbDDPM
         ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.scaler = scaler
         self.model = model
-        self.timesteps = self.model.timesteps
+        self.timesteps = 100
 
-        if model_weights_path:
-            model.load_state_dict(state_dict=clear_compile_keys(model_weights_path),strict=True)
-        if scaler_weights_path:
-            self.scaler.load_weights(scaler_weights_path)
-
-        with sqlite3.connect(db_path) as conn:
+        with sqlite3.connect(settings.DB_PATH) as conn:
             holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds WHERE wall_id = ?",conn,params=(wall_id,))
             scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
             self.holds_manifold = torch.tensor(scaled_holds[['x','y','pull_x','pull_y']].values, dtype=torch.float32)
@@ -401,72 +416,8 @@ class ClimbDDPMGenerator():
                 [2.0, 0.0, 2.0, 0.0]],dtype=torch.float32)
             ],dim=0)
 
-        self.grade_to_diff = {
-            'font': {
-                '4a': 10,
-                '4b': 11,
-                '4c': 12,
-                '5a': 13,
-                '5b': 14,
-                '5c': 15,
-                '6a': 16,
-                '6a+': 17,
-                '6b': 18,
-                '6b+': 19,
-                '6c': 20,
-                '6c+': 21,
-                '7a': 22,
-                '7a+': 23,
-                '7b': 24,
-                '7b+': 25,
-                '7c': 26,
-                '7c+': 27,
-                '8a': 28,
-                '8a+': 29,
-                '8b': 30,
-                '8b+': 31,
-                '8c': 32,
-                '8c+': 33
-            }, 
-            'v_grade': {
-                'V0-': 10,
-                'V0': 11,
-                'V0+': 12,
-                'V1': 13,
-                'V1+': 14,
-                'V2': 15,
-                'V3': 16,
-                'V3+': 17,
-                'V4': 18,
-                'V4+': 19,
-                'V5': 20,
-                'V5+': 21,
-                'V6': 22,
-                'V6+': 22.5,
-                'V7': 23,
-                'V7+': 23.5,
-                'V8': 24,
-                'V8+': 25,
-                'V9': 26,
-                'V9+': 26.5,
-                'V10': 27,
-                'V10+': 27.5,
-                'V11': 28,
-                'V11+': 28.5,
-                'V12': 29,
-                'V12+': 29.5,
-                'V13': 30,
-                'V13+': 30.5,
-                'V14': 31,
-                'V14+': 31.5,
-                'V15': 32,
-                'V15+': 32.5,
-                'V16': 33
-            }
-        }
-    
     def _build_cond_tensor(self, n, grade, diff_scale, angle):
-        diff = self.grade_to_diff[diff_scale][grade]
+        diff = GRADE_TO_DIFF[diff_scale][grade]
         df_cond = pd.DataFrame({
             "grade": [diff]*n,
             "quality": [2.9]*n,
@@ -474,10 +425,10 @@ class ClimbDDPMGenerator():
             "angle": [angle]*n
         })
 
-        cond = self.scaler.transform_climb_features(df_cond).T
+        cond = self.scaler.transform_climb_features(df_cond)
         return torch.tensor(cond, device=self.device, dtype=torch.float32)
     
-    def _project_onto_manifold(self, gen_climbs: Tensor, return_indices=False)-> Tensor:
+    def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
         """
             Project each generated hold to its nearest neighbor on the hold manifold.
             
@@ -488,24 +439,29 @@ class ClimbDDPMGenerator():
                 projected: (B, S, H) each hold snapped to nearest manifold point
         """
         B, S, H = gen_climbs.shape
-        if return_indices:
-            climbs = []
-            for gen_climb in gen_climbs:
-                flat_climb = gen_climb.reshape(-1,H)
-                dists = torch.cdist(flat_climb, self.holds_manifold)
-                idx = dists.argmin(dim=1)
-                idx = idx.detach().numpy()
-                holds = self.holds_lookup[idx]
-                climb = list(set(holds[holds > 0].tolist()))
-                climbs.append(climb)
-            return climbs
-        else:
-            flat_climbs = gen_climbs.reshape(-1,H)
-            dists = torch.cdist(flat_climbs, self.holds_manifold)
-            idx = dists.argmin(dim=1)
-            return self.holds_manifold[idx].reshape(B, S, -1)
+        flat_climbs = gen_climbs.reshape(-1,H)
+        dists = torch.cdist(flat_climbs, offset_manifold)
+        idx = dists.argmin(dim=1)
+        return self.holds_manifold[idx].reshape(B, S, -1)
         
-    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.5):
+    def _project_onto_indices(self, gen_climbs: Tensor, offset_manifold: Tensor) -> list[list[int]]:
+        """Project climb onto the final hold indices (and remove null holds)"""
+        
+        B, S, H = gen_climbs.shape
+
+        climbs = []
+        for gen_climb in gen_climbs:
+            flat_climb = gen_climb.reshape(-1,H)
+            dists = torch.cdist(flat_climb, offset_manifold)
+            idx = dists.argmin(dim=1)
+            idx = idx.detach().numpy()
+            holds = self.holds_lookup[idx]
+            climb = list(set(holds[holds > 0].tolist()))
+            climbs.append(climb)
+        
+        return climbs
+    
+    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.3):
         """Calculate the weight to assign to the projected holds based on the timestep."""
         a = (t_start_projection-t)/t_start_projection
         strength = 1 - torch.cos(a*torch.pi/2)
@@ -518,11 +474,8 @@ class ClimbDDPMGenerator():
         angle: int = 45,
         grade: str = 'V4',
         diff_scale: str = 'v_grade',
-        deterministic: bool = False,
-        projected: bool = True,
-        show_steps: bool = False,
-        return_indices = True
-    )->Tensor:
+        deterministic: bool = False
+    )->list[list[int]]:
         """
         Generate a climb or batch of climbs with the given conditions using the standard DDPM iterative denoising process.
         
@@ -539,24 +492,25 @@ class ClimbDDPMGenerator():
         x_t = torch.randn((n, 20, 4), device=self.device)
         noisy = x_t.clone()
         t_tensor = torch.ones((n,1), device=self.device)
+        
+        # Randomly offset the holds-manifold to allow for climbs to be generated at different x-coordinates around the wall.
+        x_offset = np.random.randn()
+        offset_manifold = self.holds_manifold.clone()
+        offset_manifold[:,0] += x_offset
 
         for t in range(0, self.timesteps):
             print('.',end='')
 
             gen_climbs = self.model(noisy, cond_t, t_tensor)
 
-            if projected:
-                alpha_p = self._projection_strength(t_tensor)
-                projected_climbs = self._project_onto_manifold(gen_climbs)
-                gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
+            alpha_p = self._projection_strength(t_tensor)
+            projected_climbs = self._project_onto_manifold(gen_climbs, offset_manifold)
+            gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
             
             t_tensor -= 1.0/self.timesteps
             noisy = self.model.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
-
-        if projected:
-            return self._project_onto_manifold(gen_climbs, return_indices=return_indices)
-        else:
-            return gen_climbs
+        
+        return self._project_onto_indices(gen_climbs, offset_manifold)
 
 #-----------------------------------------------------------------------
 # UTILITY FUNCTIONS
