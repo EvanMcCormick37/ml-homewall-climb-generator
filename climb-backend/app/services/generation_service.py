@@ -46,22 +46,18 @@ def generate_climbs(
     Returns:
         List of GeneratedClimb results
     """
-    print("Made it to Climb Generation!")
 
     ddpm = ClimbDDPM(
         model=Noiser(),
         weights_path=settings.DDPM_WEIGHTS_PATH,
         timesteps=100,
     )
-    print("Instantiated ClimbDDPM!")
     scaler = ClimbsFeatureScaler(
         weights_path=settings.SCALER_WEIGHTS_PATH
     )
-    print("Instantiated CFS!")
     hold_classifier = UNetHoldClassifierLogits(
         weights_path=settings.HC_WEIGHTS_PATH
     )
-    print("Instantiated HoldClassifier!")
     generator = ClimbDDPMGenerator(
         wall_id=wall_id,
         scaler=scaler,
@@ -69,12 +65,10 @@ def generate_climbs(
         hold_classifier=hold_classifier
     )
 
-    print("Instantiated All Entities!")
 
     # Resolve angle: use request override, else wall's stored angle
     angle = request.angle if request.angle else _get_wall_angle(wall_id)
 
-    print(f"Got Wall angle! {angle}. Running climb generation...")
     try:
         raw_climbs = generator.generate(
             n=request.num_climbs,
@@ -83,7 +77,6 @@ def generate_climbs(
             diff_scale=request.grade_scale.value,
             deterministic=request.deterministic
         )
-        print(raw_climbs)
     except Exception as e:
         print(f'Exception: {e}')
         raise e

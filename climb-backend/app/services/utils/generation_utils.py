@@ -447,7 +447,7 @@ class ClimbDDPMGenerator():
     @torch.no_grad()
     def generate(
         self,
-        n: int = 1 ,
+        n: int = 1,
         angle: int = 45,
         grade: str = 'V4',
         diff_scale: str = 'v_grade',
@@ -471,12 +471,11 @@ class ClimbDDPMGenerator():
         t_tensor = torch.ones((n,1), device=self.device)
         
         # Randomly offset the holds-manifold to allow for climbs to be generated at different x-coordinates around the wall.
-        x_offset = min(np.random.randn(),1.5)
+        x_offset = max(np.random.randn(),1.5)
         offset_manifold = self.holds_manifold.clone()
         offset_manifold[:,0] += x_offset*0.1
 
-        for t in range(0, self.timesteps):
-            print('.',end='')
+        for _ in range(0, self.timesteps):
 
             gen_climbs = self.ddpm(noisy, cond_t, t_tensor)
 
