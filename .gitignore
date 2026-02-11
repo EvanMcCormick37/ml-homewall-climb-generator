@@ -5,7 +5,7 @@
 *-data.json
 assets/
 boardlib/
-weights/
+model-training/data
 
 # Caches
 __pycache__
