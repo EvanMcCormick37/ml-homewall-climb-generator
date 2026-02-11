@@ -5,6 +5,7 @@ Replaces the old model CRUD schemas — the backend now uses a single
 pre-trained DDPM that generates for any wall.
 """
 from pydantic import BaseModel, Field
+from base import Holdset
 from enum import Enum
 
 
@@ -22,16 +23,9 @@ class GenerateRequest(BaseModel):
     angle: int = Field(..., ge=0, le=90, description="Wall angle override (defaults to wall's stored angle)")
     deterministic: bool = Field(False, description="Use fixed noise for reproducible results")
 
-
-class GeneratedClimb(BaseModel):
-    """A single generated climb — an unordered set of hold indices."""
-    holds: list[int]
-    num_holds: int
-
-
 class GenerateResponse(BaseModel):
     """Response containing generated climbs."""
     wall_id: str
-    climbs: list[GeneratedClimb]
+    climbs: list[Holdset]
     num_generated: int
     parameters: GenerateRequest

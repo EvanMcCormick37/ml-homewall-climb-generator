@@ -1,7 +1,8 @@
 """
 Utility modules for model training and generation.
 """
-from app.services.utils.ddpm import (
+from app.services.utils.generation_utils import (
+    UNetHoldClassifierLogits,
     Noiser,
     ClimbDDPM,
     ClimbsFeatureScaler,
@@ -15,4 +16,5 @@ __all__ = [
     "ClimbsFeatureScaler",
     "ClimbDDPMGenerator",
     "GRADE_TO_DIFF",
+    "UNetHoldClassifierLogits"
 ]

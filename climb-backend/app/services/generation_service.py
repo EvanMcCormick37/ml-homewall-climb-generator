@@ -9,30 +9,22 @@ Manages:
 import logging
 
 from app.config import settings
-from app.database import get_db
-from app.schemas.generate import GenerateRequest, GeneratedClimb
-from app.services.utils.ddpm import (
+from app.schemas import Holdset, GenerateRequest
+from app.services.utils import (
     ClimbDDPM,
     ClimbDDPMGenerator,
     ClimbsFeatureScaler,
     Noiser,
+    UNetHoldClassifierLogits
 )
+from app.services.climb_service import _holds_to_holdset
 
 logger = logging.getLogger(__name__)
-
-def _get_wall_angle(wall_id: str) -> int | None:
-    """Look up the stored angle for a wall."""
-    with get_db() as conn:
-        row = conn.execute(
-            "SELECT angle FROM walls WHERE id = ?", (wall_id,)
-        ).fetchone()
-    return row["angle"] if row else None
-
 
 def generate_climbs(
     wall_id: str,
     request: GenerateRequest,
-) -> list[GeneratedClimb]:
+) -> list[Holdset]:
     """
     Generate climbs for a wall using the DDPM.
 
@@ -43,18 +35,22 @@ def generate_climbs(
     Returns:
         List of GeneratedClimb results
     """
-    model = ClimbDDPM(
-            model=Noiser(),
-            weights_path=settings.DDPM_WEIGHTS_PATH,
-            timesteps=100,
-        )
+    ddpm = ClimbDDPM(
+        model=Noiser(),
+        weights_path=settings.DDPM_WEIGHTS_PATH,
+        timesteps=100,
+    )
     scaler = ClimbsFeatureScaler(
-            weights_path=settings.SCALER_WEIGHTS_PATH
-        )
+        weights_path=settings.SCALER_WEIGHTS_PATH
+    )
+    hold_classifier = UNetHoldClassifierLogits(
+        weights_path=settings.HC_WEIGHTS_PATH
+    )
     generator = ClimbDDPMGenerator(
         wall_id=wall_id,
         scaler=scaler,
-        model=model
+        ddpm=ddpm,
+        hold_classifier=hold_classifier
     )
 
     # Resolve angle: use request override, else wall's stored angle
@@ -67,9 +63,5 @@ def generate_climbs(
         diff_scale=request.grade_scale.value,
         deterministic=request.deterministic
     )
-    print(raw_climbs)
 
-    return [
-        GeneratedClimb(holds=holds, num_holds=len(holds))
-        for holds in raw_climbs
-    ]
+    return [_holds_to_holdset(c) for c in raw_climbs]

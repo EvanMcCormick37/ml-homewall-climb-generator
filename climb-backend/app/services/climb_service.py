@@ -11,6 +11,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.schemas import Climb, ClimbCreate, ClimbSortBy, Holdset
+from app.services.utils import _holdset_to_holds
 
 
 
@@ -310,13 +311,6 @@ def _get_sort_column(sort_by: ClimbSortBy) -> str:
         case _:
             return "created_at"
 
-def _holdset_to_holds(holdset: Holdset) -> list[list[int,int]]:
-    """Converts a Holdset object into a list of [idx, role] for each hold within the holdset."""
-    holds = []
-    for role, hold_list in enumerate([holdset.start, holdset.finish, holdset.hand, holdset.foot]):
-        holds.extend([[h_idx,role] for h_idx in hold_list])
-    return holds
-
 def _holds_to_holdset(holds: list[list[int,int]]):
     """Converts a list of [hold_idx, role] back to a Holdset object."""
     roles = [[],[],[],[]]
@@ -328,3 +322,10 @@ def _holds_to_holdset(holds: list[list[int,int]]):
         hand=roles[2],
         foot=roles[3],
     )
+
+def _holdset_to_holds(holdset: Holdset) -> list[list[int,int]]:
+    """Converts a Holdset object into a list of [idx, role] for each hold within the holdset."""
+    holds = []
+    for role, hold_list in enumerate([holdset.start, holdset.finish, holdset.hand, holdset.foot]):
+        holds.extend([[h_idx,role] for h_idx in hold_list])
+    return holds

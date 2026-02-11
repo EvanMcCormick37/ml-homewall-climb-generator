@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     # DDPM model paths & hyperparams
     DDPM_WEIGHTS_PATH: Path = DATA_DIR / "models/ddpm-weights.pth"
     SCALER_WEIGHTS_PATH: Path = DATA_DIR / "models/scaler-weights.joblib"
+    HC_WEIGHTS_PATH: Path = DATA_DIR / "unet-hold-classifier.pth"
     
     # Pagination defaults
     LIMIT: int = 50

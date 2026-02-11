@@ -6,7 +6,8 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from simple_diffusion import zero_com
+from simple_diffusion import clear_compile_keys, zero_com
+from pathlib import Path
 
 #-----------------------------------------------------------------------
 # DATA BATCHING AND PREPROCESSING
@@ -149,6 +150,7 @@ class UNetHoldClassifierLogits(nn.Module):
         out_dim: int = 5,
         hidden_dim: int = 128,
         n_layers: int = 3,
+        weights_path: Path | str | None = None
     ):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -164,6 +166,9 @@ class UNetHoldClassifierLogits(nn.Module):
         self.up_blocks = nn.ModuleList([ResidualBlock1D_V2(hidden_dim*(i+1), hidden_dim*(i), hidden_dim) for i in range(n_layers,0,-1)])
 
         self.head = nn.Conv1d(hidden_dim, out_dim, 1)
+
+        if weights_path:
+            self.load_state_dict(clear_compile_keys(weights_path, map_loc = str(self.device)), strict=True)
 
     def forward(self, x, cond):
 

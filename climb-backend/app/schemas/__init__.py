@@ -5,6 +5,7 @@ from app.schemas.base import (
     PositiveInt,
     HoldPosition,
     HoldDetail,
+    Holdset,
 )
 from app.schemas.walls import (
     WallCreate,
@@ -24,12 +25,10 @@ from app.schemas.climbs import (
     ClimbListResponse,
     ClimbCreateResponse,
     ClimbDeleteResponse,
-    Holdset,
 )
 from app.schemas.generate import (
     GradeScale,
     GenerateRequest,
-    GeneratedClimb,
     GenerateResponse,
 )
 
@@ -38,6 +37,7 @@ __all__ = [
     "PositiveInt",
     "HoldPosition",
     "HoldDetail",
+    "Holdset",
     # Walls
     "WallCreate",
     "WallDetail",
@@ -55,10 +55,8 @@ __all__ = [
     "ClimbListResponse",
     "ClimbCreateResponse",
     "ClimbDeleteResponse",
-    "Holdset",
     # Generation
     "GradeScale",
     "GenerateRequest",
-    "GeneratedClimb",
     "GenerateResponse",
 ]
