@@ -11,7 +11,6 @@ from datetime import datetime
 
 from app.database import get_db
 from app.schemas import Climb, ClimbCreate, ClimbSortBy, Holdset
-from app.services.utils import _holdset_to_holds
 
 
 

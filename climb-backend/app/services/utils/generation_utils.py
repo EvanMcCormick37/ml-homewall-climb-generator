@@ -234,7 +234,6 @@ class ClimbsFeatureScaler:
             )
         else:
             dfc = self.cond_features_scaler.transform(dfc[["grade", "quality", "ascents", "angle"]])
-            dfc = dfc
         return dfc
 
     def transform_hold_features(self, holds_to_transform: pd.DataFrame, to_df: bool = False):
@@ -246,7 +245,6 @@ class ClimbsFeatureScaler:
             )
         else:
             dfh = self.hold_features_scaler.transform(dfh[["x", "y", "pull_x", "pull_y"]])
-            dfh = dfh
         return dfh
 
 
@@ -394,7 +392,7 @@ class ClimbDDPMGenerator():
             "angle": [angle]*n
         })
 
-        cond = self.scaler.transform_climb_features(df_cond).T
+        cond = self.scaler.transform_climb_features(df_cond)
         return torch.tensor(cond, device=self.device, dtype=torch.float32)
     
     def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
@@ -473,7 +471,7 @@ class ClimbDDPMGenerator():
         t_tensor = torch.ones((n,1), device=self.device)
         
         # Randomly offset the holds-manifold to allow for climbs to be generated at different x-coordinates around the wall.
-        x_offset = np.random.randn()
+        x_offset = min(np.random.randn(),1.5)
         offset_manifold = self.holds_manifold.clone()
         offset_manifold[:,0] += x_offset*0.1
 

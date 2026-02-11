@@ -2,280 +2,65 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { getWall, getWallPhotoUrl } from "@/api/walls";
 import { generateClimbs } from "@/api/generate";
-import {
-  ArrowLeft,
-  Sparkles,
-  Loader2,
-  Hash,
-  ChevronDown,
-  Layers,
-} from "lucide-react";
-import type { WallDetail, HoldDetail } from "@/types";
-import type { GeneratedClimb, GradeScale } from "@/types/generate";
+import { ArrowLeft, Sparkles, Loader2 } from "lucide-react";
+import type { WallDetail, HoldDetail, Holdset, GenerateRequest } from "@/types";
 
 // --- Route Definition ---
 
 export const Route = createFileRoute("/walls/$wallId/generate")({
-  component: GenerateClimbsPage,
+  component: GeneratePage,
   loader: async ({ params }) => {
     const wall = await getWall(params.wallId);
     return { wall };
   },
 });
 
-// --- Constants ---
+// --- Hold color constants (matches view.tsx) ---
 
-const GENERATED_HOLD_COLOR = "#06b6d4"; // cyan-500
+const START_COLOR = "#22c55e"; // green-500
+const FINISH_COLOR = "#ffea00"; // yellow
+const HAND_COLOR = "#3b82f6"; // blue-500
+const FOOT_COLOR = "#a855f7"; // purple-500
 const HOLD_STROKE_COLOR = "#00b679";
 
-// V-grade options that match the DDPM's grade lookup
-const V_GRADE_OPTIONS = [
-  "V0-",
+// --- V-grade options ---
+
+const GRADE_OPTIONS = [
   "V0",
-  "V0+",
   "V1",
-  "V1+",
   "V2",
   "V3",
-  "V3+",
   "V4",
-  "V4+",
   "V5",
-  "V5+",
   "V6",
-  "V6+",
   "V7",
-  "V7+",
   "V8",
-  "V8+",
   "V9",
-  "V9+",
   "V10",
-  "V10+",
   "V11",
-  "V11+",
   "V12",
-  "V12+",
   "V13",
-  "V13+",
   "V14",
-  "V14+",
   "V15",
-  "V15+",
   "V16",
 ];
 
-const FONT_GRADE_OPTIONS = [
-  "4a",
-  "4b",
-  "4c",
-  "5a",
-  "5b",
-  "5c",
-  "6a",
-  "6a+",
-  "6b",
-  "6b+",
-  "6c",
-  "6c+",
-  "7a",
-  "7a+",
-  "7b",
-  "7b+",
-  "7c",
-  "7c+",
-  "8a",
-  "8a+",
-  "8b",
-  "8b+",
-  "8c",
-  "8c+",
-];
+// --- HoldsetList Component ---
 
-// --- GenerateForm Component ---
-
-interface GenerateFormProps {
-  wallAngle: number | null;
-  onGenerate: (params: {
-    grade: string;
-    gradeScale: GradeScale;
-    angle: number | null;
-  }) => void;
-  isGenerating: boolean;
-}
-
-function GenerateForm({
-  wallAngle,
-  onGenerate,
-  isGenerating,
-}: GenerateFormProps) {
-  const [gradeScale, setGradeScale] = useState<GradeScale>("v_grade");
-  const [grade, setGrade] = useState("V4");
-  const [angleOverride, setAngleOverride] = useState<number | null>(null);
-  const [isGradeOpen, setIsGradeOpen] = useState(false);
-
-  const gradeOptions =
-    gradeScale === "v_grade" ? V_GRADE_OPTIONS : FONT_GRADE_OPTIONS;
-
-  // Reset grade when switching scales
-  const handleScaleChange = (scale: GradeScale) => {
-    setGradeScale(scale);
-    setGrade(scale === "v_grade" ? "V4" : "6a");
-  };
-
-  const displayAngle = angleOverride ?? wallAngle;
-
-  return (
-    <div className="p-4 space-y-5">
-      {/* Grade Scale Toggle */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-400 mb-2">
-          Grading System
-        </label>
-        <div className="flex rounded-lg overflow-hidden border border-zinc-700">
-          <button
-            type="button"
-            onClick={() => handleScaleChange("v_grade")}
-            className={`flex-1 px-3 py-2 text-sm font-medium transition-colors
-              ${
-                gradeScale === "v_grade"
-                  ? "bg-cyan-600 text-white"
-                  : "bg-zinc-800 text-zinc-400 hover:bg-zinc-750"
-              }`}
-          >
-            V-Grade
-          </button>
-          <button
-            type="button"
-            onClick={() => handleScaleChange("font")}
-            className={`flex-1 px-3 py-2 text-sm font-medium transition-colors
-              ${
-                gradeScale === "font"
-                  ? "bg-cyan-600 text-white"
-                  : "bg-zinc-800 text-zinc-400 hover:bg-zinc-750"
-              }`}
-          >
-            Font
-          </button>
-        </div>
-      </div>
-
-      {/* Grade Dropdown */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-400 mb-1">
-          Target Grade
-        </label>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsGradeOpen(!isGradeOpen)}
-            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg
-                       text-zinc-100 text-left flex items-center justify-between"
-          >
-            {grade}
-            <ChevronDown className="w-4 h-4 text-zinc-500" />
-          </button>
-          {isGradeOpen && (
-            <div
-              className="absolute top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700
-                            rounded-lg shadow-lg max-h-48 overflow-y-auto z-10"
-            >
-              {gradeOptions.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => {
-                    setGrade(g);
-                    setIsGradeOpen(false);
-                  }}
-                  className={`w-full px-3 py-2 text-left hover:bg-zinc-700 transition-colors
-                    ${grade === g ? "bg-zinc-700 text-cyan-400" : "text-zinc-300"}`}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Angle */}
-      <div>
-        <label className="block text-sm font-medium text-zinc-400 mb-1">
-          Angle
-        </label>
-        {wallAngle !== null ? (
-          <div className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-400 text-sm">
-            {wallAngle}° <span className="text-zinc-600">(wall default)</span>
-          </div>
-        ) : (
-          <input
-            type="number"
-            value={angleOverride ?? ""}
-            onChange={(e) =>
-              setAngleOverride(e.target.value ? Number(e.target.value) : null)
-            }
-            placeholder="45"
-            min={0}
-            max={90}
-            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg
-                       text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-cyan-500"
-          />
-        )}
-      </div>
-
-      {/* Generate Button */}
-      <button
-        type="button"
-        onClick={() =>
-          onGenerate({
-            grade,
-            gradeScale,
-            angle: displayAngle ?? 45,
-          })
-        }
-        disabled={isGenerating}
-        className="w-full px-4 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-cyan-900 disabled:cursor-not-allowed
-                   rounded-lg text-white font-medium transition-colors flex items-center justify-center gap-2"
-      >
-        {isGenerating ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Generating...
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-4 h-4" />
-            Generate
-          </>
-        )}
-      </button>
-    </div>
-  );
-}
-
-// --- GeneratedClimbList Component ---
-
-interface GeneratedClimbListProps {
-  climbs: GeneratedClimb[];
+interface HoldsetListProps {
+  holdsets: Holdset[];
   selectedIndex: number | null;
   onSelect: (index: number) => void;
-  grade: string;
 }
 
-function GeneratedClimbList({
-  climbs,
-  selectedIndex,
-  onSelect,
-  grade,
-}: GeneratedClimbListProps) {
-  if (climbs.length === 0) {
+function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
+  if (holdsets.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-zinc-500 p-4">
-        <Layers className="w-12 h-12 mb-3 opacity-50" />
-        <p className="text-center text-sm">No generated climbs yet.</p>
-        <p className="text-xs text-zinc-600 mt-1">
-          Configure options above and hit Generate.
+        <Sparkles className="w-12 h-12 mb-3 opacity-50" />
+        <p className="text-center">No climbs generated yet.</p>
+        <p className="text-sm text-zinc-600 mt-1">
+          Configure parameters and hit Generate.
         </p>
       </div>
     );
@@ -285,12 +70,19 @@ function GeneratedClimbList({
     <div className="flex flex-col h-full">
       <div className="px-3 py-2 border-b border-zinc-800 flex-shrink-0">
         <span className="text-xs text-zinc-500 uppercase tracking-wider">
-          {climbs.length} Generated Climb{climbs.length !== 1 ? "s" : ""}
+          {holdsets.length} Generated Climb{holdsets.length !== 1 ? "s" : ""}
         </span>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {climbs.map((climb, i) => {
+        {holdsets.map((holdset, i) => {
           const isSelected = selectedIndex === i;
+          const totalHolds = new Set([
+            ...holdset.start,
+            ...holdset.finish,
+            ...holdset.hand,
+            ...holdset.foot,
+          ]).size;
+
           return (
             <button
               key={i}
@@ -298,25 +90,47 @@ function GeneratedClimbList({
               className={`w-full text-left px-3 py-3 border-b border-zinc-800/50 transition-colors
                 ${
                   isSelected
-                    ? "bg-zinc-800 border-l-2 border-l-cyan-500"
+                    ? "bg-zinc-800 border-l-2 border-l-emerald-500"
                     : "hover:bg-zinc-800/50 border-l-2 border-l-transparent"
                 }`}
             >
               <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold flex-shrink-0"
-                  style={{
-                    backgroundColor: "rgba(6, 182, 212, 0.15)",
-                    color: GENERATED_HOLD_COLOR,
-                  }}
-                >
-                  {grade}
+                <div className="w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold flex-shrink-0 bg-zinc-800 text-zinc-300">
+                  #{i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-zinc-100">Climb {i + 1}</div>
                   <div className="text-xs text-zinc-500 flex items-center gap-2 mt-0.5">
-                    <Hash className="w-3 h-3" />
-                    <span>{climb.num_holds} holds</span>
+                    <span>{totalHolds} holds</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ backgroundColor: START_COLOR }}
+                      />
+                      {holdset.start.length}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ backgroundColor: FINISH_COLOR }}
+                      />
+                      {holdset.finish.length}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ backgroundColor: HAND_COLOR }}
+                      />
+                      {holdset.hand.length}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span
+                        className="inline-block w-2 h-2 rounded-full"
+                        style={{ backgroundColor: FOOT_COLOR }}
+                      />
+                      {holdset.foot.length}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -334,16 +148,16 @@ interface WallCanvasProps {
   wallId: string;
   holds: HoldDetail[];
   wallDimensions: { width: number; height: number };
-  selectedClimb: GeneratedClimb | null;
+  selectedHoldset: Holdset | null;
   imageDimensions: { width: number; height: number };
-  onImageLoad: (dims: { width: number; height: number }) => void;
+  onImageLoad: (dimensions: { width: number; height: number }) => void;
 }
 
 function WallCanvas({
   wallId,
   holds,
   wallDimensions,
-  selectedClimb,
+  selectedHoldset,
   imageDimensions,
   onImageLoad,
 }: WallCanvasProps) {
@@ -407,39 +221,63 @@ function WallCanvas({
     canvas.width = width || 800;
     canvas.height = height || 600;
 
+    // Clear
     ctx.fillStyle = "#18181b";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw image
     ctx.drawImage(image, 0, 0);
 
-    // Build set of generated hold indices
-    const generatedHolds = new Set(selectedClimb?.holds ?? []);
+    // Build hold sets from selected holdset
+    const startHolds = new Set(selectedHoldset?.start || []);
+    const finishHolds = new Set(selectedHoldset?.finish || []);
+    const handHolds = new Set(selectedHoldset?.hand || []);
+    const footHolds = new Set(selectedHoldset?.foot || []);
+    const usedHolds = new Set([
+      ...startHolds,
+      ...finishHolds,
+      ...handHolds,
+      ...footHolds,
+    ]);
 
+    // Draw all holds
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const size = height / 1800;
-      const radius = hold.is_foot ? 10 * size : 18 * size;
+      const scale = height / 1000;
+      const radius = 10 * scale;
 
-      const isUsed = generatedHolds.has(hold.hold_index);
+      const isUsed = usedHolds.has(hold.hold_index);
+      const isStart = startHolds.has(hold.hold_index);
+      const isFinish = finishHolds.has(hold.hold_index);
+      const isHand = handHolds.has(hold.hold_index);
+      const isFoot = footHolds.has(hold.hold_index);
 
-      // Dim holds not in the climb when a climb is selected
-      const alpha = selectedClimb ? (isUsed ? 1 : 0.15) : 0.5;
+      // Dim holds not in the climb when a holdset is selected
+      const alpha = selectedHoldset ? (isUsed ? 1 : 0.2) : 0.5;
 
-      const strokeColor =
-        selectedClimb && isUsed ? GENERATED_HOLD_COLOR : HOLD_STROKE_COLOR;
+      // Determine color based on hold type
+      let strokeColor = HOLD_STROKE_COLOR;
+      if (selectedHoldset && isUsed) {
+        if (isStart) strokeColor = START_COLOR;
+        else if (isFinish) strokeColor = FINISH_COLOR;
+        else if (isHand) strokeColor = HAND_COLOR;
+        else if (isFoot) strokeColor = FOOT_COLOR;
+      }
+      const size = isFoot ? 0.5 : 1;
 
       ctx.beginPath();
-      ctx.arc(x, y, radius, 0, 2 * Math.PI);
+      ctx.arc(x, y, radius * size, 0, 2 * Math.PI);
       ctx.strokeStyle = strokeColor;
       ctx.globalAlpha = alpha;
-      ctx.lineWidth = isUsed && selectedClimb ? size * 2 : 2;
-      if (selectedClimb && isUsed) {
+      ctx.lineWidth = isUsed && selectedHoldset ? scale * 2 : 2;
+      if (selectedHoldset && isUsed) {
         ctx.fillStyle = strokeColor;
         ctx.fill();
       }
       ctx.stroke();
       ctx.globalAlpha = 1;
     });
-  }, [image, imageDimensions, holds, selectedClimb, toPixelCoords]);
+  }, [image, imageDimensions, holds, selectedHoldset, toPixelCoords]);
 
   // Pan handlers
   const handleMouseDown = useCallback(
@@ -502,7 +340,7 @@ function WallCanvas({
     };
   }, []);
 
-  const { zoom, x: vx, y: vy } = viewTransform;
+  const { zoom, x, y } = viewTransform;
   const { width, height } = imageDimensions;
 
   return (
@@ -514,7 +352,11 @@ function WallCanvas({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      <div style={{ transform: `translate(${vx}px, ${vy}px)` }}>
+      <div
+        style={{
+          transform: `translate(${x}px, ${y}px)`,
+        }}
+      >
         <canvas
           ref={canvasRef}
           style={{
@@ -529,7 +371,7 @@ function WallCanvas({
 
 // --- Main Page Component ---
 
-function GenerateClimbsPage() {
+function GeneratePage() {
   const navigate = useNavigate();
   const { wall } = Route.useLoaderData() as { wall: WallDetail };
   const wallId = wall.metadata.id;
@@ -537,17 +379,26 @@ function GenerateClimbsPage() {
     width: wall.metadata.dimensions[0],
     height: wall.metadata.dimensions[1],
   };
-  const wallAngle = wall.metadata.angle ?? null;
 
   const [imageDimensions, setImageDimensions] = useState({
     width: 0,
     height: 0,
   });
-  const [generatedClimbs, setGeneratedClimbs] = useState<GeneratedClimb[]>([]);
+
+  // Generation form state
+  const [numClimbs, setNumClimbs] = useState(5);
+  const [grade, setGrade] = useState("V4");
+  const [angle, setAngle] = useState<number | null>(null);
+  const [deterministic, setDeterministic] = useState(false);
+
+  // Results state
+  const [generatedHoldsets, setGeneratedHoldsets] = useState<Holdset[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastGrade, setLastGrade] = useState("V4");
+
+  const selectedHoldset =
+    selectedIndex !== null ? generatedHoldsets[selectedIndex] : null;
 
   const handleImageLoad = useCallback(
     (dimensions: { width: number; height: number }) => {
@@ -556,42 +407,35 @@ function GenerateClimbsPage() {
     [],
   );
 
-  const handleGenerate = useCallback(
-    async (params: {
-      grade: string;
-      gradeScale: GradeScale;
-      angle: number | null;
-    }) => {
-      setIsGenerating(true);
-      setError(null);
+  const handleGenerate = useCallback(async () => {
+    setIsGenerating(true);
+    setError(null);
 
-      try {
-        const response = await generateClimbs(wallId, {
-          num_climbs: 1,
-          grade: params.grade,
-          grade_scale: params.gradeScale,
-          angle: params.angle,
-          deterministic: false,
-        });
+    const request: GenerateRequest = {
+      num_climbs: numClimbs,
+      grade,
+      grade_scale: "v_grade",
+      angle: angle ?? wall.metadata.angle,
+      deterministic,
+    };
 
-        setGeneratedClimbs((prev) => [...response.climbs, ...prev]);
-        setLastGrade(params.grade);
-        setSelectedIndex(response.climbs.length > 0 ? 0 : null);
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Generation failed";
-        setError(message);
-        setGeneratedClimbs([]);
+    try {
+      const response = await generateClimbs(wallId, request);
+      setGeneratedHoldsets(response.climbs);
+      // Auto-select first climb if results returned
+      if (response.climbs.length > 0) {
+        setSelectedIndex(0);
+      } else {
         setSelectedIndex(null);
-      } finally {
-        setIsGenerating(false);
       }
-    },
-    [wallId],
-  );
-
-  const selectedClimb =
-    selectedIndex !== null ? (generatedClimbs[selectedIndex] ?? null) : null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Generation failed";
+      setError(message);
+      console.error("Generation error:", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [wallId, numClimbs, grade, deterministic, wall.metadata.angle, angle]);
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
@@ -611,50 +455,163 @@ function GenerateClimbsPage() {
           <h1 className="text-lg font-medium text-zinc-100">
             {wall.metadata.name}
           </h1>
-          <span className="text-sm text-zinc-500 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5" />
-            Generate Climbs
-          </span>
+          <span className="text-sm text-zinc-500">Generate Climbs</span>
         </div>
       </header>
-
-      {/* Error banner */}
-      {error && (
-        <div className="px-6 py-2 bg-red-900/50 text-red-300 text-sm">
-          {error}
-        </div>
-      )}
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
         {/* Left panel */}
         <div className="w-80 flex flex-col border-r border-zinc-800 flex-shrink-0">
           {/* Generation controls */}
-          <div className="border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
-            <div className="px-4 pt-4 pb-0">
-              <h2 className="text-lg font-semibold text-zinc-100">
-                Generate Climbs
-              </h2>
-              <p className="text-sm text-zinc-500 mt-1">
-                Configure parameters and generate
-              </p>
+          <div className="p-4 border-b border-zinc-800 bg-zinc-900 space-y-4 flex-shrink-0">
+            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              Parameters
+            </h2>
+
+            {/* Grade */}
+            <div>
+              <label className="text-xs text-zinc-500 block mb-1">
+                Target Grade
+              </label>
+              <select
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              >
+                {GRADE_OPTIONS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
             </div>
-            <GenerateForm
-              wallAngle={wallAngle}
-              onGenerate={handleGenerate}
-              isGenerating={isGenerating}
+
+            {/* Num climbs */}
+            <div>
+              <label className="text-xs text-zinc-500 block mb-1">
+                Number of Climbs
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={numClimbs}
+                onChange={(e) =>
+                  setNumClimbs(
+                    Math.max(1, Math.min(50, parseInt(e.target.value) || 1)),
+                  )
+                }
+                className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+            {/* Wall angle adjust if allowed */}
+            <div>
+              <label className="text-xs text-zinc-500 block mb-1">
+                Wall Angle (Degrees)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={90}
+                disabled={!!wall.metadata.angle}
+                value={angle ?? ""}
+                onChange={(e) => {
+                  if (e.target.value === "") {
+                    setAngle(null);
+                  } else {
+                    const parsed = parseInt(e.target.value);
+                    if (!isNaN(parsed)) {
+                      setAngle(Math.max(0, Math.min(90, parsed)));
+                    }
+                  }
+                }}
+                className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+
+            {/* Deterministic toggle */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!deterministic}
+                onChange={(e) => setDeterministic(!e.target.checked)}
+                className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+              />
+              <span className="text-sm text-zinc-300">Nondeterministic</span>
+            </label>
+
+            {/* Generate button */}
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium rounded transition-colors text-sm"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Generate
+                </>
+              )}
+            </button>
+
+            {/* Error */}
+            {error && (
+              <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded px-3 py-2">
+                {error}
+              </div>
+            )}
+          </div>
+
+          {/* Generated holdsets list */}
+          <div className="flex-1 min-h-0 bg-zinc-900">
+            <HoldsetList
+              holdsets={generatedHoldsets}
+              selectedIndex={selectedIndex}
+              onSelect={setSelectedIndex}
             />
           </div>
 
-          {/* Generated climb list */}
-          <div className="flex-1 min-h-0 bg-zinc-900">
-            <GeneratedClimbList
-              climbs={generatedClimbs}
-              selectedIndex={selectedIndex}
-              onSelect={setSelectedIndex}
-              grade={lastGrade}
-            />
-          </div>
+          {/* Legend */}
+          {generatedHoldsets.length > 0 && (
+            <div className="p-3 border-t border-zinc-800 bg-zinc-900 flex-shrink-0">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: START_COLOR }}
+                  />
+                  <span className="text-zinc-400">Start</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: FINISH_COLOR }}
+                  />
+                  <span className="text-zinc-400">Finish</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: HAND_COLOR }}
+                  />
+                  <span className="text-zinc-400">Hand</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: FOOT_COLOR }}
+                  />
+                  <span className="text-zinc-400">Foot</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right panel - Wall Canvas */}
@@ -663,7 +620,7 @@ function GenerateClimbsPage() {
             wallId={wallId}
             holds={wall.holds ?? []}
             wallDimensions={wallDimensions}
-            selectedClimb={selectedClimb}
+            selectedHoldset={selectedHoldset}
             imageDimensions={imageDimensions}
             onImageLoad={handleImageLoad}
           />

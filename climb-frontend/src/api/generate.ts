@@ -1,16 +1,23 @@
 import { apiClient } from "./client";
 import type { GenerateRequest, GenerateResponse } from "@/types";
 
-/**
- * Generate climbs for a wall using the DDPM model.
- */
 export async function generateClimbs(
   wallId: string,
-  request: GenerateRequest
+  request: GenerateRequest,
 ): Promise<GenerateResponse> {
-  const response = await apiClient.post<GenerateResponse>(
+  const params: Record<string, string> = {
+    num_climbs: request.num_climbs.toString(),
+    grade: request.grade,
+    grade_scale: request.grade_scale,
+    deterministic: request.deterministic.toString(),
+  };
+  if (request.angle != null) {
+    params.angle = request.angle.toString();
+  }
+
+  const response = await apiClient.get<GenerateResponse>(
     `/walls/${wallId}/generate`,
-    request
+    { params },
   );
   return response.data;
 }

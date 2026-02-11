@@ -4,21 +4,28 @@ Router for climb generation.
 Endpoints:
 - POST /walls/{wall_id}/generate  — Generate climbs using the DDPM
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
-from app.schemas.generate import GenerateRequest, GenerateResponse
+from app.schemas.generate import GenerateRequest, GenerateResponse, GradeScale
 from app.services import services
 
 router = APIRouter()
 
 
-@router.post(
+@router.get(
     "",
     response_model=GenerateResponse,
     summary="Generate climbs",
     description="Generate climbs for a wall using the pre-trained DDPM model.",
 )
-def generate_climbs(wall_id: str, request: GenerateRequest):
+def generate_climbs(
+    wall_id: str,
+    num_climbs: int = Query(5, ge=1, le=50),
+    grade: str = Query("V4"),
+    grade_scale: GradeScale = Query(GradeScale.V_GRADE),
+    angle: int | None = Query(None, ge=0, le=90),
+    deterministic: bool = Query(False),
+):
     """
     Generate climbs for a given wall.
 
@@ -32,6 +39,14 @@ def generate_climbs(wall_id: str, request: GenerateRequest):
     - **angle**: Wall angle override (defaults to the wall's stored angle)
     - **deterministic**: Fixed noise for reproducible output
     """
+    request = GenerateRequest(
+        num_climbs=num_climbs,
+        grade=grade,
+        grade_scale=grade_scale,
+        angle=angle,
+        deterministic=deterministic,
+    )
+    print("hello!")
     # Validate wall exists
     if not services.wall_exists(wall_id):
         raise HTTPException(status_code=404, detail="Wall not found")
