@@ -1,0 +1,279 @@
+import json
+import requests
+import pandas as pd
+import sqlite3
+import re
+
+API_BASE_URL = "http://localhost:8000"
+
+ROLE_MAP = {
+    1: 'start',
+    2: 'hand',
+    3: 'finish',
+    4: 'foot'
+}
+
+# ---------------------------------------------------------------
+#   Hold Upload Utilities
+# ---------------------------------------------------------------
+def df_sql(db_name, query,index_col='uuid'):
+    """Extract table <table_name> from database <db_name>.db"""
+    with sqlite3.connect(f"data/boardlib/{db_name}.db") as conn:
+        df = pd.read_sql_query(query,conn,index_col=index_col)
+    return df
+
+def convert_dataframe_to_holds(
+        df: pd.DataFrame,
+        index_col: str = 'id',
+        x_col: str = 'x_ft',
+        y_col: str = 'y_ft',
+        default_pull_x: float = 0.0,
+        default_pull_y: float = -1.0,
+        default_useability: float = 0.5) -> list[dict]:
+    """
+    Convert pandas DataFrame to list of hold dictionaries.
+    
+    Args:
+        df: DataFrame with 'hole_id', 'x_ft', 'y_ft' columns
+        default_pull_x: Default pull direction x-component
+        default_pull_y: Default pull direction y-component  
+        default_useability: Default difficulty rating (0-1)
+        default_is_foot: Whether hold is a foothold (0 or 1)
+    
+    Returns:
+        List of hold dictionaries matching the API schema
+    """
+    holds = []
+    
+    for idx, row in df.iterrows():
+        hold = {
+            "hold_index": int(row[index_col]),
+            "x": float(row[x_col]),
+            "y": float(row[y_col]),
+            "pull_x": default_pull_x,
+            "pull_y": default_pull_y,
+            "useability": default_useability,
+            "is_foot": int(row['is_foot'])
+        }
+        holds.append(hold)
+    
+    return holds
+
+def add_useability_features(wall_id, df_hold_diff):
+    """Add useability to holds. Requires the holds to be uploaded, and a correctly formatted climbs_df to extract climb difficulty data from."""
+    endpoint = f"{API_BASE_URL}/api/v1/walls/{wall_id}"
+    response = requests.get(endpoint,)
+    content = json.loads(response.text)
+    holds = content['holds']
+    for hold in holds:
+        try:
+            hold['useability'] = float(df_hold_diff.loc[float(hold['hold_index']),'difficulty_level'])
+        except:
+            continue
+    upload_holds(wall_id,holds)
+
+def upload_holds(wall_id: str, holds: list[dict], api_base_url: str = API_BASE_URL):
+    """
+    Upload holds to the API.
+    
+    Args:
+        wall_id: The wall ID to upload holds to
+        holds: List of hold dictionaries
+        api_base_url: Base URL of the API
+    
+    Returns:
+        Response JSON from the API
+    """
+    endpoint = f"{api_base_url}/api/v1/walls/{wall_id}/holds"
+    
+    # Prepare form data with JSON-encoded holds
+    form_data = {
+        "holds": json.dumps(holds)
+    }
+    
+    print(f"Uploading {len(holds)} holds to wall {wall_id}...")
+    print(f"Endpoint: {endpoint}")
+    
+    response = requests.put(endpoint, data=form_data)
+    
+    if response.status_code == 201:
+        print(f"✓ Successfully uploaded {len(holds)} holds!")
+        return response.json()
+    else:
+        print(f"✗ Upload failed with status {response.status_code}")
+        print(f"Error: {response.text}")
+        response.raise_for_status()
+
+def parse_frames_to_holdset(frames: str) -> dict:
+    """
+    Parse frames string to holdset dict.
+    
+    Format: "p{hold_idx}r{role}p{hold_idx}r{role}..."
+    Role mapping: 5=start, 6=hand, 7=finish, 8=foot
+    """
+
+    holdset = {
+        'start': [],
+        'finish': [],
+        'hand': [],
+        'foot': []
+    }
+    
+    # Find all p{int}r{int} patterns
+    pattern = r'p(\d+)r(\d+)'
+    matches = re.findall(pattern, frames)
+    
+    for p_str, role_str in matches:
+        p = int(p_str)
+        role = int(role_str)
+        if role in ROLE_MAP:
+            holdset[ROLE_MAP[role]].append(p)
+    
+    return holdset
+
+def flush_backup_holds(
+    wall_id: str,
+    backup_db_path: str = "data/storage.db",
+):
+    """Function for replacing holds with holds from the back-up DB. Use if you fuck up hold creation."""
+    with sqlite3.connect(backup_db_path) as conn:
+        df = pd.read_sql_query(
+            """
+            SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot
+            FROM holds
+            WHERE wall_id = ?
+            ORDER BY hold_index ASC
+            """,conn,
+            params=(wall_id,))
+    holds = []
+    for idx, row in df.iterrows():
+        hold = {
+            "hold_index": int(row['hold_index']),
+            "x": float(row['x']),
+            "y": float(row['y']),
+            "pull_x": float(row['pull_x']),
+            "pull_y": float(row['pull_y']),
+            "useability": float(row['useability']),
+            "is_foot": int(row['is_foot'])
+        }
+        holds.append(hold)
+    upload_holds(wall_id,holds)
+
+# ---------------------------------------------------------------
+#   Climb Upload Utilities
+# ---------------------------------------------------------------
+def upload_climbs_batch(
+    df: pd.DataFrame,
+    wall_id: str,
+    base_url: str = API_BASE_URL,
+    batch_size: int = 500,
+    verbose: bool = True,
+    try_one: bool = False
+) -> list[dict]:
+    """
+    Upload climbs from DataFrame to backend using batch endpoint.
+    
+    Args:
+        df: DataFrame with columns [uuid, angle, frames, difficulty_average, 
+            quality_average, ascensionist_count, fa_username, created_at]
+        wall_id: The wall ID to upload climbs to
+        base_url: Base URL of the API
+        batch_size: Number of climbs per batch request
+        verbose: Print progress updates
+        try_one: If True, only process the first row (for testing)
+    
+    Returns:
+        List of results with original uuid and response/error
+    """
+    endpoint = f"{base_url}/api/v1/walls/{wall_id}/climbs/batch"
+    results = []
+    
+    if try_one:
+        df = df.head(1)
+    
+    total = len(df)
+    
+    # Process in batches
+    for batch_start in range(0, total, batch_size):
+        batch_end = min(batch_start + batch_size, total)
+        batch_df = df.iloc[batch_start:batch_end]
+        
+        # Build payloads for this batch, tracking original uuids
+        climbs = []
+        batch_uuids = []
+        
+        for idx, row in batch_df.iterrows():
+            try:
+                # Parse frames to holdset
+                holdset = parse_frames_to_holdset(row['frames'])
+                
+                # Build payload (same logic as original)
+                payload = {
+                    'name': f"{row['name']}-{row['angle']}",
+                    'holdset': holdset,
+                    'angle': int(row['angle']),
+                    'grade': float(row['difficulty_average']),
+                    'quality': float(row['quality_average']),
+                    'ascents': int(row['ascensionist_count']),
+                    'setter_name': row.get('fa_username') if pd.notna(row.get('fa_username')) else None,
+                    'tags': None
+                }
+                
+                climbs.append(payload)
+                batch_uuids.append(row['name'])
+                
+            except Exception as e:
+                # If payload construction fails, record error immediately
+                results.append({
+                    'original_uuid': row['name'],
+                    'status': 'error',
+                    'error': f"Payload construction failed: {str(e)}"
+                })
+        
+        # Send batch request if we have climbs
+        if climbs:
+            try:
+                response = requests.post(endpoint, json={'climbs': climbs})
+                
+                if response.status_code == 201:
+                    batch_results = response.json()['results']
+                    
+                    # Map batch results back to per-row format
+                    for result in batch_results:
+                        idx = result['index']
+                        if result['status'] == 'success':
+                            results.append({
+                                'original_uuid': batch_uuids[idx],
+                                'new_id': result['id'],
+                                'status': 'success'
+                            })
+                        else:
+                            results.append({
+                                'original_uuid': batch_uuids[idx],
+                                'status': 'error',
+                                'error': result.get('error', 'Unknown error')
+                            })
+                else:
+                    # Entire batch request failed
+                    for uuid in batch_uuids:
+                        results.append({
+                            'original_uuid': uuid,
+                            'status': 'error',
+                            'error': f"Batch request failed: {response.text}"
+                        })
+                        
+            except Exception as e:
+                # Network/request error - mark all in batch as failed
+                for uuid in batch_uuids:
+                    results.append({
+                        'original_uuid': uuid,
+                        'status': 'error',
+                        'error': f"Request failed: {str(e)}"
+                    })
+        
+        # Progress update
+        if verbose:
+            success_count = sum(1 for r in results if r['status'] == 'success')
+            print(f"Progress: {len(results)}/{total} | Success: {success_count} | Errors: {len(results) - success_count}")
+    
+    return results

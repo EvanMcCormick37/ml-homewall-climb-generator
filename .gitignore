@@ -5,7 +5,6 @@
 *-data.json
 assets/
 boardlib/
-data/
 
 # Caches
 __pycache__
