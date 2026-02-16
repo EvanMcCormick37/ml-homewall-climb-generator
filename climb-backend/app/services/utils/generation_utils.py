@@ -423,8 +423,6 @@ class ClimbDDPMGenerator():
         idx = dists.argmin(dim=1)
         holds = self.holds_lookup[idx]
         holds = holds.reshape(B, S)
-
-        print(type(holds),type(roles))
         
         # Mask null holds to be role 4
         is_null = (holds == -1)
@@ -433,10 +431,23 @@ class ClimbDDPMGenerator():
         # Concatenate indices and roles
         climbs = np.stack([holds, roles], axis=2)
         
-        # Convert climbs into list[np.array] filtering on role != 4 
-        climbs = [c[c[:,1] != 4].tolist() for c in climbs]
-        
-        return climbs
+        deduped_climbs = []
+        for c in climbs:
+            # 2. Filter out null holds (role == 4)
+            valid_mask = c[:, 1] != 4
+            c_valid = c[valid_mask]
+
+            # 3. Sort by Role (column 1) ascending
+            # This ensures the lowest role-index comes first for any given hold
+            c_sorted = c_valid[c_valid[:, 1].argsort()]
+
+            # 4. Keep only the first occurrence of each Hold Index (column 0)
+            _, unique_indices = np.unique(c_sorted[:, 0], return_index=True)
+            
+            # 5. Extract results and convert to list
+            deduped_climbs.append(c_sorted[unique_indices].tolist())
+
+        return deduped_climbs
     
     def _projection_strength(self, t: Tensor, t_start_projection: float = 0.8):
         """Calculate the weight to assign to the projected holds based on the timestep."""
