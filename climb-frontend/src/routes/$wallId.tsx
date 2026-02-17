@@ -146,8 +146,8 @@ const FONT_OPTIONS = [
   "8c",
   "8c+",
 ];
-// --- Random Climb Name Generator ---
 
+// --- Random Climb Name Generator ---
 const ADJECTIVES = [
   "Angry",
   "Bold",
