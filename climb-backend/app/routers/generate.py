@@ -20,7 +20,7 @@ router = APIRouter()
 )
 def generate_climbs(
     wall_id: str,
-    num_climbs: int = Query(5, ge=1, le=50),
+    num_climbs: int = Query(5, ge=1, le=15),
     grade: str = Query("V4"),
     grade_scale: GradeScale = Query(GradeScale.V_GRADE),
     angle: int | None = Query(None, ge=0, le=90),

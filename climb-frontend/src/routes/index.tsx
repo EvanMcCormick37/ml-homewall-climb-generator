@@ -10,12 +10,16 @@ export const Route = createFileRoute("/")({
 const LINKS = [
   { label: "About me", href: "https://www.evmojo.dev" },
   {
-    label: "Github Repo",
+    label: "Github",
     href: "https://github.com/EvanMcCormick37/ml-homewall-climb-generator",
   },
   {
-    label: "Write-up (Substack)",
+    label: "Climb-LSTM Model Explained (Deprecated)",
     href: "https://evmojo37.substack.com/p/beta-zero-alpha-can-ai-set-climbs",
+  },
+  {
+    label: "Climb-DDPM Model Explained",
+    href: "https://evmojo37.substack.com/p/betazero-v2-a-diffusion-model-for",
   },
 ];
 
@@ -32,7 +36,7 @@ function HomePage() {
           {/* Welcome text */}
           <p className="text-zinc-400 max-w-md">
             Welcome to BetaZero, a public resource for generating board climbs
-            using ML techniques.
+            using machine learning.
           </p>
 
           {/* External links */}

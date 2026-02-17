@@ -9,13 +9,30 @@ import {
   Settings,
   Pencil,
   RotateCcw,
+  Link,
+  Check,
+  Share2,
+  Image,
 } from "lucide-react";
-import type { WallDetail, HoldDetail, Holdset, GenerateRequest } from "@/types";
+import type {
+  WallDetail,
+  HoldDetail,
+  Holdset,
+  GenerateRequest,
+  GradeScale,
+} from "@/types";
 
 // --- Route Definition ---
 
+interface ClimbSearchParams {
+  climb?: string;
+}
+
 export const Route = createFileRoute("/$wallId")({
   component: GeneratePage,
+  validateSearch: (search: Record<string, unknown>): ClimbSearchParams => ({
+    climb: typeof search.climb === "string" ? search.climb : undefined,
+  }),
   loader: async ({ params }) => {
     const wall = await getWall(params.wallId);
     return { wall };
@@ -23,7 +40,6 @@ export const Route = createFileRoute("/$wallId")({
 });
 
 // --- Hold category types (from create.tsx) ---
-
 type HoldCategory = "hand" | "foot" | "start" | "finish";
 
 const CATEGORY_ORDER: HoldCategory[] = ["hand", "foot", "start", "finish"];
@@ -46,7 +62,6 @@ const CATEGORY_LABELS: Record<HoldCategory, string> = {
 const HOLD_STROKE_COLOR = "#00b679";
 
 // --- Display settings types ---
-
 type ColorMode = "role" | "uniform";
 
 interface DisplaySettings {
@@ -59,15 +74,14 @@ interface DisplaySettings {
 
 const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   scale: 2.0,
-  colorMode: "uniform",
+  colorMode: "role",
   uniformColor: "#3b82f6",
   opacity: 0.6,
   filled: true,
 };
 
 // --- V-grade options ---
-
-const GRADE_OPTIONS = [
+const VGRADE_OPTIONS = [
   "V0",
   "V1",
   "V2",
@@ -87,6 +101,32 @@ const GRADE_OPTIONS = [
   "V16",
 ];
 
+const FONT_OPTIONS = [
+  "4a",
+  "4b",
+  "4c",
+  "5a",
+  "5b",
+  "5c",
+  "6a",
+  "6a+",
+  "6b",
+  "6b+",
+  "6c",
+  "6c+",
+  "7a",
+  "7a+",
+  "7b",
+  "7b+",
+  "7c",
+  "7c+",
+  "8a",
+  "8a+",
+  "8b",
+  "8b+",
+  "8c",
+  "8c+",
+];
 // --- Random Climb Name Generator ---
 
 const ADJECTIVES = [
@@ -158,6 +198,220 @@ function generateClimbName(): string {
 interface NamedHoldset {
   name: string;
   holdset: Holdset;
+}
+
+// ============================================================
+// --- Sharing utilities ---
+// ============================================================
+
+/** Encode a named holdset into a compact base64 URL-safe string. */
+function encodeClimbToParam(entry: NamedHoldset): string {
+  // Compact representation: {n: name, s: start, f: finish, h: hand, t: foot}
+  const compact = {
+    n: entry.name,
+    s: entry.holdset.start,
+    f: entry.holdset.finish,
+    h: entry.holdset.hand,
+    t: entry.holdset.foot,
+  };
+  const json = JSON.stringify(compact);
+  // btoa with URI-safe substitutions
+  const b64 = btoa(json)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  return b64;
+}
+
+/** Decode a base64 URL-safe string back to a NamedHoldset, or null on failure. */
+function decodeClimbFromParam(param: string): NamedHoldset | null {
+  try {
+    // Restore standard base64
+    let b64 = param.replace(/-/g, "+").replace(/_/g, "/");
+    // Re-pad
+    while (b64.length % 4 !== 0) b64 += "=";
+    const json = atob(b64);
+    const compact = JSON.parse(json);
+    if (!compact || typeof compact.n !== "string") return null;
+    return {
+      name: compact.n,
+      holdset: {
+        start: Array.isArray(compact.s) ? compact.s : [],
+        finish: Array.isArray(compact.f) ? compact.f : [],
+        hand: Array.isArray(compact.h) ? compact.h : [],
+        foot: Array.isArray(compact.t) ? compact.t : [],
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Build a shareable URL for the current climb. */
+function buildShareUrl(wallId: string, entry: NamedHoldset): string {
+  const encoded = encodeClimbToParam(entry);
+  const base = `${window.location.origin}/${wallId}`;
+  return `${base}?climb=${encoded}`;
+}
+
+// ============================================================
+// --- Export canvas renderer ---
+// ============================================================
+
+/**
+ * Render a high-quality export image onto an offscreen canvas and return it as
+ * a Blob. The image includes the wall photo, highlighted holds, a title bar
+ * with the climb name, and a small legend.
+ */
+async function renderExportImage(
+  wallId: string,
+  wallName: string,
+  holds: HoldDetail[],
+  wallDimensions: { width: number; height: number },
+  holdset: Holdset,
+  climbName: string,
+  displaySettings: DisplaySettings,
+): Promise<Blob> {
+  // Load image
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new window.Image();
+    el.crossOrigin = "anonymous";
+    el.onload = () => resolve(el);
+    el.onerror = reject;
+    el.src = getWallPhotoUrl(wallId);
+  });
+
+  const imgW = img.width;
+  const imgH = img.height;
+
+  // Banner heights
+  const topBannerH = Math.round(imgH * 0.06);
+  const bottomBannerH = Math.round(imgH * 0.045);
+  const totalH = imgH + topBannerH + bottomBannerH;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = imgW;
+  canvas.height = totalH;
+  const ctx = canvas.getContext("2d")!;
+
+  // Background
+  ctx.fillStyle = "#09090b";
+  ctx.fillRect(0, 0, imgW, totalH);
+
+  // --- Top banner: climb name ---
+  ctx.fillStyle = "#18181b";
+  ctx.fillRect(0, 0, imgW, topBannerH);
+  ctx.fillStyle = "#f4f4f5";
+  ctx.font = `bold ${Math.round(topBannerH * 0.55)}px sans-serif`;
+  ctx.textBaseline = "middle";
+  ctx.fillText(climbName, Math.round(imgW * 0.02), topBannerH / 2);
+
+  // Wall name on the right
+  ctx.fillStyle = "#71717a";
+  ctx.font = `${Math.round(topBannerH * 0.4)}px sans-serif`;
+  ctx.textAlign = "right";
+  ctx.fillText(wallName, imgW - Math.round(imgW * 0.02), topBannerH / 2);
+  ctx.textAlign = "left";
+
+  // --- Wall image ---
+  ctx.drawImage(img, 0, topBannerH);
+
+  // --- Draw holds ---
+  const startSet = new Set(holdset.start);
+  const finishSet = new Set(holdset.finish);
+  const handSet = new Set(holdset.hand);
+  const footSet = new Set(holdset.foot);
+  const usedSet = new Set([...startSet, ...finishSet, ...handSet, ...footSet]);
+
+  const {
+    scale: userScale,
+    colorMode,
+    uniformColor,
+    opacity: userOpacity,
+    filled,
+  } = displaySettings;
+
+  holds.forEach((hold) => {
+    const px = (hold.x / wallDimensions.width) * imgW;
+    const py = (1 - hold.y / wallDimensions.height) * imgH + topBannerH;
+    const baseScale = imgH / 1000;
+    const radius = 10 * baseScale * userScale;
+
+    const isUsed = usedSet.has(hold.hold_index);
+    const isStart = startSet.has(hold.hold_index);
+    const isFinish = finishSet.has(hold.hold_index);
+    const isHand = handSet.has(hold.hold_index);
+    const isFoot = footSet.has(hold.hold_index);
+
+    const baseAlpha = isUsed ? 1 : 0.15;
+    const alpha = isUsed ? baseAlpha * userOpacity : baseAlpha;
+
+    let color = HOLD_STROKE_COLOR;
+    if (isUsed) {
+      if (colorMode === "uniform") {
+        color = uniformColor;
+      } else {
+        if (isStart) color = CATEGORY_COLORS.start;
+        else if (isFinish) color = CATEGORY_COLORS.finish;
+        else if (isHand) color = CATEGORY_COLORS.hand;
+        else if (isFoot) color = CATEGORY_COLORS.foot;
+      }
+    }
+
+    const footScale = isFoot ? 0.5 : 1;
+
+    ctx.beginPath();
+    ctx.arc(px, py, radius * footScale, 0, 2 * Math.PI);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = isUsed ? baseScale * 2 : 2;
+
+    if (isUsed && filled) {
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+
+  // --- Bottom banner: legend ---
+  const legendY = topBannerH + imgH;
+  ctx.fillStyle = "#18181b";
+  ctx.fillRect(0, legendY, imgW, bottomBannerH);
+
+  const legendFont = Math.round(bottomBannerH * 0.45);
+  ctx.font = `${legendFont}px sans-serif`;
+  ctx.textBaseline = "middle";
+  const legendMidY = legendY + bottomBannerH / 2;
+  const dotR = Math.round(bottomBannerH * 0.15);
+  const pad = Math.round(imgW * 0.02);
+
+  const legendItems = [
+    { label: "Start", color: CATEGORY_COLORS.start },
+    { label: "Finish", color: CATEGORY_COLORS.finish },
+    { label: "Hand", color: CATEGORY_COLORS.hand },
+    { label: "Foot", color: CATEGORY_COLORS.foot },
+  ];
+
+  let cursorX = pad;
+  for (const item of legendItems) {
+    ctx.fillStyle = item.color;
+    ctx.beginPath();
+    ctx.arc(cursorX + dotR, legendMidY, dotR, 0, 2 * Math.PI);
+    ctx.fill();
+    cursorX += dotR * 2 + 6;
+    ctx.fillStyle = "#a1a1aa";
+    ctx.fillText(item.label, cursorX, legendMidY);
+    cursorX += ctx.measureText(item.label).width + pad;
+  }
+
+  // Convert to blob
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))),
+      "image/png",
+    );
+  });
 }
 
 // --- Display Settings Panel ---
@@ -404,6 +658,12 @@ interface EditPanelProps {
   editing: boolean;
   onToggleEditing: () => void;
   onReset: () => void;
+  onExportImage: () => void;
+  onCopyLink: () => void;
+  onNativeShare: () => void;
+  isExporting: boolean;
+  linkCopied: boolean;
+  hasNativeShare: boolean;
   holdset: Holdset | null;
   climbName: string;
 }
@@ -412,6 +672,12 @@ function EditPanel({
   editing,
   onToggleEditing,
   onReset,
+  onExportImage,
+  onCopyLink,
+  onNativeShare,
+  isExporting,
+  linkCopied,
+  hasNativeShare,
   holdset,
   climbName,
 }: EditPanelProps) {
@@ -530,6 +796,61 @@ function EditPanel({
               Reset to Generated
             </button>
           )}
+
+          {/* ---- Share / Export section ---- */}
+          <div className="pt-2 border-t border-zinc-800 space-y-2">
+            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              Share
+            </h3>
+
+            {/* Copy shareable link */}
+            <button
+              onClick={onCopyLink}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg transition-colors text-sm"
+            >
+              {linkCopied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-emerald-400">Link Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Link className="w-3.5 h-3.5" />
+                  Copy Link
+                </>
+              )}
+            </button>
+
+            {/* Export as image */}
+            <button
+              onClick={onExportImage}
+              disabled={isExporting}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 font-medium rounded-lg transition-colors text-sm"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Rendering...
+                </>
+              ) : (
+                <>
+                  <Image className="w-3.5 h-3.5" />
+                  Save Image
+                </>
+              )}
+            </button>
+
+            {/* Native share (mobile) */}
+            {hasNativeShare && (
+              <button
+                onClick={onNativeShare}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-medium rounded-lg transition-colors text-sm"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                Share...
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -610,7 +931,7 @@ function WallCanvas({
 
   // Load image
   useEffect(() => {
-    const img = new Image();
+    const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       setImage(img);
@@ -791,7 +1112,9 @@ function WallCanvas({
   );
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    // Only pan while primary mouse button is held
     if (e.buttons !== 1) return;
+
     const dx = e.clientX - panDragRef.current.startX;
     const dy = e.clientY - panDragRef.current.startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
@@ -883,6 +1206,7 @@ function WallCanvas({
 function GeneratePage() {
   const navigate = useNavigate();
   const { wall } = Route.useLoaderData() as { wall: WallDetail };
+  const { climb: climbParam } = Route.useSearch();
   const wallId = wall.metadata.id;
   const wallDimensions = {
     width: wall.metadata.dimensions[0],
@@ -895,8 +1219,11 @@ function GeneratePage() {
   });
 
   // Generation form state
+  const [gradingScale, setGradingScale] = useState<GradeScale>("v_grade");
+  const [gradeOptions, setGradeOptions] = useState(VGRADE_OPTIONS);
+
   const [numClimbs, setNumClimbs] = useState(5);
-  const [grade, setGrade] = useState("V4");
+  const [grade, setGrade] = useState<string | null>(null);
   const [angle, setAngle] = useState<number | null>(null);
   const [deterministic, setDeterministic] = useState(false);
 
@@ -914,12 +1241,34 @@ function GeneratePage() {
 
   // Edit mode state
   const [editing, setEditing] = useState(false);
-  // Store the original generated holdsets so reset works
   const originalHoldsetsRef = useRef<Holdset[]>([]);
+
+  // Share state
+  const [isExporting, setIsExporting] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const hasNativeShare = typeof navigator !== "undefined" && !!navigator.share;
 
   const selectedClimb =
     selectedIndex !== null ? generatedClimbs[selectedIndex] : null;
   const selectedHoldset = selectedClimb?.holdset ?? null;
+
+  // --- Load shared climb from URL on mount ---
+  useEffect(() => {
+    if (!climbParam) return;
+    const decoded = decodeClimbFromParam(climbParam);
+    if (!decoded) return;
+
+    setGeneratedClimbs([decoded]);
+    originalHoldsetsRef.current = [
+      {
+        start: [...decoded.holdset.start],
+        finish: [...decoded.holdset.finish],
+        hand: [...decoded.holdset.hand],
+        foot: [...decoded.holdset.foot],
+      },
+    ];
+    setSelectedIndex(0);
+  }, []); // Only on mount
 
   const handleImageLoad = useCallback(
     (dimensions: { width: number; height: number }) => {
@@ -935,8 +1284,8 @@ function GeneratePage() {
 
     const request: GenerateRequest = {
       num_climbs: numClimbs,
-      grade,
-      grade_scale: "v_grade",
+      grade: grade ?? gradeOptions[0],
+      grade_scale: gradingScale,
       angle: angle ?? wall.metadata.angle,
       deterministic,
     };
@@ -959,6 +1308,13 @@ function GeneratePage() {
       } else {
         setSelectedIndex(null);
       }
+      // Clear any shared-climb param from URL after generating new ones
+      navigate({
+        to: "/$wallId",
+        params: { wallId },
+        search: {},
+        replace: true,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Generation failed";
       setError(message);
@@ -966,7 +1322,17 @@ function GeneratePage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [wallId, numClimbs, grade, deterministic, wall.metadata.angle, angle]);
+  }, [
+    wallId,
+    numClimbs,
+    grade,
+    gradingScale,
+    gradeOptions,
+    deterministic,
+    wall.metadata.angle,
+    angle,
+    navigate,
+  ]);
 
   // Toggle editing mode
   const handleToggleEditing = useCallback(() => {
@@ -995,6 +1361,89 @@ function GeneratePage() {
       ),
     );
   }, [selectedIndex]);
+
+  // --- Share: Copy link ---
+  const handleCopyLink = useCallback(() => {
+    if (!selectedClimb) return;
+    const url = buildShareUrl(wallId, selectedClimb);
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  }, [wallId, selectedClimb]);
+
+  // --- Share: Export image ---
+  const handleExportImage = useCallback(async () => {
+    if (!selectedClimb) return;
+    setIsExporting(true);
+    try {
+      const blob = await renderExportImage(
+        wallId,
+        wall.metadata.name,
+        wall.holds ?? [],
+        wallDimensions,
+        selectedClimb.holdset,
+        selectedClimb.name,
+        displaySettings,
+      );
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${selectedClimb.name.replace(/\s+/g, "_")}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [wallId, wall, wallDimensions, selectedClimb, displaySettings]);
+
+  // --- Share: Native share API (mobile) ---
+  const handleNativeShare = useCallback(async () => {
+    if (!selectedClimb) return;
+    try {
+      const blob = await renderExportImage(
+        wallId,
+        wall.metadata.name,
+        wall.holds ?? [],
+        wallDimensions,
+        selectedClimb.holdset,
+        selectedClimb.name,
+        displaySettings,
+      );
+      const file = new File(
+        [blob],
+        `${selectedClimb.name.replace(/\s+/g, "_")}.png`,
+        { type: "image/png" },
+      );
+      const url = buildShareUrl(wallId, selectedClimb);
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: selectedClimb.name,
+          text: `Check out this climb: ${selectedClimb.name}`,
+          url,
+          files: [file],
+        });
+      } else {
+        // Fallback: share without image
+        await navigator.share({
+          title: selectedClimb.name,
+          text: `Check out this climb: ${selectedClimb.name}`,
+          url,
+        });
+      }
+    } catch (err) {
+      // User cancelled share or not supported — silent
+      if ((err as Error).name !== "AbortError") {
+        console.error("Share failed:", err);
+      }
+    }
+  }, [wallId, wall, wallDimensions, selectedClimb, displaySettings]);
 
   // Handle hold click for editing (cycle through categories like create.tsx)
   const handleHoldClick = useCallback(
@@ -1102,6 +1551,42 @@ function GeneratePage() {
               Parameters
             </h2>
 
+            {/* Grade toggle */}
+            <div>
+              <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
+                Grading Scale
+              </label>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => {
+                    setGradingScale("v_grade");
+                    setGradeOptions(VGRADE_OPTIONS);
+                    setGrade("V0");
+                  }}
+                  className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                    gradingScale === "v_grade"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  V-grade
+                </button>
+                <button
+                  onClick={() => {
+                    setGradingScale("font");
+                    setGradeOptions(FONT_OPTIONS);
+                    setGrade("4a");
+                  }}
+                  className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                    gradingScale === "font"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Fontainebleau
+                </button>
+              </div>
+            </div>
             {/* Grade */}
             <div>
               <label className="text-xs text-zinc-500 block mb-1">
@@ -1112,7 +1597,7 @@ function GeneratePage() {
                 onChange={(e) => setGrade(e.target.value)}
                 className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
               >
-                {GRADE_OPTIONS.map((g) => (
+                {gradeOptions.map((g) => (
                   <option key={g} value={g}>
                     {g}
                   </option>
@@ -1128,11 +1613,11 @@ function GeneratePage() {
               <input
                 type="number"
                 min={1}
-                max={50}
+                max={15}
                 value={numClimbs}
                 onChange={(e) =>
                   setNumClimbs(
-                    Math.max(1, Math.min(50, parseInt(e.target.value) || 1)),
+                    Math.max(1, Math.min(15, parseInt(e.target.value) || 1)),
                   )
                 }
                 className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
@@ -1260,6 +1745,12 @@ function GeneratePage() {
           editing={editing}
           onToggleEditing={handleToggleEditing}
           onReset={handleResetHoldset}
+          onExportImage={handleExportImage}
+          onCopyLink={handleCopyLink}
+          onNativeShare={handleNativeShare}
+          isExporting={isExporting}
+          linkCopied={linkCopied}
+          hasNativeShare={hasNativeShare}
           holdset={selectedHoldset}
           climbName={selectedClimb?.name ?? ""}
         />
