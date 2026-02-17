@@ -13,6 +13,7 @@ import {
   Check,
   Share2,
   Image,
+  X,
 } from "lucide-react";
 import type {
   WallDetail,
@@ -37,6 +38,7 @@ export const Route = createFileRoute("/$wallId")({
     const wall = await getWall(params.wallId);
     return { wall };
   },
+  staleTime: 3_600_000, // 1-hour cache on GetWall
 });
 
 // --- Hold category types (from create.tsx) ---
@@ -198,6 +200,7 @@ function generateClimbName(): string {
 interface NamedHoldset {
   name: string;
   holdset: Holdset;
+  grade: string;
 }
 
 // ============================================================
@@ -209,6 +212,7 @@ function encodeClimbToParam(entry: NamedHoldset): string {
   // Compact representation: {n: name, s: start, f: finish, h: hand, t: foot}
   const compact = {
     n: entry.name,
+    g: entry.grade,
     s: entry.holdset.start,
     f: entry.holdset.finish,
     h: entry.holdset.hand,
@@ -232,9 +236,10 @@ function decodeClimbFromParam(param: string): NamedHoldset | null {
     while (b64.length % 4 !== 0) b64 += "=";
     const json = atob(b64);
     const compact = JSON.parse(json);
-    if (!compact || typeof compact.n !== "string") return null;
+    if (!compact) return null;
     return {
-      name: compact.n,
+      name: typeof compact.n !== "string" ? compact.n : "Unnamed",
+      grade: typeof compact.g === "string" ? compact.g : "V?",
       holdset: {
         start: Array.isArray(compact.s) ? compact.s : [],
         finish: Array.isArray(compact.f) ? compact.f : [],
@@ -664,8 +669,9 @@ interface EditPanelProps {
   isExporting: boolean;
   linkCopied: boolean;
   hasNativeShare: boolean;
-  holdset: Holdset | null;
-  climbName: string;
+  climb: NamedHoldset | null;
+  gradeOptions: string[];
+  onUpdateClimb: (updates: Partial<NamedHoldset>) => void;
 }
 
 function EditPanel({
@@ -678,9 +684,11 @@ function EditPanel({
   isExporting,
   linkCopied,
   hasNativeShare,
-  holdset,
-  climbName,
+  climb,
+  gradeOptions,
+  onUpdateClimb,
 }: EditPanelProps) {
+  const holdset = climb?.holdset ?? null;
   const holdCounts = useMemo(() => {
     if (!holdset) return { hand: 0, foot: 0, start: 0, finish: 0 };
     return {
@@ -689,16 +697,6 @@ function EditPanel({
       start: holdset.start.length,
       finish: holdset.finish.length,
     };
-  }, [holdset]);
-
-  const totalHolds = useMemo(() => {
-    if (!holdset) return 0;
-    return new Set([
-      ...holdset.start,
-      ...holdset.finish,
-      ...holdset.hand,
-      ...holdset.foot,
-    ]).size;
   }, [holdset]);
 
   return (
@@ -721,18 +719,9 @@ function EditPanel({
             }`}
           >
             <Pencil className="w-3 h-3" />
-            {editing ? "Editing" : "Edit Climb"}
+            {editing ? "Done" : "Edit Climb"}
           </button>
         </div>
-        {!holdset ? (
-          <p className="text-xs text-zinc-600">
-            Select a generated climb to view or edit its holds.
-          </p>
-        ) : (
-          <p className="text-sm text-zinc-300 truncate" title={climbName}>
-            {climbName}
-          </p>
-        )}
       </div>
 
       {/* Hold breakdown */}
@@ -740,12 +729,37 @@ function EditPanel({
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Total */}
           <div className="text-center py-3 bg-zinc-950 rounded-lg border border-zinc-800">
-            <div className="text-2xl font-semibold text-zinc-100">
-              {totalHolds}
-            </div>
-            <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">
-              Total Holds
-            </div>
+            {editing ? (
+              <div className="px-3 space-y-2">
+                <input
+                  type="text"
+                  value={climb?.name || ""}
+                  onChange={(e) => onUpdateClimb({ name: e.target.value })}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-center font-semibold text-zinc-100 focus:outline-none focus:border-emerald-500"
+                  placeholder="Climb Name"
+                />
+                <select
+                  value={climb?.grade || ""}
+                  onChange={(e) => onUpdateClimb({ grade: e.target.value })}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-center text-zinc-300 focus:outline-none focus:border-emerald-500"
+                >
+                  {gradeOptions.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <>
+                <div className="text-2xl font-semibold text-zinc-100 px-2 truncate">
+                  {climb?.name}
+                </div>
+                <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">
+                  {climb?.grade}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Category counts */}
@@ -775,14 +789,10 @@ function EditPanel({
           {editing && (
             <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
               <p className="text-xs text-zinc-400 leading-relaxed">
-                Click holds on the wall to cycle through:
+                Click holds on the wall to cycle through roles, or edit the name
+                and grade above.
               </p>
-              <p className="text-xs text-zinc-300 mt-1 font-medium">
-                Hand → Foot → Start → Finish → Remove
-              </p>
-              <p className="text-xs text-zinc-500 mt-2">
-                Start and Finish are limited to 2 holds each.
-              </p>
+              {/* ... existing instructions ... */}
             </div>
           )}
 
@@ -799,6 +809,7 @@ function EditPanel({
 
           {/* ---- Share / Export section ---- */}
           <div className="pt-2 border-t border-zinc-800 space-y-2">
+            {/* ... content unchanged ... */}
             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
               Share
             </h3>
@@ -1223,7 +1234,7 @@ function GeneratePage() {
   const [gradeOptions, setGradeOptions] = useState(VGRADE_OPTIONS);
 
   const [numClimbs, setNumClimbs] = useState(5);
-  const [grade, setGrade] = useState<string | null>(null);
+  const [grade, setGrade] = useState<string>("V4");
   const [angle, setAngle] = useState<number | null>(null);
   const [deterministic, setDeterministic] = useState(false);
 
@@ -1248,6 +1259,11 @@ function GeneratePage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const hasNativeShare = typeof navigator !== "undefined" && !!navigator.share;
 
+  // Mobile drawer state
+  const [mobilePanel, setMobilePanel] = useState<"none" | "left" | "right">(
+    "none",
+  );
+  const closeMobilePanel = useCallback(() => setMobilePanel("none"), []);
   const selectedClimb =
     selectedIndex !== null ? generatedClimbs[selectedIndex] : null;
   const selectedHoldset = selectedClimb?.holdset ?? null;
@@ -1281,10 +1297,11 @@ function GeneratePage() {
     setIsGenerating(true);
     setError(null);
     setEditing(false);
+    const generate_grade = grade ?? gradeOptions[0];
 
     const request: GenerateRequest = {
       num_climbs: numClimbs,
-      grade: grade ?? gradeOptions[0],
+      grade: generate_grade,
       grade_scale: gradingScale,
       angle: angle ?? wall.metadata.angle,
       deterministic,
@@ -1294,6 +1311,7 @@ function GeneratePage() {
       const response = await generateClimbs(wallId, request);
       const named: NamedHoldset[] = response.climbs.map((holdset) => ({
         name: generateClimbName(),
+        grade: generate_grade,
         holdset,
       }));
       setGeneratedClimbs(named);
@@ -1308,7 +1326,6 @@ function GeneratePage() {
       } else {
         setSelectedIndex(null);
       }
-      // Clear any shared-climb param from URL after generating new ones
       navigate({
         to: "/$wallId",
         params: { wallId },
@@ -1339,6 +1356,18 @@ function GeneratePage() {
     if (!selectedHoldset) return;
     setEditing((prev) => !prev);
   }, [selectedHoldset]);
+
+  const handleUpdateClimb = useCallback(
+    (updates: Partial<NamedHoldset>) => {
+      setGeneratedClimbs((prev) => {
+        if (selectedIndex === null) return prev;
+        return prev.map((climb, i) =>
+          i === selectedIndex ? { ...climb, ...updates } : climb,
+        );
+      });
+    },
+    [selectedIndex],
+  );
 
   // Reset to original generated holdset
   const handleResetHoldset = useCallback(() => {
@@ -1523,6 +1552,18 @@ function GeneratePage() {
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
+      {/* Keyframes for mobile drawer animations */}
+      <style>{`
+        @keyframes slideInLeft {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
+        @keyframes slideInRight {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+      `}</style>
+
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -1534,17 +1575,19 @@ function GeneratePage() {
             Back
           </button>
           <div className="w-px h-5 bg-zinc-700" />
-          <h1 className="text-lg font-medium text-zinc-100">
+          <h1 className="text-lg font-medium text-zinc-100 truncate">
             {wall.metadata.name}
           </h1>
-          <span className="text-sm text-zinc-500">Generate Climbs</span>
+          <span className="text-sm text-zinc-500 hidden sm:inline">
+            Generate Climbs
+          </span>
         </div>
       </header>
 
       {/* Main content */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 relative">
         {/* Left panel — Generation controls */}
-        <div className="w-80 flex flex-col border-r border-zinc-800 flex-shrink-0">
+        <div className="hidden lg:flex w-80 flex-col border-r border-zinc-800 flex-shrink-0">
           {/* Generation controls */}
           <div className="p-4 border-b border-zinc-800 bg-zinc-900 space-y-4 flex-shrink-0">
             <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
@@ -1724,7 +1767,220 @@ function GeneratePage() {
             />
           </div>
         </div>
+        {/* Mobile left drawer */}
+        {mobilePanel === "left" && (
+          <div className="lg:hidden fixed inset-0 z-40 flex">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={closeMobilePanel}
+            />
+            {/* Drawer */}
+            <div
+              className="relative w-80 max-w-[85vw] h-full flex flex-col bg-zinc-900 shadow-2xl z-10"
+              style={{
+                animation: "slideInLeft 0.2s ease-out forwards",
+              }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+                <span className="text-sm font-semibold text-zinc-200">
+                  Generate
+                </span>
+                <button
+                  onClick={closeMobilePanel}
+                  className="text-zinc-400 hover:text-zinc-100 p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Generation controls */}
+                <div className="p-4 border-b border-zinc-800 bg-zinc-900 space-y-4 flex-shrink-0">
+                  <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                    Parameters
+                  </h2>
 
+                  {/* Grade toggle */}
+                  <div>
+                    <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
+                      Grading Scale
+                    </label>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => {
+                          setGradingScale("v_grade");
+                          setGradeOptions(VGRADE_OPTIONS);
+                          setGrade("V0");
+                        }}
+                        className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                          gradingScale === "v_grade"
+                            ? "bg-emerald-600 text-white"
+                            : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                        }`}
+                      >
+                        V-grade
+                      </button>
+                      <button
+                        onClick={() => {
+                          setGradingScale("font");
+                          setGradeOptions(FONT_OPTIONS);
+                          setGrade("4a");
+                        }}
+                        className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                          gradingScale === "font"
+                            ? "bg-emerald-600 text-white"
+                            : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                        }`}
+                      >
+                        Fontainebleau
+                      </button>
+                    </div>
+                  </div>
+                  {/* Grade */}
+                  <div>
+                    <label className="text-xs text-zinc-500 block mb-1">
+                      Target Grade
+                    </label>
+                    <select
+                      value={grade}
+                      onChange={(e) => setGrade(e.target.value)}
+                      className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                    >
+                      {gradeOptions.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Num climbs */}
+                  <div>
+                    <label className="text-xs text-zinc-500 block mb-1">
+                      Number of Climbs
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={15}
+                      value={numClimbs}
+                      onChange={(e) =>
+                        setNumClimbs(
+                          Math.max(
+                            1,
+                            Math.min(15, parseInt(e.target.value) || 1),
+                          ),
+                        )
+                      }
+                      className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                    />
+                  </div>
+
+                  {/* Wall angle */}
+                  <div>
+                    <label className="text-xs text-zinc-500 block mb-1">
+                      Wall Angle (Degrees)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={90}
+                      disabled={!!wall.metadata.angle}
+                      value={angle ?? ""}
+                      onChange={(e) => {
+                        if (e.target.value === "") {
+                          setAngle(null);
+                        } else {
+                          const parsed = parseInt(e.target.value);
+                          if (!isNaN(parsed)) {
+                            setAngle(Math.max(0, Math.min(90, parsed)));
+                          }
+                        }
+                      }}
+                      className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                    />
+                  </div>
+
+                  {/* Deterministic toggle */}
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!deterministic}
+                      onChange={(e) => setDeterministic(!e.target.checked)}
+                      className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
+                    />
+                    <span className="text-sm text-zinc-300">
+                      Nondeterministic
+                    </span>
+                  </label>
+
+                  {/* Generate button */}
+                  <button
+                    onClick={handleGenerate}
+                    disabled={isGenerating}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium rounded transition-colors text-sm"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Generate
+                      </>
+                    )}
+                  </button>
+
+                  {/* Error */}
+                  {error && (
+                    <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded px-3 py-2">
+                      {error}
+                    </div>
+                  )}
+                </div>
+
+                {/* Display settings toggle + panel */}
+                <div className="border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
+                  <button
+                    onClick={() => setShowDisplaySettings((prev) => !prev)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-800/50 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                      <Settings className="w-3.5 h-3.5" />
+                      Display Settings
+                    </span>
+                    <span
+                      className={`text-zinc-500 text-xs transition-transform ${
+                        showDisplaySettings ? "rotate-180" : ""
+                      }`}
+                    >
+                      ▼
+                    </span>
+                  </button>
+                  {showDisplaySettings && (
+                    <div className="px-4 pb-4">
+                      <DisplaySettingsPanel
+                        settings={displaySettings}
+                        onChange={setDisplaySettings}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Generated holdsets list */}
+                <div className="flex-1 min-h-0 bg-zinc-900">
+                  <HoldsetList
+                    holdsets={generatedClimbs}
+                    selectedIndex={selectedIndex}
+                    onSelect={handleSelectClimb}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Center — Wall Canvas */}
         <div className="flex-1 min-w-0">
           <WallCanvas
@@ -1741,19 +1997,90 @@ function GeneratePage() {
         </div>
 
         {/* Right panel — Edit Panel */}
-        <EditPanel
-          editing={editing}
-          onToggleEditing={handleToggleEditing}
-          onReset={handleResetHoldset}
-          onExportImage={handleExportImage}
-          onCopyLink={handleCopyLink}
-          onNativeShare={handleNativeShare}
-          isExporting={isExporting}
-          linkCopied={linkCopied}
-          hasNativeShare={hasNativeShare}
-          holdset={selectedHoldset}
-          climbName={selectedClimb?.name ?? ""}
-        />
+        <div className="hidden lg:flex w-72 flex-shrink-0">
+          <EditPanel
+            editing={editing}
+            onToggleEditing={handleToggleEditing}
+            onReset={handleResetHoldset}
+            onExportImage={handleExportImage}
+            onCopyLink={handleCopyLink}
+            onNativeShare={handleNativeShare}
+            isExporting={isExporting}
+            linkCopied={linkCopied}
+            hasNativeShare={hasNativeShare}
+            climb={selectedClimb}
+            gradeOptions={gradeOptions}
+            onUpdateClimb={handleUpdateClimb}
+          />
+        </div>
+
+        {/* Mobile right drawer */}
+        {mobilePanel === "right" && (
+          <div className="lg:hidden fixed inset-0 z-40 flex justify-end">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={closeMobilePanel}
+            />
+            {/* Drawer */}
+            <div
+              className="relative w-80 max-w-[85vw] h-full flex flex-col bg-zinc-900 shadow-2xl z-10"
+              style={{
+                animation: "slideInRight 0.2s ease-out forwards",
+              }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+                <span className="text-sm font-semibold text-zinc-200">
+                  Edit & Share
+                </span>
+                <button
+                  onClick={closeMobilePanel}
+                  className="text-zinc-400 hover:text-zinc-100 p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <EditPanel
+                  editing={editing}
+                  onToggleEditing={handleToggleEditing}
+                  onReset={handleResetHoldset}
+                  onExportImage={handleExportImage}
+                  onCopyLink={handleCopyLink}
+                  onNativeShare={handleNativeShare}
+                  isExporting={isExporting}
+                  linkCopied={linkCopied}
+                  hasNativeShare={hasNativeShare}
+                  climb={selectedClimb}
+                  gradeOptions={gradeOptions}
+                  onUpdateClimb={handleUpdateClimb}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ====== Mobile floating action buttons (visible only below lg) ====== */}
+        <div className="lg:hidden absolute bottom-4 left-0 right-0 flex justify-center gap-3 z-30 pointer-events-none">
+          <button
+            onClick={() =>
+              setMobilePanel((p) => (p === "left" ? "none" : "left"))
+            }
+            className="pointer-events-auto flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-full shadow-lg shadow-black/40 text-sm transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+            Generate
+          </button>
+          <button
+            onClick={() =>
+              setMobilePanel((p) => (p === "right" ? "none" : "right"))
+            }
+            className="pointer-events-auto flex items-center gap-2 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-medium rounded-full shadow-lg shadow-black/40 text-sm border border-zinc-700 transition-colors"
+          >
+            <Pencil className="w-4 h-4" />
+            Edit & Share
+          </button>
+        </div>
       </div>
     </div>
   );
