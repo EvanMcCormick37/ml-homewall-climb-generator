@@ -1,8 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { getWall, getWallPhotoUrl } from "@/api/walls";
 import { generateClimbs } from "@/api/generate";
-import { ArrowLeft, Sparkles, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Sparkles,
+  Loader2,
+  Settings,
+  Pencil,
+  RotateCcw,
+} from "lucide-react";
 import type { WallDetail, HoldDetail, Holdset, GenerateRequest } from "@/types";
 
 // --- Route Definition ---
@@ -15,13 +22,48 @@ export const Route = createFileRoute("/$wallId")({
   },
 });
 
-// --- Hold color constants ---
+// --- Hold category types (from create.tsx) ---
 
-const START_COLOR = "#22c55e"; // green-500
-const FINISH_COLOR = "#ffea00"; // yellow
-const HAND_COLOR = "#3b82f6"; // blue-500
-const FOOT_COLOR = "#a855f7"; // purple-500
+type HoldCategory = "hand" | "foot" | "start" | "finish";
+
+const CATEGORY_ORDER: HoldCategory[] = ["hand", "foot", "start", "finish"];
+
+const CATEGORY_COLORS: Record<HoldCategory, string> = {
+  hand: "#3b82f6",
+  foot: "#a855f7",
+  start: "#22c55e",
+  finish: "#ffea00",
+};
+
+const CATEGORY_LABELS: Record<HoldCategory, string> = {
+  hand: "Hand",
+  foot: "Foot",
+  start: "Start",
+  finish: "Finish",
+};
+
+// --- Hold color constants ---
 const HOLD_STROKE_COLOR = "#00b679";
+
+// --- Display settings types ---
+
+type ColorMode = "role" | "uniform";
+
+interface DisplaySettings {
+  scale: number;
+  colorMode: ColorMode;
+  uniformColor: string;
+  opacity: number;
+  filled: boolean;
+}
+
+const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  scale: 2.0,
+  colorMode: "uniform",
+  uniformColor: "#3b82f6",
+  opacity: 0.6,
+  filled: true,
+};
 
 // --- V-grade options ---
 
@@ -45,10 +87,221 @@ const GRADE_OPTIONS = [
   "V16",
 ];
 
+// --- Random Climb Name Generator ---
+
+const ADJECTIVES = [
+  "Angry",
+  "Bold",
+  "Cosmic",
+  "Daring",
+  "Electric",
+  "Fierce",
+  "Gnarly",
+  "Humble",
+  "Icy",
+  "Jazzy",
+  "Keen",
+  "Lunar",
+  "Mighty",
+  "Noble",
+  "Obscure",
+  "Primal",
+  "Quick",
+  "Radical",
+  "Savage",
+  "Twisted",
+  "Ultra",
+  "Vivid",
+  "Wicked",
+  "Xtreme",
+  "Yonder",
+  "Zesty",
+];
+
+const ANIMALS = [
+  "Aardvark",
+  "Badger",
+  "Cobra",
+  "Dolphin",
+  "Eagle",
+  "Falcon",
+  "Gorilla",
+  "Hawk",
+  "Ibex",
+  "Jaguar",
+  "Koala",
+  "Lemur",
+  "Mantis",
+  "Narwhal",
+  "Osprey",
+  "Panther",
+  "Quokka",
+  "Raven",
+  "Scorpion",
+  "Tiger",
+  "Urchin",
+  "Viper",
+  "Wolf",
+  "Xerus",
+  "Yak",
+  "Zebra",
+];
+
+function generateClimbName(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+  return `${adj} ${animal}`;
+}
+
+// --- Holdset with name ---
+
+interface NamedHoldset {
+  name: string;
+  holdset: Holdset;
+}
+
+// --- Display Settings Panel ---
+
+interface DisplaySettingsPanelProps {
+  settings: DisplaySettings;
+  onChange: (settings: DisplaySettings) => void;
+}
+
+function DisplaySettingsPanel({
+  settings,
+  onChange,
+}: DisplaySettingsPanelProps) {
+  const update = (patch: Partial<DisplaySettings>) =>
+    onChange({ ...settings, ...patch });
+
+  return (
+    <div className="space-y-4">
+      {/* Scale */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs text-zinc-500 uppercase tracking-wider">
+            Scale
+          </label>
+          <span className="text-xs text-zinc-400 font-mono">
+            {settings.scale.toFixed(1)}x
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0.3}
+          max={3.0}
+          step={0.1}
+          value={settings.scale}
+          onChange={(e) => update({ scale: parseFloat(e.target.value) })}
+          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer
+                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
+                     [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
+                     [&::-webkit-slider-thumb]:bg-emerald-500 [&::-webkit-slider-thumb]:cursor-pointer"
+        />
+      </div>
+
+      {/* Color Mode */}
+      <div>
+        <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
+          Color
+        </label>
+        <div className="flex gap-1">
+          <button
+            onClick={() => update({ colorMode: "role" })}
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+              settings.colorMode === "role"
+                ? "bg-emerald-600 text-white"
+                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            By Role
+          </button>
+          <button
+            onClick={() => update({ colorMode: "uniform" })}
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+              settings.colorMode === "uniform"
+                ? "bg-emerald-600 text-white"
+                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Uniform
+          </button>
+        </div>
+        {settings.colorMode === "uniform" && (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="color"
+              value={settings.uniformColor}
+              onChange={(e) => update({ uniformColor: e.target.value })}
+              className="w-8 h-8 rounded border border-zinc-700 bg-transparent cursor-pointer"
+            />
+            <span className="text-xs text-zinc-500 font-mono">
+              {settings.uniformColor}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Opacity */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs text-zinc-500 uppercase tracking-wider">
+            Opacity
+          </label>
+          <span className="text-xs text-zinc-400 font-mono">
+            {Math.round(settings.opacity * 100)}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0.1}
+          max={1.0}
+          step={0.05}
+          value={settings.opacity}
+          onChange={(e) => update({ opacity: parseFloat(e.target.value) })}
+          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer
+                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
+                     [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
+                     [&::-webkit-slider-thumb]:bg-emerald-500 [&::-webkit-slider-thumb]:cursor-pointer"
+        />
+      </div>
+
+      {/* Fill / Outline */}
+      <div>
+        <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
+          Style
+        </label>
+        <div className="flex gap-1">
+          <button
+            onClick={() => update({ filled: true })}
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+              settings.filled
+                ? "bg-emerald-600 text-white"
+                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Filled
+          </button>
+          <button
+            onClick={() => update({ filled: false })}
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+              !settings.filled
+                ? "bg-emerald-600 text-white"
+                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Outline
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- HoldsetList Component ---
 
 interface HoldsetListProps {
-  holdsets: Holdset[];
+  holdsets: NamedHoldset[];
   selectedIndex: number | null;
   onSelect: (index: number) => void;
 }
@@ -74,8 +327,9 @@ function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
         </span>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {holdsets.map((holdset, i) => {
+        {holdsets.map((entry, i) => {
           const isSelected = selectedIndex === i;
+          const { holdset } = entry;
           const totalHolds = new Set([
             ...holdset.start,
             ...holdset.finish,
@@ -99,35 +353,37 @@ function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
                   #{i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-zinc-100">Climb {i + 1}</div>
+                  <div className="font-medium text-zinc-100 truncate">
+                    {entry.name}
+                  </div>
                   <div className="text-xs text-zinc-500 flex items-center gap-2 mt-0.5">
                     <span>{totalHolds} holds</span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <span
                         className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: START_COLOR }}
+                        style={{ backgroundColor: CATEGORY_COLORS.start }}
                       />
                       {holdset.start.length}
                     </span>
                     <span className="flex items-center gap-1">
                       <span
                         className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: FINISH_COLOR }}
+                        style={{ backgroundColor: CATEGORY_COLORS.finish }}
                       />
                       {holdset.finish.length}
                     </span>
                     <span className="flex items-center gap-1">
                       <span
                         className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: HAND_COLOR }}
+                        style={{ backgroundColor: CATEGORY_COLORS.hand }}
                       />
                       {holdset.hand.length}
                     </span>
                     <span className="flex items-center gap-1">
                       <span
                         className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: FOOT_COLOR }}
+                        style={{ backgroundColor: CATEGORY_COLORS.foot }}
                       />
                       {holdset.foot.length}
                     </span>
@@ -142,6 +398,178 @@ function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
   );
 }
 
+// --- Edit Panel (right sidebar) ---
+
+interface EditPanelProps {
+  editing: boolean;
+  onToggleEditing: () => void;
+  onReset: () => void;
+  holdset: Holdset | null;
+  climbName: string;
+}
+
+function EditPanel({
+  editing,
+  onToggleEditing,
+  onReset,
+  holdset,
+  climbName,
+}: EditPanelProps) {
+  const holdCounts = useMemo(() => {
+    if (!holdset) return { hand: 0, foot: 0, start: 0, finish: 0 };
+    return {
+      hand: holdset.hand.length,
+      foot: holdset.foot.length,
+      start: holdset.start.length,
+      finish: holdset.finish.length,
+    };
+  }, [holdset]);
+
+  const totalHolds = useMemo(() => {
+    if (!holdset) return 0;
+    return new Set([
+      ...holdset.start,
+      ...holdset.finish,
+      ...holdset.hand,
+      ...holdset.foot,
+    ]).size;
+  }, [holdset]);
+
+  return (
+    <div className="w-72 flex-shrink-0 border-l border-zinc-800 bg-zinc-900 flex flex-col">
+      {/* Header */}
+      <div className="p-4 border-b border-zinc-800">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+            Edit Climb
+          </h2>
+          <button
+            onClick={onToggleEditing}
+            disabled={!holdset}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              editing
+                ? "bg-amber-600 text-white"
+                : holdset
+                  ? "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  : "bg-zinc-800/50 text-zinc-600 cursor-not-allowed"
+            }`}
+          >
+            <Pencil className="w-3 h-3" />
+            {editing ? "Editing" : "Edit Climb"}
+          </button>
+        </div>
+        {!holdset ? (
+          <p className="text-xs text-zinc-600">
+            Select a generated climb to view or edit its holds.
+          </p>
+        ) : (
+          <p className="text-sm text-zinc-300 truncate" title={climbName}>
+            {climbName}
+          </p>
+        )}
+      </div>
+
+      {/* Hold breakdown */}
+      {holdset && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Total */}
+          <div className="text-center py-3 bg-zinc-950 rounded-lg border border-zinc-800">
+            <div className="text-2xl font-semibold text-zinc-100">
+              {totalHolds}
+            </div>
+            <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">
+              Total Holds
+            </div>
+          </div>
+
+          {/* Category counts */}
+          <div className="space-y-2">
+            {(["start", "hand", "foot", "finish"] as HoldCategory[]).map(
+              (cat) => (
+                <div
+                  key={cat}
+                  className="flex items-center gap-2 px-3 py-2 bg-zinc-800 rounded-lg"
+                >
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: CATEGORY_COLORS[cat] }}
+                  />
+                  <span className="text-sm text-zinc-300">
+                    {CATEGORY_LABELS[cat]}
+                  </span>
+                  <span className="ml-auto text-sm font-medium text-zinc-100">
+                    {holdCounts[cat]}
+                  </span>
+                </div>
+              ),
+            )}
+          </div>
+
+          {/* Instructions */}
+          {editing && (
+            <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Click holds on the wall to cycle through:
+              </p>
+              <p className="text-xs text-zinc-300 mt-1 font-medium">
+                Hand → Foot → Start → Finish → Remove
+              </p>
+              <p className="text-xs text-zinc-500 mt-2">
+                Start and Finish are limited to 2 holds each.
+              </p>
+            </div>
+          )}
+
+          {/* Reset button */}
+          {editing && (
+            <button
+              onClick={onReset}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-medium rounded-lg transition-colors text-sm"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset to Generated
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Legend (always visible at bottom) */}
+      <div className="p-3 border-t border-zinc-800 flex-shrink-0">
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: CATEGORY_COLORS.start }}
+            />
+            <span className="text-zinc-400">Start</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: CATEGORY_COLORS.finish }}
+            />
+            <span className="text-zinc-400">Finish</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: CATEGORY_COLORS.hand }}
+            />
+            <span className="text-zinc-400">Hand</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: CATEGORY_COLORS.foot }}
+            />
+            <span className="text-zinc-400">Foot</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- WallCanvas Component ---
 
 interface WallCanvasProps {
@@ -151,6 +579,9 @@ interface WallCanvasProps {
   selectedHoldset: Holdset | null;
   imageDimensions: { width: number; height: number };
   onImageLoad: (dimensions: { width: number; height: number }) => void;
+  displaySettings: DisplaySettings;
+  editing: boolean;
+  onHoldClick: (holdIndex: number) => void;
 }
 
 function WallCanvas({
@@ -160,6 +591,9 @@ function WallCanvas({
   selectedHoldset,
   imageDimensions,
   onImageLoad,
+  displaySettings,
+  editing,
+  onHoldClick,
 }: WallCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -240,11 +674,19 @@ function WallCanvas({
       ...footHolds,
     ]);
 
+    const {
+      scale: userScale,
+      colorMode,
+      uniformColor,
+      opacity: userOpacity,
+      filled,
+    } = displaySettings;
+
     // Draw all holds
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const scale = height / 1000;
-      const radius = 10 * scale;
+      const baseScale = height / 1000;
+      const radius = 10 * baseScale * userScale;
 
       const isUsed = usedHolds.has(hold.hold_index);
       const isStart = startHolds.has(hold.hold_index);
@@ -252,38 +694,93 @@ function WallCanvas({
       const isHand = handHolds.has(hold.hold_index);
       const isFoot = footHolds.has(hold.hold_index);
 
-      // Dim holds not in the climb when a holdset is selected
-      const alpha = selectedHoldset ? (isUsed ? 1 : 0.2) : 0.5;
+      // Dim unused holds when a holdset is selected
+      const baseAlpha = selectedHoldset ? (isUsed ? 1 : 0.2) : 0.5;
+      const alpha = isUsed ? baseAlpha * userOpacity : baseAlpha;
 
-      // Determine color based on hold type
+      // Determine color
       let strokeColor = HOLD_STROKE_COLOR;
       if (selectedHoldset && isUsed) {
-        if (isStart) strokeColor = START_COLOR;
-        else if (isFinish) strokeColor = FINISH_COLOR;
-        else if (isHand) strokeColor = HAND_COLOR;
-        else if (isFoot) strokeColor = FOOT_COLOR;
+        if (colorMode === "uniform") {
+          strokeColor = uniformColor;
+        } else {
+          if (isStart) strokeColor = CATEGORY_COLORS.start;
+          else if (isFinish) strokeColor = CATEGORY_COLORS.finish;
+          else if (isHand) strokeColor = CATEGORY_COLORS.hand;
+          else if (isFoot) strokeColor = CATEGORY_COLORS.foot;
+        }
       }
-      const size = isFoot ? 0.5 : 1;
+
+      const footScale = isFoot ? 0.5 : 1;
 
       ctx.beginPath();
-      ctx.arc(x, y, radius * size, 0, 2 * Math.PI);
+      ctx.arc(x, y, radius * footScale, 0, 2 * Math.PI);
       ctx.strokeStyle = strokeColor;
       ctx.globalAlpha = alpha;
-      ctx.lineWidth = isUsed && selectedHoldset ? scale * 2 : 2;
-      if (selectedHoldset && isUsed) {
+      ctx.lineWidth = isUsed && selectedHoldset ? baseScale * 2 : 2;
+
+      if (selectedHoldset && isUsed && filled) {
         ctx.fillStyle = strokeColor;
         ctx.fill();
       }
       ctx.stroke();
       ctx.globalAlpha = 1;
     });
-  }, [image, imageDimensions, holds, selectedHoldset, toPixelCoords]);
+  }, [
+    image,
+    imageDimensions,
+    holds,
+    selectedHoldset,
+    toPixelCoords,
+    displaySettings,
+  ]);
 
-  // Pan handlers
+  // Get image coordinates from mouse event
+  const getImageCoords = useCallback(
+    (e: React.MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return { x: 0, y: 0 };
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (imageDimensions.width / rect.width),
+        y: (e.clientY - rect.top) * (imageDimensions.height / rect.height),
+      };
+    },
+    [imageDimensions],
+  );
+
+  // Find hold at position
+  const findHoldAt = useCallback(
+    (pixelX: number, pixelY: number): HoldDetail | null => {
+      const hitRadius = 25;
+      for (const hold of holds) {
+        const { x, y } = toPixelCoords(hold);
+        const dist = Math.sqrt((x - pixelX) ** 2 + (y - pixelY) ** 2);
+        if (dist < hitRadius) return hold;
+      }
+      return null;
+    },
+    [holds, toPixelCoords],
+  );
+
+  // Handle canvas click
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!editing) return;
+      const { x, y } = getImageCoords(e);
+      const hold = findHoldAt(x, y);
+      if (hold) {
+        onHoldClick(hold.hold_index);
+      }
+    },
+    [editing, getImageCoords, findHoldAt, onHoldClick],
+  );
+
+  // Pan handlers — distinguish click from drag
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       panDragRef.current = {
-        isDragging: true,
+        isDragging: false,
         startX: e.clientX,
         startY: e.clientY,
         startViewX: viewTransform.x,
@@ -294,22 +791,30 @@ function WallCanvas({
   );
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (e.buttons !== 1) return;
+    const dx = e.clientX - panDragRef.current.startX;
+    const dy = e.clientY - panDragRef.current.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      panDragRef.current.isDragging = true;
+    }
     if (panDragRef.current.isDragging) {
       setViewTransform((prev) => ({
         ...prev,
-        x:
-          panDragRef.current.startViewX +
-          (e.clientX - panDragRef.current.startX),
-        y:
-          panDragRef.current.startViewY +
-          (e.clientY - panDragRef.current.startY),
+        x: panDragRef.current.startViewX + dx,
+        y: panDragRef.current.startViewY + dy,
       }));
     }
   }, []);
 
-  const handleMouseUp = useCallback(() => {
-    panDragRef.current.isDragging = false;
-  }, []);
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent) => {
+      if (!panDragRef.current.isDragging) {
+        handleCanvasClick(e);
+      }
+      panDragRef.current.isDragging = false;
+    },
+    [handleCanvasClick],
+  );
 
   // Scroll wheel zoom
   useEffect(() => {
@@ -346,11 +851,15 @@ function WallCanvas({
   return (
     <div
       ref={wrapperRef}
-      className="w-full h-full overflow-hidden bg-zinc-950 cursor-grab active:cursor-grabbing"
+      className={`w-full h-full overflow-hidden bg-zinc-950 ${
+        editing ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"
+      }`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={() => {
+        panDragRef.current.isDragging = false;
+      }}
     >
       <div
         style={{
@@ -392,13 +901,25 @@ function GeneratePage() {
   const [deterministic, setDeterministic] = useState(false);
 
   // Results state
-  const [generatedHoldsets, setGeneratedHoldsets] = useState<Holdset[]>([]);
+  const [generatedClimbs, setGeneratedClimbs] = useState<NamedHoldset[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedHoldset =
-    selectedIndex !== null ? generatedHoldsets[selectedIndex] : null;
+  // Display settings
+  const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(
+    DEFAULT_DISPLAY_SETTINGS,
+  );
+  const [showDisplaySettings, setShowDisplaySettings] = useState(false);
+
+  // Edit mode state
+  const [editing, setEditing] = useState(false);
+  // Store the original generated holdsets so reset works
+  const originalHoldsetsRef = useRef<Holdset[]>([]);
+
+  const selectedClimb =
+    selectedIndex !== null ? generatedClimbs[selectedIndex] : null;
+  const selectedHoldset = selectedClimb?.holdset ?? null;
 
   const handleImageLoad = useCallback(
     (dimensions: { width: number; height: number }) => {
@@ -410,6 +931,7 @@ function GeneratePage() {
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
     setError(null);
+    setEditing(false);
 
     const request: GenerateRequest = {
       num_climbs: numClimbs,
@@ -421,8 +943,17 @@ function GeneratePage() {
 
     try {
       const response = await generateClimbs(wallId, request);
-      setGeneratedHoldsets(response.climbs);
-      // Auto-select first climb if results returned
+      const named: NamedHoldset[] = response.climbs.map((holdset) => ({
+        name: generateClimbName(),
+        holdset,
+      }));
+      setGeneratedClimbs(named);
+      originalHoldsetsRef.current = response.climbs.map((h) => ({
+        start: [...h.start],
+        finish: [...h.finish],
+        hand: [...h.hand],
+        foot: [...h.foot],
+      }));
       if (response.climbs.length > 0) {
         setSelectedIndex(0);
       } else {
@@ -436,6 +967,110 @@ function GeneratePage() {
       setIsGenerating(false);
     }
   }, [wallId, numClimbs, grade, deterministic, wall.metadata.angle, angle]);
+
+  // Toggle editing mode
+  const handleToggleEditing = useCallback(() => {
+    if (!selectedHoldset) return;
+    setEditing((prev) => !prev);
+  }, [selectedHoldset]);
+
+  // Reset to original generated holdset
+  const handleResetHoldset = useCallback(() => {
+    if (selectedIndex === null) return;
+    const original = originalHoldsetsRef.current[selectedIndex];
+    if (!original) return;
+    setGeneratedClimbs((prev) =>
+      prev.map((entry, i) =>
+        i === selectedIndex
+          ? {
+              ...entry,
+              holdset: {
+                start: [...original.start],
+                finish: [...original.finish],
+                hand: [...original.hand],
+                foot: [...original.foot],
+              },
+            }
+          : entry,
+      ),
+    );
+  }, [selectedIndex]);
+
+  // Handle hold click for editing (cycle through categories like create.tsx)
+  const handleHoldClick = useCallback(
+    (holdIndex: number) => {
+      if (selectedIndex === null) return;
+
+      setGeneratedClimbs((prev) => {
+        const entry = prev[selectedIndex];
+        if (!entry) return prev;
+
+        const holdset = entry.holdset;
+
+        // Determine current category of this hold
+        let currentCat: HoldCategory | null = null;
+        if (holdset.start.includes(holdIndex)) currentCat = "start";
+        else if (holdset.finish.includes(holdIndex)) currentCat = "finish";
+        else if (holdset.hand.includes(holdIndex)) currentCat = "hand";
+        else if (holdset.foot.includes(holdIndex)) currentCat = "foot";
+
+        // Helper to remove from all categories
+        const removeFromAll = (hs: Holdset, idx: number): Holdset => ({
+          start: hs.start.filter((h) => h !== idx),
+          finish: hs.finish.filter((h) => h !== idx),
+          hand: hs.hand.filter((h) => h !== idx),
+          foot: hs.foot.filter((h) => h !== idx),
+        });
+
+        let newHoldset: Holdset;
+
+        if (currentCat === null) {
+          // Not in climb — add as hand
+          newHoldset = { ...holdset, hand: [...holdset.hand, holdIndex] };
+        } else {
+          const currentIndex = CATEGORY_ORDER.indexOf(currentCat);
+          let nextIndex = currentIndex + 1;
+          const cleaned = removeFromAll(holdset, holdIndex);
+
+          // Try to place in next category, skipping full ones
+          while (nextIndex < CATEGORY_ORDER.length) {
+            const nextCat = CATEGORY_ORDER[nextIndex];
+            if (nextCat === "start" && cleaned.start.length >= 2) {
+              nextIndex++;
+              continue;
+            }
+            if (nextCat === "finish" && cleaned.finish.length >= 2) {
+              nextIndex++;
+              continue;
+            }
+            break;
+          }
+
+          if (nextIndex >= CATEGORY_ORDER.length) {
+            // Cycled through all — remove
+            newHoldset = cleaned;
+          } else {
+            const nextCat = CATEGORY_ORDER[nextIndex];
+            newHoldset = {
+              ...cleaned,
+              [nextCat]: [...cleaned[nextCat], holdIndex],
+            };
+          }
+        }
+
+        return prev.map((e, i) =>
+          i === selectedIndex ? { ...e, holdset: newHoldset } : e,
+        );
+      });
+    },
+    [selectedIndex],
+  );
+
+  // When selecting a different climb, exit edit mode
+  const handleSelectClimb = useCallback((index: number) => {
+    setSelectedIndex(index);
+    setEditing(false);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
@@ -459,7 +1094,7 @@ function GeneratePage() {
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
-        {/* Left panel */}
+        {/* Left panel — Generation controls */}
         <div className="w-80 flex flex-col border-r border-zinc-800 flex-shrink-0">
           {/* Generation controls */}
           <div className="p-4 border-b border-zinc-800 bg-zinc-900 space-y-4 flex-shrink-0">
@@ -567,53 +1202,45 @@ function GeneratePage() {
             )}
           </div>
 
+          {/* Display settings toggle + panel */}
+          <div className="border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
+            <button
+              onClick={() => setShowDisplaySettings((prev) => !prev)}
+              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-800/50 transition-colors"
+            >
+              <span className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                <Settings className="w-3.5 h-3.5" />
+                Display Settings
+              </span>
+              <span
+                className={`text-zinc-500 text-xs transition-transform ${
+                  showDisplaySettings ? "rotate-180" : ""
+                }`}
+              >
+                ▼
+              </span>
+            </button>
+            {showDisplaySettings && (
+              <div className="px-4 pb-4">
+                <DisplaySettingsPanel
+                  settings={displaySettings}
+                  onChange={setDisplaySettings}
+                />
+              </div>
+            )}
+          </div>
+
           {/* Generated holdsets list */}
           <div className="flex-1 min-h-0 bg-zinc-900">
             <HoldsetList
-              holdsets={generatedHoldsets}
+              holdsets={generatedClimbs}
               selectedIndex={selectedIndex}
-              onSelect={setSelectedIndex}
+              onSelect={handleSelectClimb}
             />
           </div>
-
-          {/* Legend */}
-          {generatedHoldsets.length > 0 && (
-            <div className="p-3 border-t border-zinc-800 bg-zinc-900 flex-shrink-0">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: START_COLOR }}
-                  />
-                  <span className="text-zinc-400">Start</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: FINISH_COLOR }}
-                  />
-                  <span className="text-zinc-400">Finish</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: HAND_COLOR }}
-                  />
-                  <span className="text-zinc-400">Hand</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: FOOT_COLOR }}
-                  />
-                  <span className="text-zinc-400">Foot</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Right panel - Wall Canvas */}
+        {/* Center — Wall Canvas */}
         <div className="flex-1 min-w-0">
           <WallCanvas
             wallId={wallId}
@@ -622,8 +1249,20 @@ function GeneratePage() {
             selectedHoldset={selectedHoldset}
             imageDimensions={imageDimensions}
             onImageLoad={handleImageLoad}
+            displaySettings={displaySettings}
+            editing={editing}
+            onHoldClick={handleHoldClick}
           />
         </div>
+
+        {/* Right panel — Edit Panel */}
+        <EditPanel
+          editing={editing}
+          onToggleEditing={handleToggleEditing}
+          onReset={handleResetHoldset}
+          holdset={selectedHoldset}
+          climbName={selectedClimb?.name ?? ""}
+        />
       </div>
     </div>
   );
