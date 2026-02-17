@@ -1,11 +1,5 @@
 import { apiClient } from "./client";
-import type {
-  WallListResponse,
-  WallDetail,
-  WallCreateResponse,
-  WallCreate,
-  HoldDetail,
-} from "@/types";
+import type { WallListResponse, WallDetail } from "@/types";
 
 /**
  * Fetch all walls
@@ -24,71 +18,10 @@ export async function getWall(wallId: string): Promise<WallDetail> {
 }
 
 /**
- * Create a new wall (metadata + photo, no holds)
- */
-export async function createWall(
-  data: WallCreate
-): Promise<WallCreateResponse> {
-  const formData = new FormData();
-  formData.append("name", data.name);
-  formData.append("photo", data.photo);
-  if (data.dimensions) {
-    formData.append(
-      "dimensions",
-      `${data.dimensions[0]},${data.dimensions[1]}`
-    );
-  }
-  if (data.angle !== undefined) {
-    formData.append("angle", String(data.angle));
-  }
-
-  const response = await apiClient.post<WallCreateResponse>(
-    "/walls",
-    formData,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }
-  );
-  return response.data;
-}
-
-/**
- * Delete a wall
- */
-export async function deleteWall(wallId: string): Promise<void> {
-  await apiClient.delete(`/walls/${wallId}`);
-}
-
-/**
  * Get wall photo URL
  */
 export function getWallPhotoUrl(wallId: string): string {
   const baseUrl =
     import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
   return `${baseUrl}/walls/${wallId}/photo`;
-}
-
-/**
- * Set or replace holds on an existing wall
- * Holds use x/y in feet (absolute position on wall)
- */
-export async function setHolds(
-  wallId: string,
-  holds: HoldDetail[]
-): Promise<{ id: string }> {
-  const formData = new FormData();
-  formData.append("holds", JSON.stringify(holds));
-
-  const response = await apiClient.put<{ id: string }>(
-    `/walls/${wallId}/holds`,
-    formData,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }
-  );
-  return response.data;
 }
