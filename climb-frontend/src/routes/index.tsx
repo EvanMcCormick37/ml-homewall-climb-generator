@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { useWalls } from "@/hooks/useWalls";
-import { getWallPhotoUrl } from "@/api/walls";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -28,13 +28,24 @@ const LINKS = [
 function HomePage() {
   const { walls, loading, error } = useWalls();
   const navigate = useNavigate();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const handleWallSelect = (wallId: string) => {
+    setIsMenuOpen(false);
+    navigate({ to: `/walls/${wallId}` });
+  };
+
+  const handleCreateWall = () => {
+    setIsMenuOpen(false);
+    navigate({ to: "/walls/new" });
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
       {/* Main content area */}
-      <div className="flex-1 flex flex-col items-center px-6 py-12">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         {/* Top section with welcome text and links */}
-        <div className="w-full max-w-4xl flex items-start justify-between mb-16">
+        <div className="w-full max-w-4xl flex items-start justify-between mb-24">
           {/* Welcome text */}
           <p className="text-zinc-400 max-w-md">
             Welcome to BetaZero, a public resource for generating board climbs
@@ -57,71 +68,64 @@ function HomePage() {
           </div>
         </div>
 
-        {/* Wall list section */}
-        <div className="w-full max-w-4xl">
-          <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-6">
-            Select a Wall
-          </h2>
+        {/* Center section with Select Wall button */}
+        <div className="relative">
+          {isMenuOpen ? (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-zinc-900 border border-zinc-700 z-10">
+              {/* Loading state */}
+              {loading && (
+                <div className="px-4 py-3 text-center text-zinc-500 text-sm">
+                  Loading walls...
+                </div>
+              )}
 
-          {/* Loading state */}
-          {loading && (
-            <div className="text-center text-zinc-500 py-12">
-              Loading walls...
-            </div>
-          )}
+              {/* Error state */}
+              {error && (
+                <div className="px-4 py-3 text-center text-red-400 text-sm">
+                  {error}
+                </div>
+              )}
 
-          {/* Error state */}
-          {error && (
-            <div className="text-center text-red-400 py-12">{error}</div>
-          )}
-
-          {/* Wall cards */}
-          {!loading && !error && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Available walls */}
-              {walls.map((wall) => (
-                <button
-                  key={wall.id}
-                  onClick={() => navigate({ to: "/$wallId", params: { wallId: wall.id } })}
-                  className="group text-left bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden 
-                             hover:border-cyan-500/50 hover:bg-zinc-900/80 transition-all"
-                >
-                  {/* Wall photo */}
-                  <div className="w-full h-40 bg-zinc-800 overflow-hidden">
-                    <img
-                      src={getWallPhotoUrl(wall.id)}
-                      alt={wall.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                  {/* Wall info */}
-                  <div className="p-4">
-                    <div className="font-medium text-zinc-100">{wall.name}</div>
-                    <div className="text-xs text-zinc-500 mt-1">
-                      {wall.num_holds} holds
-                      {wall.dimensions &&
-                        ` · ${wall.dimensions[0]}×${wall.dimensions[1]} ft`}
-                      {wall.angle != null && ` · ${wall.angle}°`}
-                    </div>
-                  </div>
-                </button>
-              ))}
+              {!loading &&
+                walls.map((wall) => (
+                  <button
+                    key={wall.id}
+                    onClick={() => handleWallSelect(wall.id)}
+                    className="w-full px-4 py-2 text-center text-zinc-100 hover:bg-zinc-800 transition-colors border-b border-zinc-700 last:border-b-0"
+                  >
+                    {wall.name}
+                  </button>
+                ))}
 
               {/* Coming soon walls */}
-              {COMING_SOON_WALLS.map((wall) => (
-                <div
-                  key={wall.id}
-                  className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg overflow-hidden opacity-60"
+              {!loading &&
+                COMING_SOON_WALLS.map((wall) => (
+                  <div
+                    key={wall.id}
+                    className="w-full px-4 py-2 text-center text-zinc-500 border-b border-zinc-700"
+                  >
+                    (Coming soon) {wall.name}
+                  </div>
+                ))}
+
+              {/* Create new wall option */}
+              {!loading && (
+                <button
+                  onClick={handleCreateWall}
+                  className="w-full px-4 py-2 text-center text-blue-400 hover:bg-zinc-800 transition-colors"
                 >
-                  <div className="w-full h-40 bg-zinc-800/50 flex items-center justify-center">
-                    <span className="text-zinc-600 text-sm">Coming Soon</span>
-                  </div>
-                  <div className="p-4">
-                    <div className="font-medium text-zinc-500">{wall.name}</div>
-                  </div>
-                </div>
-              ))}
+                  Create new wall
+                </button>
+              )}
             </div>
+          ) : (
+            <button
+              onClick={() => setIsMenuOpen(true)}
+              className="px-8 py-3 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 transition-colors border border-zinc-700"
+            >
+              Select Wall
+            </button>
           )}
         </div>
       </div>

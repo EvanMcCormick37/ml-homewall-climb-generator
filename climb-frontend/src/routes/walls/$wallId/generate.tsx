@@ -7,7 +7,7 @@ import type { WallDetail, HoldDetail, Holdset, GenerateRequest } from "@/types";
 
 // --- Route Definition ---
 
-export const Route = createFileRoute("/$wallId")({
+export const Route = createFileRoute("/walls/$wallId/generate")({
   component: GeneratePage,
   loader: async ({ params }) => {
     const wall = await getWall(params.wallId);
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/$wallId")({
   },
 });
 
-// --- Hold color constants ---
+// --- Hold color constants (matches view.tsx) ---
 
 const START_COLOR = "#22c55e"; // green-500
 const FINISH_COLOR = "#ffea00"; // yellow
@@ -443,7 +443,9 @@ function GeneratePage() {
       <header className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate({ to: "/" })}
+            onClick={() =>
+              navigate({ to: "/walls/$wallId", params: { wallId } })
+            }
             className="flex items-center gap-1 text-zinc-400 hover:text-zinc-100 transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -503,8 +505,7 @@ function GeneratePage() {
                 className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
               />
             </div>
-
-            {/* Wall angle */}
+            {/* Wall angle adjust if allowed */}
             <div>
               <label className="text-xs text-zinc-500 block mb-1">
                 Wall Angle (Degrees)
