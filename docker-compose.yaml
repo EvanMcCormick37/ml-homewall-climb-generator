@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  # The Python API
+  backend:
+    build:
+      context: ./climb-backend
+      dockerfile: Dockerfile
+    container_name: betazero-backend
+    restart: unless-stopped
+    volumes:
+      - ./climb-backend/data:/app/data
+
+  # The React App + Caddy Reverse Proxy
+  frontend:
+    build:
+      context: ./climb-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    container_name: betazero-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    links:
+      - backend
+
+networks:
+  default:
+    name: betazero-net

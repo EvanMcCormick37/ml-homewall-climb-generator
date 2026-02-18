@@ -1,5 +1,7 @@
 FROM python:3.11-slim AS base
 
+WORKDIR /app
+
 # Install python system dependencies which require C++ Compiler during install
 RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ build-essential && rm -rf /var/lib/apt/lists/*
 

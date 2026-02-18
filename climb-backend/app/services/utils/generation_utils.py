@@ -387,8 +387,8 @@ class ClimbDDPMGenerator():
         diff = GRADE_TO_DIFF[diff_scale][grade]
         df_cond = pd.DataFrame({
             "grade": [diff]*n,
-            "quality": [2.9]*n,
-            "ascents": [100]*n,
+            "quality": [3.0]*n,
+            "ascents": [1000]*n,
             "angle": [angle]*n
         })
 
