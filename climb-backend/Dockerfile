@@ -9,7 +9,9 @@ RUN pip install --no-cache-dir -r requirements-lock.txt
 
 # Copy app and Data directories
 COPY app/ ./app/
-COPY data/ ./data/
+COPY data/models/ ./data/models/
+
+RUN mkdir -p ./data/walls
 
 EXPOSE 8000
 
