@@ -14,6 +14,7 @@ import {
   Share2,
   Image,
   X,
+  RefreshCcw,
 } from "lucide-react";
 import type {
   WallDetail,
@@ -70,14 +71,16 @@ interface DisplaySettings {
   scale: number;
   colorMode: ColorMode;
   uniformColor: string;
+  categoryColors: Record<HoldCategory, string>;
   opacity: number;
   filled: boolean;
 }
 
 const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
-  scale: 2.0,
+  scale: 1.0,
   colorMode: "role",
-  uniformColor: "#3b82f6",
+  uniformColor: HOLD_STROKE_COLOR,
+  categoryColors: { ...CATEGORY_COLORS },
   opacity: 0.6,
   filled: true,
 };
@@ -226,7 +229,6 @@ interface NamedHoldset {
 
 /** Encode a named holdset into a compact base64 URL-safe string. */
 function encodeClimbToParam(entry: NamedHoldset): string {
-  // Compact representation: {n: name, s: start, f: finish, h: hand, t: foot}
   const compact = {
     n: entry.name,
     g: entry.grade,
@@ -236,20 +238,13 @@ function encodeClimbToParam(entry: NamedHoldset): string {
     t: entry.holdset.foot,
   };
   const json = JSON.stringify(compact);
-  // btoa with URI-safe substitutions
-  const b64 = btoa(json)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return b64;
+  return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 /** Decode a base64 URL-safe string back to a NamedHoldset, or null on failure. */
 function decodeClimbFromParam(param: string): NamedHoldset | null {
   try {
-    // Restore standard base64
     let b64 = param.replace(/-/g, "+").replace(/_/g, "/");
-    // Re-pad
     while (b64.length % 4 !== 0) b64 += "=";
     const json = atob(b64);
     const compact = JSON.parse(json);
@@ -280,11 +275,6 @@ function buildShareUrl(wallId: string, entry: NamedHoldset): string {
 // --- Export canvas renderer ---
 // ============================================================
 
-/**
- * Render a high-quality export image onto an offscreen canvas and return it as
- * a Blob. The image includes the wall photo, highlighted holds, a title bar
- * with the climb name, and a small legend.
- */
 async function renderExportImage(
   wallId: string,
   wallName: string,
@@ -294,7 +284,6 @@ async function renderExportImage(
   climbName: string,
   displaySettings: DisplaySettings,
 ): Promise<Blob> {
-  // Load image
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new window.Image();
     el.crossOrigin = "anonymous";
@@ -306,7 +295,6 @@ async function renderExportImage(
   const imgW = img.width;
   const imgH = img.height;
 
-  // Banner heights
   const topBannerH = Math.round(imgH * 0.06);
   const bottomBannerH = Math.round(imgH * 0.045);
   const totalH = imgH + topBannerH + bottomBannerH;
@@ -316,11 +304,9 @@ async function renderExportImage(
   canvas.height = totalH;
   const ctx = canvas.getContext("2d")!;
 
-  // Background
   ctx.fillStyle = "#09090b";
   ctx.fillRect(0, 0, imgW, totalH);
 
-  // --- Top banner: climb name ---
   ctx.fillStyle = "#18181b";
   ctx.fillRect(0, 0, imgW, topBannerH);
   ctx.fillStyle = "#f4f4f5";
@@ -328,17 +314,14 @@ async function renderExportImage(
   ctx.textBaseline = "middle";
   ctx.fillText(climbName, Math.round(imgW * 0.02), topBannerH / 2);
 
-  // Wall name on the right
   ctx.fillStyle = "#71717a";
   ctx.font = `${Math.round(topBannerH * 0.4)}px sans-serif`;
   ctx.textAlign = "right";
   ctx.fillText(wallName, imgW - Math.round(imgW * 0.02), topBannerH / 2);
   ctx.textAlign = "left";
 
-  // --- Wall image ---
   ctx.drawImage(img, 0, topBannerH);
 
-  // --- Draw holds ---
   const startSet = new Set(holdset.start);
   const finishSet = new Set(holdset.finish);
   const handSet = new Set(holdset.hand);
@@ -396,7 +379,6 @@ async function renderExportImage(
     ctx.globalAlpha = 1;
   });
 
-  // --- Bottom banner: legend ---
   const legendY = topBannerH + imgH;
   ctx.fillStyle = "#18181b";
   ctx.fillRect(0, legendY, imgW, bottomBannerH);
@@ -427,7 +409,6 @@ async function renderExportImage(
     cursorX += ctx.measureText(item.label).width + pad;
   }
 
-  // Convert to blob
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))),
@@ -449,9 +430,16 @@ function DisplaySettingsPanel({
 }: DisplaySettingsPanelProps) {
   const update = (patch: Partial<DisplaySettings>) =>
     onChange({ ...settings, ...patch });
-
+  const updateCategoryColor = (cat: HoldCategory, color: string) => {
+    update({
+      categoryColors: {
+        ...settings.categoryColors,
+        [cat]: color,
+      },
+    });
+  };
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-[240px]">
       {/* Scale */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
@@ -469,10 +457,7 @@ function DisplaySettingsPanel({
           step={0.1}
           value={settings.scale}
           onChange={(e) => update({ scale: parseFloat(e.target.value) })}
-          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer
-                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
-                     [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
-                     [&::-webkit-slider-thumb]:bg-emerald-500 [&::-webkit-slider-thumb]:cursor-pointer"
+          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer"
         />
       </div>
 
@@ -503,7 +488,7 @@ function DisplaySettingsPanel({
             Uniform
           </button>
         </div>
-        {settings.colorMode === "uniform" && (
+        {settings.colorMode === "uniform" ? (
           <div className="mt-2 flex items-center gap-2">
             <input
               type="color"
@@ -514,6 +499,27 @@ function DisplaySettingsPanel({
             <span className="text-xs text-zinc-500 font-mono">
               {settings.uniformColor}
             </span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {CATEGORY_ORDER.map((cat) => (
+              <div
+                key={cat}
+                className="flex items-center gap-2 p-1.5 rounded bg-zinc-800/30 border border-zinc-800"
+              >
+                <input
+                  type="color"
+                  value={settings.categoryColors[cat]}
+                  onChange={(e) => updateCategoryColor(cat, e.target.value)}
+                  className="w-6 h-6 rounded border-0 p-0 bg-transparent cursor-pointer"
+                />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs text-zinc-300 font-medium truncate">
+                    {CATEGORY_LABELS[cat]}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -535,10 +541,7 @@ function DisplaySettingsPanel({
           step={0.05}
           value={settings.opacity}
           onChange={(e) => update({ opacity: parseFloat(e.target.value) })}
-          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer
-                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5
-                     [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full
-                     [&::-webkit-slider-thumb]:bg-emerald-500 [&::-webkit-slider-thumb]:cursor-pointer"
+          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer"
         />
       </div>
 
@@ -580,9 +583,17 @@ interface HoldsetListProps {
   holdsets: NamedHoldset[];
   selectedIndex: number | null;
   onSelect: (index: number) => void;
+  onDelete: (index: number) => void;
+  onClear: () => void;
 }
 
-function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
+function HoldsetList({
+  holdsets,
+  selectedIndex,
+  onSelect,
+  onDelete,
+  onClear,
+}: HoldsetListProps) {
   if (holdsets.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-zinc-500 p-4">
@@ -597,10 +608,17 @@ function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-zinc-800 flex-shrink-0">
+      <div className="px-3 py-2 border-b border-zinc-800 flex-shrink-0 flex items-center justify-between">
         <span className="text-xs text-zinc-500 uppercase tracking-wider">
-          {holdsets.length} Generated Climb{holdsets.length !== 1 ? "s" : ""}
+          {holdsets.length} Climb{holdsets.length !== 1 ? "s" : ""}
         </span>
+        <button
+          onClick={onClear}
+          className="text-xs text-zinc-500 hover:text-red-400 flex items-center gap-1 transition-colors"
+        >
+          <RefreshCcw className="w-3 h-3" />
+          Clear
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto">
         {holdsets.map((entry, i) => {
@@ -614,17 +632,19 @@ function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
           ]).size;
 
           return (
-            <button
+            <div
               key={i}
-              onClick={() => onSelect(i)}
-              className={`w-full text-left px-3 py-3 border-b border-zinc-800/50 transition-colors
+              className={`w-full group flex items-stretch border-b border-zinc-800/50 transition-colors
                 ${
                   isSelected
                     ? "bg-zinc-800 border-l-2 border-l-emerald-500"
                     : "hover:bg-zinc-800/50 border-l-2 border-l-transparent"
                 }`}
             >
-              <div className="flex items-center gap-3">
+              <button
+                onClick={() => onSelect(i)}
+                className="flex-1 text-left px-3 py-3 flex items-center gap-3 min-w-0"
+              >
                 <div className="w-10 h-10 rounded-md flex items-center justify-center text-sm font-bold flex-shrink-0 bg-zinc-800 text-zinc-300">
                   #{i + 1}
                 </div>
@@ -633,7 +653,9 @@ function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
                     {entry.name}
                   </div>
                   <div className="text-xs text-zinc-500 flex items-center gap-2 mt-0.5">
-                    <span>{totalHolds} holds</span>
+                    <span className="font-semibold text-emerald-500">
+                      {entry.grade}
+                    </span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <span
@@ -665,8 +687,17 @@ function HoldsetList({ holdsets, selectedIndex, onSelect }: HoldsetListProps) {
                     </span>
                   </div>
                 </div>
-              </div>
-            </button>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(i);
+                }}
+                className="px-2 text-zinc-600 hover:text-red-400 hover:bg-zinc-800/80 transition-colors flex items-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           );
         })}
       </div>
@@ -717,7 +748,7 @@ function EditPanel({
   }, [holdset]);
 
   return (
-    <div className="w-72 flex-shrink-0 border-l border-zinc-800 bg-zinc-900 flex flex-col">
+    <div className="w-full h-full flex flex-col bg-zinc-900 border-l border-zinc-800">
       {/* Header */}
       <div className="p-4 border-b border-zinc-800">
         <div className="flex items-center justify-between mb-2">
@@ -809,7 +840,6 @@ function EditPanel({
                 Click holds on the wall to cycle through roles, or edit the name
                 and grade above.
               </p>
-              {/* ... existing instructions ... */}
             </div>
           )}
 
@@ -826,7 +856,6 @@ function EditPanel({
 
           {/* ---- Share / Export section ---- */}
           <div className="pt-2 border-t border-zinc-800 space-y-2">
-            {/* ... content unchanged ... */}
             <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
               Share
             </h3>
@@ -868,7 +897,7 @@ function EditPanel({
               )}
             </button>
 
-            {/* Native share (mobile) */}
+            {/* Native share (desktop only? or fallback) */}
             {hasNativeShare && (
               <button
                 onClick={onNativeShare}
@@ -883,7 +912,7 @@ function EditPanel({
       )}
 
       {/* Legend (always visible at bottom) */}
-      <div className="p-3 border-t border-zinc-800 flex-shrink-0">
+      <div className="p-3 border-t border-zinc-800 flex-shrink-0 mt-auto">
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="flex items-center gap-1.5">
             <span
@@ -1034,7 +1063,7 @@ function WallCanvas({
     // Draw all holds
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const baseScale = height / 1000;
+      const baseScale = height / 500;
       const radius = 10 * baseScale * userScale;
 
       const isUsed = usedHolds.has(hold.hold_index);
@@ -1331,18 +1360,27 @@ function GeneratePage() {
         grade: generate_grade,
         holdset,
       }));
-      setGeneratedClimbs(named);
-      originalHoldsetsRef.current = response.climbs.map((h) => ({
+
+      // Append new climbs instead of replacing
+      setGeneratedClimbs((prev) => [...named, ...prev]);
+
+      // Append originals to ref
+      const newOriginals = response.climbs.map((h) => ({
         start: [...h.start],
         finish: [...h.finish],
         hand: [...h.hand],
         foot: [...h.foot],
       }));
+      originalHoldsetsRef.current = [
+        ...originalHoldsetsRef.current,
+        ...newOriginals,
+      ];
+
+      // Select the first of the *new* climbs
       if (response.climbs.length > 0) {
-        setSelectedIndex(0);
-      } else {
-        setSelectedIndex(null);
+        setSelectedIndex(generatedClimbs.length); // The index where the new batch starts
       }
+
       navigate({
         to: "/$wallId",
         params: { wallId },
@@ -1366,6 +1404,7 @@ function GeneratePage() {
     wall.metadata.angle,
     angle,
     navigate,
+    generatedClimbs.length,
   ]);
 
   // Toggle editing mode
@@ -1407,6 +1446,30 @@ function GeneratePage() {
       ),
     );
   }, [selectedIndex]);
+
+  // Handle Delete Single Climb
+  const handleDeleteClimb = useCallback((index: number) => {
+    setGeneratedClimbs((prev) => prev.filter((_, i) => i !== index));
+    // Remove from originals ref
+    originalHoldsetsRef.current = originalHoldsetsRef.current.filter(
+      (_, i) => i !== index,
+    );
+
+    // Adjust selected index
+    setSelectedIndex((current) => {
+      if (current === null) return null;
+      if (current === index) return null;
+      if (current > index) return current - 1;
+      return current;
+    });
+  }, []);
+
+  // Handle Clear All Climbs
+  const handleClearClimbs = useCallback(() => {
+    setGeneratedClimbs([]);
+    originalHoldsetsRef.current = [];
+    setSelectedIndex(null);
+  }, []);
 
   // --- Share: Copy link ---
   const handleCopyLink = useCallback(() => {
@@ -1452,44 +1515,56 @@ function GeneratePage() {
   const handleNativeShare = useCallback(async () => {
     if (!selectedClimb) return;
     try {
-      const blob = await renderExportImage(
-        wallId,
-        wall.metadata.name,
-        wall.holds ?? [],
-        wallDimensions,
-        selectedClimb.holdset,
-        selectedClimb.name,
-        displaySettings,
-      );
-      const file = new File(
-        [blob],
-        `${selectedClimb.name.replace(/\s+/g, "_")}.png`,
-        { type: "image/png" },
-      );
       const url = buildShareUrl(wallId, selectedClimb);
 
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          title: selectedClimb.name,
-          text: `Check out this climb: ${selectedClimb.name}`,
-          url,
-          files: [file],
-        });
-      } else {
-        // Fallback: share without image
-        await navigator.share({
-          title: selectedClimb.name,
-          text: `Check out this climb: ${selectedClimb.name}`,
-          url,
-        });
+      // Try generating image first
+      let file: File | undefined;
+      try {
+        const blob = await renderExportImage(
+          wallId,
+          wall.metadata.name,
+          wall.holds ?? [],
+          wallDimensions,
+          selectedClimb.holdset,
+          selectedClimb.name,
+          displaySettings,
+        );
+        file = new File(
+          [blob],
+          `${selectedClimb.name.replace(/\s+/g, "_")}.png`,
+          { type: "image/png" },
+        );
+      } catch (e) {
+        console.warn("Failed to generate image for share", e);
       }
+
+      const shareData: ShareData = {
+        title: selectedClimb.name,
+        text: `Check out this climb: ${selectedClimb.name}`,
+        url,
+      };
+
+      if (file && navigator.canShare?.({ files: [file] })) {
+        shareData.files = [file];
+      }
+
+      await navigator.share(shareData);
     } catch (err) {
       // User cancelled share or not supported — silent
       if ((err as Error).name !== "AbortError") {
         console.error("Share failed:", err);
+        // Fallback to copy link if native share fails/isn't supported
+        handleCopyLink();
       }
     }
-  }, [wallId, wall, wallDimensions, selectedClimb, displaySettings]);
+  }, [
+    wallId,
+    wall,
+    wallDimensions,
+    selectedClimb,
+    displaySettings,
+    handleCopyLink,
+  ]);
 
   // Handle hold click for editing (cycle through categories like create.tsx)
   const handleHoldClick = useCallback(
@@ -1568,7 +1643,7 @@ function GeneratePage() {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-zinc-950">
+    <div className="h-screen flex flex-col bg-zinc-950 relative">
       {/* Keyframes for mobile drawer animations */}
       <style>{`
         @keyframes slideInLeft {
@@ -1579,34 +1654,99 @@ function GeneratePage() {
           from { transform: translateX(100%); }
           to { transform: translateX(0); }
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
 
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 flex-shrink-0">
+      <header className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-20 relative">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate({ to: "/" })}
             className="flex items-center gap-1 text-zinc-400 hover:text-zinc-100 transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back
+            <span className="hidden sm:inline">Back</span>
           </button>
-          <div className="w-px h-5 bg-zinc-700" />
+          <div className="w-px h-5 bg-zinc-700 hidden sm:block" />
           <h1 className="text-lg font-medium text-zinc-100 truncate">
             {wall.metadata.name}
           </h1>
-          <span className="text-sm text-zinc-500 hidden sm:inline">
-            Generate Climbs
-          </span>
+        </div>
+
+        {/* Display Settings Toggle (Desktop & Mobile) */}
+        <div className="relative flex items-center gap-3">
+          {/* Divider between Board Name area and Settings Label */}
+          <div className="w-px h-5 bg-zinc-800 hidden sm:block" />
+
+          {!showDisplaySettings && (
+            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+              Display Settings
+            </span>
+          )}
+
+          <button
+            onClick={() => setShowDisplaySettings(!showDisplaySettings)}
+            className={`p-2 rounded-md transition-colors ${
+              showDisplaySettings
+                ? "bg-emerald-600 text-white"
+                : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+
+          {/* Settings Popover */}
+          {showDisplaySettings && (
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-transparent"
+                onClick={() => setShowDisplaySettings(false)}
+              />
+              <div
+                className="absolute right-0 top-full mt-2 p-4 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-50 w-72"
+                style={{ animation: "fadeIn 0.1s ease-out" }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+                    Display Settings
+                  </span>
+                </div>
+                <DisplaySettingsPanel
+                  settings={displaySettings}
+                  onChange={setDisplaySettings}
+                />
+              </div>
+            </>
+          )}
         </div>
       </header>
+
+      {/* Mobile Floating Climb Info Chip (Only when a climb is selected) */}
+      {selectedClimb && (
+        <div className="lg:hidden absolute top-16 left-0 right-0 z-10 flex justify-center pointer-events-none px-4">
+          <div
+            className="bg-zinc-900/90 backdrop-blur border border-zinc-700 rounded-full py-2 px-5 shadow-lg flex flex-col items-center pointer-events-auto"
+            style={{ animation: "fadeIn 0.2s ease-out" }}
+          >
+            <span className="text-sm font-bold text-zinc-100">
+              {selectedClimb.name}
+            </span>
+            <span className="text-xs font-medium text-emerald-400">
+              {selectedClimb.grade}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0 relative">
         {/* Left panel — Generation controls */}
-        <div className="hidden lg:flex w-80 flex-col border-r border-zinc-800 flex-shrink-0">
+        <div className="hidden lg:flex w-80 flex-col border-r border-zinc-800 flex-shrink-0 bg-zinc-900">
           {/* Generation controls */}
-          <div className="p-4 border-b border-zinc-800 bg-zinc-900 space-y-4 flex-shrink-0">
+          <div className="p-4 border-b border-zinc-800 space-y-4 flex-shrink-0">
             <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
               Parameters
             </h2>
@@ -1747,40 +1887,14 @@ function GeneratePage() {
             )}
           </div>
 
-          {/* Display settings toggle + panel */}
-          <div className="border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
-            <button
-              onClick={() => setShowDisplaySettings((prev) => !prev)}
-              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-800/50 transition-colors"
-            >
-              <span className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                <Settings className="w-3.5 h-3.5" />
-                Display Settings
-              </span>
-              <span
-                className={`text-zinc-500 text-xs transition-transform ${
-                  showDisplaySettings ? "rotate-180" : ""
-                }`}
-              >
-                ▼
-              </span>
-            </button>
-            {showDisplaySettings && (
-              <div className="px-4 pb-4">
-                <DisplaySettingsPanel
-                  settings={displaySettings}
-                  onChange={setDisplaySettings}
-                />
-              </div>
-            )}
-          </div>
-
           {/* Generated holdsets list */}
           <div className="flex-1 min-h-0 bg-zinc-900">
             <HoldsetList
               holdsets={generatedClimbs}
               selectedIndex={selectedIndex}
               onSelect={handleSelectClimb}
+              onDelete={handleDeleteClimb}
+              onClear={handleClearClimbs}
             />
           </div>
         </div>
@@ -1801,7 +1915,7 @@ function GeneratePage() {
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
                 <span className="text-sm font-semibold text-zinc-200">
-                  Generate
+                  Climbs & Generation
                 </span>
                 <button
                   onClick={closeMobilePanel}
@@ -1958,40 +2072,17 @@ function GeneratePage() {
                   )}
                 </div>
 
-                {/* Display settings toggle + panel */}
-                <div className="border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
-                  <button
-                    onClick={() => setShowDisplaySettings((prev) => !prev)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-800/50 transition-colors"
-                  >
-                    <span className="flex items-center gap-2 text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                      <Settings className="w-3.5 h-3.5" />
-                      Display Settings
-                    </span>
-                    <span
-                      className={`text-zinc-500 text-xs transition-transform ${
-                        showDisplaySettings ? "rotate-180" : ""
-                      }`}
-                    >
-                      ▼
-                    </span>
-                  </button>
-                  {showDisplaySettings && (
-                    <div className="px-4 pb-4">
-                      <DisplaySettingsPanel
-                        settings={displaySettings}
-                        onChange={setDisplaySettings}
-                      />
-                    </div>
-                  )}
-                </div>
-
                 {/* Generated holdsets list */}
                 <div className="flex-1 min-h-0 bg-zinc-900">
                   <HoldsetList
                     holdsets={generatedClimbs}
                     selectedIndex={selectedIndex}
-                    onSelect={handleSelectClimb}
+                    onSelect={(i) => {
+                      handleSelectClimb(i);
+                      closeMobilePanel();
+                    }}
+                    onDelete={handleDeleteClimb}
+                    onClear={handleClearClimbs}
                   />
                 </div>
               </div>
@@ -2078,24 +2169,39 @@ function GeneratePage() {
         )}
 
         {/* ====== Mobile floating action buttons (visible only below lg) ====== */}
-        <div className="lg:hidden absolute bottom-4 left-0 right-0 flex justify-center gap-3 z-30 pointer-events-none">
+        <div className="lg:hidden absolute bottom-6 left-0 right-0 flex justify-center gap-3 z-30 pointer-events-none px-4">
           <button
             onClick={() =>
               setMobilePanel((p) => (p === "left" ? "none" : "left"))
             }
-            className="pointer-events-auto flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-full shadow-lg shadow-black/40 text-sm transition-colors"
+            className="pointer-events-auto flex items-center gap-2 px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-full shadow-lg shadow-black/40 text-sm border border-zinc-700 transition-colors"
           >
-            <Sparkles className="w-4 h-4" />
-            Generate
+            <Sparkles className="w-4 h-4 text-emerald-400" />
+            Climbs
           </button>
+
           <button
             onClick={() =>
               setMobilePanel((p) => (p === "right" ? "none" : "right"))
             }
-            className="pointer-events-auto flex items-center gap-2 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-medium rounded-full shadow-lg shadow-black/40 text-sm border border-zinc-700 transition-colors"
+            className="pointer-events-auto flex items-center gap-2 px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-medium rounded-full shadow-lg shadow-black/40 text-sm border border-zinc-700 transition-colors"
           >
             <Pencil className="w-4 h-4" />
-            Edit & Share
+            Edit
+          </button>
+
+          <button
+            onClick={handleNativeShare}
+            disabled={!selectedClimb}
+            className={`pointer-events-auto flex items-center gap-2 px-5 py-3 font-medium rounded-full shadow-lg shadow-black/40 text-sm transition-colors
+              ${
+                selectedClimb
+                  ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                  : "bg-zinc-800 text-zinc-500 border border-zinc-700"
+              }`}
+          >
+            <Share2 className="w-4 h-4" />
+            Share
           </button>
         </div>
       </div>
