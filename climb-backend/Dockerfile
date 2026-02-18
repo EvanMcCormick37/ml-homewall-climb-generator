@@ -11,11 +11,7 @@ RUN pip install --no-cache-dir -r requirements-lock.txt
 
 # Copy app and Data directories
 COPY app/ ./app/
-COPY data/models/ ./data/models/
-
-RUN mkdir -p ./data/walls
-
-EXPOSE 8000
+COPY data/ ./data/
 
 # Health check — Docker (and platforms like Railway/Fly) use this to know
 # the container is alive and ready to serve traffic

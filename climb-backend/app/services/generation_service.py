@@ -8,16 +8,9 @@ Manages:
 """
 import logging
 
-from app.config import settings
 from app.schemas import Holdset, GenerateRequest
 from app.database import get_db
-from app.services.utils import (
-    ClimbDDPM,
-    ClimbDDPMGenerator,
-    ClimbsFeatureScaler,
-    Noiser,
-    UNetHoldClassifierLogits
-)
+from app.services.utils import generator
 from app.services.climb_service import _holds_to_holdset
 
 logger = logging.getLogger(__name__)
@@ -47,30 +40,12 @@ def generate_climbs(
         List of GeneratedClimb results
     """
 
-    ddpm = ClimbDDPM(
-        model=Noiser(),
-        weights_path=settings.DDPM_WEIGHTS_PATH,
-        timesteps=100,
-    )
-    scaler = ClimbsFeatureScaler(
-        weights_path=settings.SCALER_WEIGHTS_PATH
-    )
-    hold_classifier = UNetHoldClassifierLogits(
-        weights_path=settings.HC_WEIGHTS_PATH
-    )
-    generator = ClimbDDPMGenerator(
-        wall_id=wall_id,
-        scaler=scaler,
-        ddpm=ddpm,
-        hold_classifier=hold_classifier
-    )
-
-
     # Resolve angle: use request override, else wall's stored angle
     angle = request.angle if request.angle else _get_wall_angle(wall_id)
 
     try:
         raw_climbs = generator.generate(
+            wall_id=wall_id,
             n=request.num_climbs,
             angle=angle,
             grade=request.grade,

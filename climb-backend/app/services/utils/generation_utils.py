@@ -351,11 +351,15 @@ class UNetHoldClassifierLogits(nn.Module):
 # ---------------------------------------------------------------------------
 # ClimbDDPMGenerator
 # ---------------------------------------------------------------------------
+NULL_HOLD_SENTINELS = torch.tensor(
+    [[-2.0, 0.0, -2.0, 0.0],
+    [2.0, 0.0, -2.0, 0.0],
+    [-2.0, 0.0, 2.0, 0.0],
+    [2.0, 0.0, 2.0, 0.0]], dtype=torch.float32)
 
 class ClimbDDPMGenerator():
     def __init__(
             self,
-            wall_id: str,
             scaler: ClimbsFeatureScaler,
             ddpm: ClimbDDPM,
             hold_classifier: UNetHoldClassifierLogits,
@@ -367,27 +371,22 @@ class ClimbDDPMGenerator():
         self.timesteps = 100
 
         with sqlite3.connect(settings.DB_PATH) as conn:
-            holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds WHERE wall_id = ?",conn,params=(wall_id,))
+            holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds", conn)
+            wall_ids = list(set(holds['wall_id'].values))
             scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
-            self.holds_manifold = torch.tensor(scaled_holds[['x','y','pull_x','pull_y']].values, dtype=torch.float32)
-            self.holds_lookup = scaled_holds['hold_index'].values
-        
-        self.holds_lookup = np.concatenate([self.holds_lookup, np.array([-1, -1, -1, -1])])
-        
-        self.holds_manifold = torch.cat([
-            self.holds_manifold,
-            torch.tensor(
-                [[-2.0, 0.0, -2.0, 0.0],
-                [2.0, 0.0, -2.0, 0.0],
-                [-2.0, 0.0, 2.0, 0.0],
-                [2.0, 0.0, 2.0, 0.0]],dtype=torch.float32)
-            ],dim=0)
+            self.holds_manifolds = {}
+            self.holds_lookup = {}
+            for wall_id in wall_ids:
+                df = scaled_holds[scaled_holds['wall_id']==wall_id]
+                self.holds_manifolds[wall_id] = torch.cat([torch.tensor(df[['x','y','pull_x','pull_y']].values, dtype=torch.float32), NULL_HOLD_SENTINELS], dim=0)
+                self.holds_lookup[wall_id] = df['hold_index'].values
+                self.holds_lookup[wall_id] = np.concatenate([self.holds_lookup[wall_id], np.array([-1, -1, -1, -1])])
 
     def _build_cond_tensor(self, n, grade, diff_scale, angle):
         diff = GRADE_TO_DIFF[diff_scale][grade]
         df_cond = pd.DataFrame({
             "grade": [diff]*n,
-            "quality": [3.0]*n,
+            "quality": [3.]*n,
             "ascents": [1000]*n,
             "angle": [angle]*n
         })
@@ -409,9 +408,9 @@ class ClimbDDPMGenerator():
         flat_climbs = gen_climbs.reshape(-1,H)
         dists = torch.cdist(flat_climbs, offset_manifold)
         idx = dists.argmin(dim=1)
-        return self.holds_manifold[idx].reshape(B, S, -1)
+        return offset_manifold[idx].reshape(B, S, -1)
         
-    def _project_onto_indices(self, gen_climbs: Tensor, cond_t: Tensor, offset_manifold: Tensor) -> list[list[list[int]]]:
+    def _project_onto_indices(self, gen_climbs: Tensor, cond_t: Tensor, offset_manifold: Tensor, wall_id: str) -> list[list[list[int]]]:
         """Project climb onto the final hold indices (and remove null holds)"""
         
         B, S, H = gen_climbs.shape
@@ -421,7 +420,7 @@ class ClimbDDPMGenerator():
         flat_climbs = gen_climbs.reshape(-1,H)
         dists = torch.cdist(flat_climbs, offset_manifold)
         idx = dists.argmin(dim=1)
-        holds = self.holds_lookup[idx]
+        holds = self.holds_lookup[wall_id][idx]
         holds = holds.reshape(B, S)
         
         # Mask null holds to be role 4
@@ -449,7 +448,7 @@ class ClimbDDPMGenerator():
 
         return deduped_climbs
     
-    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.8):
+    def _projection_strength(self, t: Tensor, t_start_projection: float = 1.0):
         """Calculate the weight to assign to the projected holds based on the timestep."""
         a = (t_start_projection-t)/t_start_projection
         strength = 1 - torch.cos(a*torch.pi/2)
@@ -458,6 +457,7 @@ class ClimbDDPMGenerator():
     @torch.no_grad()
     def generate(
         self,
+        wall_id: str,
         n: int = 1,
         angle: int = 45,
         grade: str = 'V4',
@@ -482,8 +482,8 @@ class ClimbDDPMGenerator():
         t_tensor = torch.ones((n,1), device=self.device)
         
         # Randomly offset the holds-manifold to allow for climbs to be generated at different x-coordinates around the wall.
-        x_offset = max(np.random.randn(),1.5)
-        offset_manifold = self.holds_manifold.clone()
+        x_offset = max(np.random.randn(),1.3)
+        offset_manifold = self.holds_manifolds[wall_id].clone()
         offset_manifold[:,0] += x_offset*0.1
 
         for _ in range(0, self.timesteps):
@@ -497,4 +497,24 @@ class ClimbDDPMGenerator():
             t_tensor -= 1.0/self.timesteps
             noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
         
-        return self._project_onto_indices(gen_climbs, cond_t, offset_manifold)
+        return self._project_onto_indices(gen_climbs, cond_t, offset_manifold, wall_id)
+
+# ---------------------------------------------------------------------------
+# Global ClimbGenerator Instance For Dependency Injection
+# ---------------------------------------------------------------------------
+ddpm = ClimbDDPM(
+    model=Noiser(),
+    weights_path=settings.DDPM_WEIGHTS_PATH,
+    timesteps=100,
+)
+scaler = ClimbsFeatureScaler(
+    weights_path=settings.SCALER_WEIGHTS_PATH
+)
+hold_classifier = UNetHoldClassifierLogits(
+    weights_path=settings.HC_WEIGHTS_PATH
+)
+generator = ClimbDDPMGenerator(
+    scaler=scaler,
+    ddpm=ddpm,
+    hold_classifier=hold_classifier
+)
