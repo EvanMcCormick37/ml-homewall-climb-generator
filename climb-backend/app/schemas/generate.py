@@ -22,7 +22,7 @@ class GenerateSettings(BaseModel):
 
 class GenerateRequest(BaseModel):
     """Request schema for generating climbs via the DDPM."""
-    num_climbs: int = Field(..., ge=1, le=50, description="Number of climbs to generate")
+    num_climbs: int = Field(..., ge=1, le=10, description="Number of climbs to generate")
     grade: str = Field("V4", description="Target difficulty grade (e.g. 'V4', '6b+')")
     grade_scale: GradeScale = Field(GradeScale.V_GRADE, description="Grading system to use")
     angle: int | None = Field(None, ge=0, le=90, description="Wall angle override (defaults to wall's stored angle)")

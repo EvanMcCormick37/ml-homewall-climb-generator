@@ -410,7 +410,81 @@ class ClimbDDPMGenerator():
         dists = torch.cdist(flat_climbs, offset_manifold)
         idx = dists.argmin(dim=1)
         return offset_manifold[idx].reshape(B, S, -1)
-        
+    
+    def _find_optimal_translation(
+        self,
+        gen_climbs: Tensor,           # (B, S, H)
+        offset_manifold: Tensor,      # (M, H)
+        x_offsets: Tensor,            # (Nx,)
+        y_offsets: Tensor,            # (Ny,)
+    ) -> tuple[Tensor, Tensor]:
+        """
+        Find the (dx, dy) translation per batch item that minimises total
+        nearest-neighbour projection distance onto the hold manifold.
+
+        Returns:
+            best_dx: (B,)  optimal x translation for each climb
+            best_dy: (B,)  optimal y translation for each climb
+        """
+        B, S, H = gen_climbs.shape
+        Nx = x_offsets.shape[0]
+        Ny = y_offsets.shape[0]
+
+        # Build a (Nx*Ny, H) manifold shift table — only x/y cols (0 and 2) move
+        # Shape: (Nx, Ny, H)
+        shifts = torch.zeros(Nx, Ny, H, device=gen_climbs.device)
+        shifts[:, :, 0] = x_offsets.unsqueeze(1)   # broadcast over Ny
+        shifts[:, :, 1] = y_offsets.unsqueeze(0)   # broadcast over Nx
+        shifts = shifts.reshape(Nx * Ny, H)         # (G, H)  G = grid size
+
+        # Translate climbs: (B, S, H) + (G, H) -> (G, B, S, H)
+        translated = gen_climbs.unsqueeze(0) + shifts.unsqueeze(1).unsqueeze(2)
+
+        # Flatten holds dim for cdist: (G*B, S, H)
+        G = Nx * Ny
+        flat = translated.reshape(G * B, S, H)
+
+        # Nearest-neighbour distances to manifold: (G*B, S, M) -> (G*B, S)
+        dists = torch.cdist(flat, offset_manifold)              # (G*B, S, M)
+        nn_dists = dists.min(dim=2).values                      # (G*B, S)
+        total_dist = nn_dists.sum(dim=1).reshape(G, B)          # (G, B)
+
+        # Best grid point per batch item
+        best_g = total_dist.argmin(dim=0)                       # (B,)
+        best_dx = x_offsets[best_g // Ny]
+        best_dy = y_offsets[best_g % Ny]
+
+        return best_dx, best_dy
+
+    def _project_onto_indices_with_translation(
+        self,
+        gen_climbs: Tensor,
+        cond_t: Tensor,
+        offset_manifold: Tensor,
+        wall_id: str,
+        x_offsets: Tensor | None = None,
+        y_offsets: Tensor | None = None,
+    ) -> list[list[list[int]]]:
+
+        if x_offsets is None:
+            x_offsets = torch.linspace(-0.5, 0.5, 21, device=gen_climbs.device)
+        if y_offsets is None:
+            y_offsets = torch.linspace(-0.2, 0.2, 9, device=gen_climbs.device)
+
+        best_dx, best_dy = self._find_optimal_translation(
+            gen_climbs, offset_manifold, x_offsets, y_offsets
+        )
+
+        # Apply per-climb optimal translation  (B, S, H)
+        B, S, H = gen_climbs.shape
+        translation = torch.zeros(B, 1, H, device=gen_climbs.device)
+        translation[:, 0, 0] = best_dx   # x col
+        translation[:, 0, 1] = best_dy   # y col  (pull_x/pull_y cols 1,3 left alone)
+        translated_climbs = gen_climbs + translation
+
+        # Now do the standard index projection on the translated climbs
+        return self._project_onto_indices(translated_climbs, cond_t, offset_manifold, wall_id)
+
     def _project_onto_indices(self, gen_climbs: Tensor, cond_t: Tensor, offset_manifold: Tensor, wall_id: str) -> list[list[list[int]]]:
         """Project climb onto the final hold indices (and remove null holds)"""
         
@@ -483,14 +557,16 @@ class ClimbDDPMGenerator():
         :return: A set of generated climbs according to the specified 
         :rtype: list[list[list[int]]]
         """
+        auto=False
         # Seed Noise Generator
         if deterministic:
             self.deterministic_noise_generator.manual_seed(seed)
         
         # Added x-offset logic for more variety
         if x_offset is None:
-            x_offset = torch.randn(1, generator=self.deterministic_noise_generator).item() if deterministic else max(np.random.randn(), 1.3)
-            x_offset = max(x_offset, 1.3)
+            val = torch.randn(1, generator=self.deterministic_noise_generator).item() if deterministic else np.random.randn()
+            x_offset = max(min(val, 1.0), -1.0)
+            auto=True
         
         offset_manifold = self.holds_manifolds[wall_id].clone()
         offset_manifold[:,0] += x_offset*0.1
@@ -511,6 +587,8 @@ class ClimbDDPMGenerator():
             t_tensor -= 1.0/timesteps
             noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
         
+        if auto:
+            return self._project_onto_indices_with_translation(gen_climbs, cond_t, offset_manifold, wall_id)
         return self._project_onto_indices(gen_climbs, cond_t, offset_manifold, wall_id)
 
 # ---------------------------------------------------------------------------

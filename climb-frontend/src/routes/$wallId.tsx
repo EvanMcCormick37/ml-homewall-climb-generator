@@ -17,6 +17,10 @@ import {
   RefreshCcw,
   Cpu,
   ChevronDown,
+  Zap,
+  Target,
+  Hourglass,
+  Settings2,
 } from "lucide-react";
 import type {
   WallDetail,
@@ -26,7 +30,11 @@ import type {
   GenerateSettings,
   GradeScale,
 } from "@/types";
-import { DEFAULT_GENERATE_SETTINGS } from "@/types";
+import {
+  DEFAULT_GENERATE_SETTINGS,
+  FAST_GENERATE_SETTINGS,
+  SLOW_GENERATE_SETTINGS,
+} from "@/types";
 
 // --- Route Definition ---
 
@@ -604,7 +612,7 @@ function ModelSettingsPanel({ settings, onChange }: ModelSettingsPanelProps) {
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <label className="text-xs text-zinc-500 uppercase tracking-wider">
-            Timesteps
+            Generation Timesteps
           </label>
           <span className="text-xs text-zinc-400 font-mono">
             {settings.timesteps}
@@ -637,7 +645,7 @@ function ModelSettingsPanel({ settings, onChange }: ModelSettingsPanelProps) {
         </div>
         <input
           type="range"
-          min={0.3}
+          min={0.0}
           max={1.0}
           step={0.05}
           value={settings.t_start_projection}
@@ -656,7 +664,7 @@ function ModelSettingsPanel({ settings, onChange }: ModelSettingsPanelProps) {
       <div>
         <div className="flex items-center justify-between mb-1.5">
           <label className="text-xs text-zinc-500 uppercase tracking-wider">
-            X Offset
+            X-Offset
           </label>
           <span className="text-xs text-zinc-400 font-mono">
             {settings.x_offset != null ? settings.x_offset.toFixed(2) : "Auto"}
@@ -664,8 +672,8 @@ function ModelSettingsPanel({ settings, onChange }: ModelSettingsPanelProps) {
         </div>
         <input
           type="range"
-          min={-1.5}
-          max={1.5}
+          min={-1.0}
+          max={1.0}
           step={0.05}
           value={settings.x_offset ?? 0}
           onChange={(e) => update({ x_offset: parseFloat(e.target.value) })}
@@ -679,7 +687,7 @@ function ModelSettingsPanel({ settings, onChange }: ModelSettingsPanelProps) {
               : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"
           }`}
         >
-          {settings.x_offset == null ? "Auto (random)" : "Reset to Auto"}
+          {settings.x_offset == null ? "Auto (recommended)" : "Reset to Auto"}
         </button>
       </div>
 
@@ -732,8 +740,11 @@ function ModelSettingsPanel({ settings, onChange }: ModelSettingsPanelProps) {
       )}
 
       <p className="text-xs text-zinc-600 leading-relaxed pt-1 border-t border-zinc-800">
-        Lower timesteps are faster but may reduce climb variety. Projection
-        start controls when holds are snapped to the wall manifold.
+        Fewer timesteps results in faster generation, but may reduce climb
+        quality. Projection start controls when the wall's holds start to "pull"
+        on the diffusion model's generated holds. X-Offset offsets the climb's
+        center (- is left, + is right). Auto (recommended for quality) uses
+        grid-search to find the optimal projection offset.
       </p>
     </div>
   );
@@ -792,12 +803,15 @@ function GenerationPanel({
   onDeleteHoldset,
   onClearHoldsets,
 }: GenerationPanelProps) {
-  const hasCustomModelSettings =
-    generateSettings.timesteps !== DEFAULT_GENERATE_SETTINGS.timesteps ||
-    generateSettings.t_start_projection !==
-      DEFAULT_GENERATE_SETTINGS.t_start_projection ||
-    generateSettings.x_offset !== DEFAULT_GENERATE_SETTINGS.x_offset;
+  const isPresetActive = (preset: GenerateSettings) =>
+    generateSettings.timesteps === preset.timesteps &&
+    generateSettings.t_start_projection === preset.t_start_projection &&
+    generateSettings.deterministic === preset.deterministic;
 
+  const isCustom =
+    !isPresetActive(FAST_GENERATE_SETTINGS) &&
+    !isPresetActive(DEFAULT_GENERATE_SETTINGS) &&
+    !isPresetActive(SLOW_GENERATE_SETTINGS);
   return (
     <>
       {/* Generation controls */}
@@ -861,7 +875,7 @@ function GenerationPanel({
           <input
             type="number"
             min={1}
-            max={15}
+            max={10}
             value={numClimbs}
             onChange={(e) =>
               onNumClimbsChange(
@@ -897,28 +911,82 @@ function GenerationPanel({
           />
         </div>
 
-        {/* Model Settings collapsible */}
+        {/* --- NEW MODEL SETTINGS SECTION --- */}
         <div>
+          <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">
+            Generation Mode
+          </label>
+
+          {/* Preset Buttons Grid */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <button
+              onClick={() => onGenerateSettingsChange(FAST_GENERATE_SETTINGS)}
+              className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
+                isPresetActive(FAST_GENERATE_SETTINGS)
+                  ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
+                  : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+              }`}
+            >
+              <Zap className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wide">
+                Fast
+              </span>
+            </button>
+
+            <button
+              onClick={() =>
+                onGenerateSettingsChange(DEFAULT_GENERATE_SETTINGS)
+              }
+              className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
+                isPresetActive(DEFAULT_GENERATE_SETTINGS)
+                  ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
+                  : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+              }`}
+            >
+              <Target className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wide">
+                Standard
+              </span>
+            </button>
+
+            <button
+              onClick={() => onGenerateSettingsChange(SLOW_GENERATE_SETTINGS)}
+              className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
+                isPresetActive(SLOW_GENERATE_SETTINGS)
+                  ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
+                  : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+              }`}
+            >
+              <Hourglass className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-wide">
+                Quality
+              </span>
+            </button>
+          </div>
+
+          {/* Toggle for Advanced/Custom Settings */}
           <button
             onClick={onToggleModelSettings}
-            className="w-full flex items-center justify-between px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors text-xs text-zinc-400 hover:text-zinc-200"
+            className={`w-full flex items-center justify-between px-3 py-2 rounded transition-colors text-xs ${
+              isCustom || showModelSettings
+                ? "bg-zinc-800 text-zinc-200"
+                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+            }`}
           >
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-2">
               <Cpu className="w-3.5 h-3.5" />
-              Model Settings
-              {hasCustomModelSettings && (
-                <span
-                  className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"
-                  title="Custom settings active"
-                />
-              )}
+              {isCustom ? "Custom Settings Active" : "Custom Settings"}
             </span>
             <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform ${showModelSettings ? "rotate-180" : ""}`}
+              className={`w-3.5 h-3.5 transition-transform ${
+                showModelSettings ? "rotate-180" : ""
+              }`}
             />
           </button>
+
+          {/* Collapsible Panel */}
           {showModelSettings && (
-            <div className="mt-2 p-3 bg-zinc-950 border border-zinc-800 rounded">
+            <div className="mt-2 p-3 bg-zinc-950 border border-zinc-800 rounded shadow-inner">
               <ModelSettingsPanel
                 settings={generateSettings}
                 onChange={onGenerateSettingsChange}
@@ -926,7 +994,6 @@ function GenerationPanel({
             </div>
           )}
         </div>
-
         {/* Generate button */}
         <button
           onClick={onGenerate}
