@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Sparkles,
   Loader2,
-  Settings,
   Pencil,
   RotateCcw,
   Link,
@@ -19,8 +18,8 @@ import {
   ChevronDown,
   Zap,
   Target,
-  Hourglass,
-  Settings2,
+  Turtle,
+  SunMedium,
 } from "lucide-react";
 import type {
   WallDetail,
@@ -474,7 +473,7 @@ function DisplaySettingsPanel({
       </div>
 
       {/* Color Mode */}
-      <div>
+      <div className="space-y-2">
         <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
           Color
         </label>
@@ -758,8 +757,8 @@ interface GenerationPanelProps {
   grade: string;
   onGradingScaleChange: (scale: GradeScale) => void;
   onGradeChange: (grade: string) => void;
-  numClimbs: number;
-  onNumClimbsChange: (n: number) => void;
+  numClimbs: number | null;
+  onNumClimbsChange: (n: number | null) => void;
   angle: number | null;
   angleFixed: boolean;
   onAngleChange: (angle: number | null) => void;
@@ -803,6 +802,48 @@ function GenerationPanel({
   onDeleteHoldset,
   onClearHoldsets,
 }: GenerationPanelProps) {
+  const [showClimbParams, setShowClimbParams] = useState(true);
+
+  // Drag-to-scroll for the entire panel
+  const panelRef = useRef<HTMLDivElement>(null);
+  const dragScrollRef = useRef({
+    isDragging: false,
+    startY: 0,
+    startScrollTop: 0,
+  });
+
+  const handlePanelMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only drag on the scrollable area itself, not on interactive children
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, select, a")) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    dragScrollRef.current = {
+      isDragging: true,
+      startY: e.clientY,
+      startScrollTop: panel.scrollTop,
+    };
+    panel.style.cursor = "grabbing";
+    panel.style.userSelect = "none";
+  }, []);
+
+  const handlePanelMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragScrollRef.current.isDragging) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const dy = e.clientY - dragScrollRef.current.startY;
+    panel.scrollTop = dragScrollRef.current.startScrollTop - dy;
+  }, []);
+
+  const handlePanelMouseUp = useCallback(() => {
+    dragScrollRef.current.isDragging = false;
+    const panel = panelRef.current;
+    if (panel) {
+      panel.style.cursor = "";
+      panel.style.userSelect = "";
+    }
+  }, []);
+
   const isPresetActive = (preset: GenerateSettings) =>
     generateSettings.timesteps === preset.timesteps &&
     generateSettings.t_start_projection === preset.t_start_projection &&
@@ -814,215 +855,242 @@ function GenerationPanel({
     !isPresetActive(SLOW_GENERATE_SETTINGS);
   return (
     <>
-      {/* Generation controls */}
-      <div className="p-4 border-b border-zinc-800 space-y-4 flex-shrink-0">
-        <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-          Parameters
-        </h2>
-
-        {/* Grading scale toggle */}
-        <div>
-          <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
-            Grading Scale
-          </label>
-          <div className="flex gap-1">
-            <button
-              onClick={() => onGradingScaleChange("v_grade")}
-              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                gradingScale === "v_grade"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              V-grade
-            </button>
-            <button
-              onClick={() => onGradingScaleChange("font")}
-              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                gradingScale === "font"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              Fontainebleau
-            </button>
-          </div>
-        </div>
-
-        {/* Grade */}
-        <div>
-          <label className="text-xs text-zinc-500 block mb-1">
-            Target Grade
-          </label>
-          <select
-            value={grade}
-            onChange={(e) => onGradeChange(e.target.value)}
-            className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-          >
-            {gradeOptions.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Num climbs */}
-        <div>
-          <label className="text-xs text-zinc-500 block mb-1">
-            Number of Climbs (Fewer = Faster)
-          </label>
-          <input
-            type="number"
-            min={1}
-            max={10}
-            value={numClimbs}
-            onChange={(e) =>
-              onNumClimbsChange(
-                Math.max(1, Math.min(15, parseInt(e.target.value) || 1)),
-              )
-            }
-            className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-          />
-        </div>
-
-        {/* Wall angle */}
-        <div>
-          <label className="text-xs text-zinc-500 block mb-1">
-            Wall Angle (Degrees)
-          </label>
-          <input
-            type="number"
-            min={0}
-            max={90}
-            disabled={angleFixed}
-            value={angle ?? ""}
-            onChange={(e) => {
-              if (e.target.value === "") {
-                onAngleChange(null);
-              } else {
-                const parsed = parseInt(e.target.value);
-                if (!isNaN(parsed)) {
-                  onAngleChange(Math.max(0, Math.min(90, parsed)));
-                }
-              }
-            }}
-            className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-          />
-        </div>
-
-        {/* --- NEW MODEL SETTINGS SECTION --- */}
-        <div>
-          <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-2">
-            Generation Mode
-          </label>
-
-          {/* Preset Buttons Grid */}
-          <div className="grid grid-cols-3 gap-2 mb-2">
-            <button
-              onClick={() => onGenerateSettingsChange(FAST_GENERATE_SETTINGS)}
-              className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
-                isPresetActive(FAST_GENERATE_SETTINGS)
-                  ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
-                  : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-              }`}
-            >
-              <Zap className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wide">
-                Fast
-              </span>
-            </button>
-
-            <button
-              onClick={() =>
-                onGenerateSettingsChange(DEFAULT_GENERATE_SETTINGS)
-              }
-              className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
-                isPresetActive(DEFAULT_GENERATE_SETTINGS)
-                  ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
-                  : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-              }`}
-            >
-              <Target className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wide">
-                Standard
-              </span>
-            </button>
-
-            <button
-              onClick={() => onGenerateSettingsChange(SLOW_GENERATE_SETTINGS)}
-              className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
-                isPresetActive(SLOW_GENERATE_SETTINGS)
-                  ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
-                  : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-              }`}
-            >
-              <Hourglass className="w-4 h-4" />
-              <span className="text-[10px] font-bold uppercase tracking-wide">
-                Quality
-              </span>
-            </button>
-          </div>
-
-          {/* Toggle for Advanced/Custom Settings */}
+      {/* Scrollable generation controls */}
+      <div
+        ref={panelRef}
+        className="flex-1 min-h-0 overflow-y-auto select-none"
+        onMouseDown={handlePanelMouseDown}
+        onMouseMove={handlePanelMouseMove}
+        onMouseUp={handlePanelMouseUp}
+        onMouseLeave={handlePanelMouseUp}
+      >
+        {/* Climb Parameters collapsible section */}
+        <div className="border-b border-zinc-800">
           <button
-            onClick={onToggleModelSettings}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded transition-colors text-xs ${
-              isCustom || showModelSettings
-                ? "bg-zinc-800 text-zinc-200"
-                : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
-            }`}
+            onClick={() => setShowClimbParams((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-800/50 transition-colors"
           >
-            <span className="flex items-center gap-2">
-              <Cpu className="w-3.5 h-3.5" />
-              {isCustom ? "Custom Settings Active" : "Custom Settings"}
+            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+              Climb Parameters
             </span>
             <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform ${
-                showModelSettings ? "rotate-180" : ""
-              }`}
+              className={`w-4 h-4 text-zinc-500 transition-transform ${showClimbParams ? "rotate-180" : ""}`}
             />
           </button>
 
-          {/* Collapsible Panel */}
-          {showModelSettings && (
-            <div className="mt-2 p-3 bg-zinc-950 border border-zinc-800 rounded shadow-inner">
-              <ModelSettingsPanel
-                settings={generateSettings}
-                onChange={onGenerateSettingsChange}
-              />
+          {showClimbParams && (
+            <div className="px-4 pb-4 space-y-4">
+              {/* Grading scale toggle */}
+              <div>
+                <label className="text-xs text-zinc-500 tracking-wider block mb-1.5">
+                  Grading Scale
+                </label>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => onGradingScaleChange("v_grade")}
+                    className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                      gradingScale === "v_grade"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    V-grade
+                  </button>
+                  <button
+                    onClick={() => onGradingScaleChange("font")}
+                    className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                      gradingScale === "font"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    Fontainebleau
+                  </button>
+                </div>
+              </div>
+
+              {/* Grade */}
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">
+                  Target Grade
+                </label>
+                <select
+                  value={grade}
+                  onChange={(e) => onGradeChange(e.target.value)}
+                  className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                >
+                  {gradeOptions.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Num climbs */}
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">
+                  Number of Climbs (Default 5)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={numClimbs ?? ""}
+                  onChange={(e) =>
+                    onNumClimbsChange(
+                      e.target.value == ""
+                        ? null
+                        : Math.max(1, Math.min(10, parseInt(e.target.value))),
+                    )
+                  }
+                  className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+
+              {/* Wall angle */}
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">
+                  Wall Angle (Default 45 Degrees)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={90}
+                  disabled={angleFixed}
+                  value={angle ?? ""}
+                  onChange={(e) => {
+                    if (e.target.value === "") {
+                      onAngleChange(null);
+                    } else {
+                      const parsed = parseInt(e.target.value);
+                      if (!isNaN(parsed)) {
+                        onAngleChange(Math.max(0, Math.min(90, parsed)));
+                      }
+                    }
+                  }}
+                  className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+                />
+              </div>
             </div>
           )}
         </div>
-        {/* Generate button */}
-        <button
-          onClick={onGenerate}
-          disabled={isGenerating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium rounded transition-colors text-sm"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-4 h-4" />
-              Generate
-            </>
-          )}
-        </button>
 
-        {/* Error */}
-        {error && (
-          <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded px-3 py-2">
-            {error}
+        {/* --- NEW MODEL SETTINGS SECTION --- */}
+        <div className="p-4 border-b border-zinc-800 space-y-4">
+          <div>
+            <label className="text-xs text-zinc-400 uppercase tracking-wider block mb-2">
+              Generation Mode
+            </label>
+
+            {/* Preset Buttons Grid */}
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <button
+                onClick={() => onGenerateSettingsChange(FAST_GENERATE_SETTINGS)}
+                className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
+                  isPresetActive(FAST_GENERATE_SETTINGS)
+                    ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
+                    : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                <Zap className="w-4 h-4" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">
+                  Speed
+                </span>
+              </button>
+
+              <button
+                onClick={() =>
+                  onGenerateSettingsChange(DEFAULT_GENERATE_SETTINGS)
+                }
+                className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
+                  isPresetActive(DEFAULT_GENERATE_SETTINGS)
+                    ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
+                    : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                <Target className="w-4 h-4" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">
+                  Standard
+                </span>
+              </button>
+
+              <button
+                onClick={() => onGenerateSettingsChange(SLOW_GENERATE_SETTINGS)}
+                className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded border transition-all ${
+                  isPresetActive(SLOW_GENERATE_SETTINGS)
+                    ? "bg-emerald-600/20 border-emerald-600 text-emerald-400"
+                    : "bg-zinc-800 border-transparent text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                <Turtle className="w-4 h-4" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">
+                  Quality
+                </span>
+              </button>
+            </div>
+
+            {/* Toggle for Advanced/Custom Settings */}
+            <button
+              onClick={onToggleModelSettings}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded transition-colors text-xs ${
+                isCustom || showModelSettings
+                  ? "bg-zinc-800 text-zinc-200"
+                  : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Cpu className="w-3.5 h-3.5" />
+                {isCustom
+                  ? "Custom Settings Active"
+                  : "Custom Generation Settings"}
+              </span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${
+                  showModelSettings ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {/* Collapsible Panel */}
+            {showModelSettings && (
+              <div className="mt-2 p-3 bg-zinc-950 border border-zinc-800 rounded shadow-inner">
+                <ModelSettingsPanel
+                  settings={generateSettings}
+                  onChange={onGenerateSettingsChange}
+                />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+          {/* Generate button */}
+          <button
+            onClick={onGenerate}
+            disabled={isGenerating}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium rounded transition-colors text-sm"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Generate
+              </>
+            )}
+          </button>
 
-      {/* Generated holdsets list */}
-      <div className="flex-1 min-h-0 bg-zinc-900">
+          {/* Error */}
+          {error && (
+            <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded px-3 py-2">
+              {error}
+            </div>
+          )}
+        </div>
+        {/* end generation mode section */}
+
+        {/* Generated holdsets list — inline below controls, no separate flex child */}
         <HoldsetList
           holdsets={holdsets}
           selectedIndex={selectedIndex}
@@ -1031,6 +1099,7 @@ function GenerationPanel({
           onClear={onClearHoldsets}
         />
       </div>
+      {/* end single scrollable panel */}
     </>
   );
 }
@@ -1412,6 +1481,8 @@ interface WallCanvasProps {
   displaySettings: DisplaySettings;
   editing: boolean;
   onHoldClick: (holdIndex: number) => void;
+  onSwipeNext?: () => void;
+  onSwipePrev?: () => void;
 }
 
 function WallCanvas({
@@ -1424,6 +1495,8 @@ function WallCanvas({
   displaySettings,
   editing,
   onHoldClick,
+  onSwipeNext,
+  onSwipePrev,
 }: WallCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -1437,6 +1510,22 @@ function WallCanvas({
     startViewX: 0,
     startViewY: 0,
   });
+
+  // Touch state for pinch-zoom and pan on mobile
+  const touchRef = useRef({
+    lastTouchX: 0,
+    lastTouchY: 0,
+    lastDist: 0,
+    isTwoFinger: false,
+    startX: 0,
+    startY: 0,
+    startTime: 0,
+    startViewX: 0,
+    startViewY: 0,
+    moved: false,
+  });
+
+  const [swipeHint, setSwipeHint] = useState<"left" | "right" | null>(null);
 
   // Load image
   useEffect(() => {
@@ -1677,13 +1766,134 @@ function WallCanvas({
     };
   }, []);
 
+  // Touch pan & pinch-zoom — prevent page scroll/zoom
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!element) return;
+
+    const getTouchDist = (t: TouchList) =>
+      Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const getTouchMid = (t: TouchList) => ({
+      x: (t[0].clientX + t[1].clientX) / 2,
+      y: (t[0].clientY + t[1].clientY) / 2,
+    });
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        touchRef.current = {
+          ...touchRef.current,
+          lastTouchX: e.touches[0].clientX,
+          lastTouchY: e.touches[0].clientY,
+          startX: e.touches[0].clientX,
+          startY: e.touches[0].clientY,
+          startTime: Date.now(),
+          startViewX: 0, // will be set from state via closure below
+          startViewY: 0,
+          isTwoFinger: false,
+          moved: false,
+        };
+        // Store view at gesture start
+        setViewTransform((prev) => {
+          touchRef.current.startViewX = prev.x;
+          touchRef.current.startViewY = prev.y;
+          return prev;
+        });
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        touchRef.current.isTwoFinger = true;
+        touchRef.current.lastDist = getTouchDist(e.touches);
+        const mid = getTouchMid(e.touches);
+        touchRef.current.lastTouchX = mid.x;
+        touchRef.current.lastTouchY = mid.y;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const rect = element.getBoundingClientRect();
+        const mid = getTouchMid(e.touches);
+        const dist = getTouchDist(e.touches);
+        const pinchFactor = dist / (touchRef.current.lastDist || dist);
+        const dx = mid.x - touchRef.current.lastTouchX;
+        const dy = mid.y - touchRef.current.lastTouchY;
+        const midX = mid.x - rect.left;
+        const midY = mid.y - rect.top;
+
+        setViewTransform((prev) => {
+          const newZoom = Math.max(0.1, Math.min(10, prev.zoom * pinchFactor));
+          const scale = newZoom / prev.zoom;
+          return {
+            zoom: newZoom,
+            x: midX - (midX - prev.x) * scale + dx,
+            y: midY - (midY - prev.y) * scale + dy,
+          };
+        });
+
+        touchRef.current.lastDist = dist;
+        touchRef.current.lastTouchX = mid.x;
+        touchRef.current.lastTouchY = mid.y;
+      } else if (e.touches.length === 1 && !touchRef.current.isTwoFinger) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - touchRef.current.startX;
+        const dy = e.touches[0].clientY - touchRef.current.startY;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+          touchRef.current.moved = true;
+        }
+        if (touchRef.current.moved) {
+          setViewTransform((prev) => ({
+            ...prev,
+            x: touchRef.current.startViewX + dx,
+            y: touchRef.current.startViewY + dy,
+          }));
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        touchRef.current.isTwoFinger = false;
+      }
+      // Detect swipe: fast, horizontal, single-finger, minimal vertical movement
+      if (e.changedTouches.length === 1 && !touchRef.current.isTwoFinger) {
+        const dx = e.changedTouches[0].clientX - touchRef.current.startX;
+        const dy = e.changedTouches[0].clientY - touchRef.current.startY;
+        const dt = Date.now() - touchRef.current.startTime;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        // Swipe: >60px horizontal, <80px vertical, <400ms, mostly horizontal
+        if (absDx > 60 && absDy < 80 && dt < 400 && absDx > absDy * 1.5) {
+          if (dx < 0 && onSwipeNext) {
+            setSwipeHint("left");
+            setTimeout(() => setSwipeHint(null), 600);
+            onSwipeNext();
+          } else if (dx > 0 && onSwipePrev) {
+            setSwipeHint("right");
+            setTimeout(() => setSwipeHint(null), 600);
+            onSwipePrev();
+          }
+        }
+      }
+    };
+
+    element.addEventListener("touchstart", onTouchStart, { passive: false });
+    element.addEventListener("touchmove", onTouchMove, { passive: false });
+    element.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    return () => {
+      element.removeEventListener("touchstart", onTouchStart);
+      element.removeEventListener("touchmove", onTouchMove);
+      element.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
+
   const { zoom, x, y } = viewTransform;
   const { width, height } = imageDimensions;
 
   return (
     <div
       ref={wrapperRef}
-      className={`w-full h-full overflow-hidden bg-zinc-950 ${
+      className={`w-full h-full overflow-hidden bg-zinc-950 relative ${
         editing ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"
       }`}
       onMouseDown={handleMouseDown}
@@ -1706,6 +1916,26 @@ function WallCanvas({
           }}
         />
       </div>
+
+      {/* Swipe hint flash */}
+      {swipeHint && (
+        <div
+          className="absolute inset-0 pointer-events-none flex items-center justify-center z-20"
+          style={{ animation: "fadeIn 0.1s ease-out" }}
+        >
+          <div className="bg-black/50 rounded-full px-6 py-3 text-white text-sm font-semibold flex items-center gap-2">
+            {swipeHint === "left" ? (
+              <>
+                <span>→</span> Next Climb
+              </>
+            ) : (
+              <>
+                <span>←</span> Prev Climb
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1731,7 +1961,7 @@ function GeneratePage() {
   const [gradingScale, setGradingScale] = useState<GradeScale>("v_grade");
   const [gradeOptions, setGradeOptions] = useState(VGRADE_OPTIONS);
 
-  const [numClimbs, setNumClimbs] = useState(5);
+  const [numClimbs, setNumClimbs] = useState<number | null>(5);
   const [grade, setGrade] = useState<string>("V4");
   const [angle, setAngle] = useState<number | null>(null);
 
@@ -1803,7 +2033,7 @@ function GeneratePage() {
     const generate_grade = grade ?? gradeOptions[0];
 
     const request: GenerateRequest = {
-      num_climbs: numClimbs,
+      num_climbs: numClimbs ?? 5,
       grade: generate_grade,
       grade_scale: gradingScale,
       angle: angle ?? wall.metadata.angle,
@@ -1834,7 +2064,7 @@ function GeneratePage() {
 
       // Select the first of the *new* climbs
       if (response.climbs.length > 0) {
-        setSelectedIndex(generatedClimbs.length); // The index where the new batch starts
+        setSelectedIndex(0);
       }
 
       navigate({
@@ -1926,8 +2156,7 @@ function GeneratePage() {
     // Adjust selected index
     setSelectedIndex((current) => {
       if (current === null) return null;
-      if (current === index) return null;
-      if (current > index) return current - 1;
+      if (current >= index && current > 0) return current - 1;
       return current;
     });
   }, []);
@@ -2110,6 +2339,25 @@ function GeneratePage() {
     setEditing(false);
   }, []);
 
+  // Swipe climb navigation for mobile
+  const handleSwipeNext = useCallback(() => {
+    if (generatedClimbs.length === 0) return;
+    setSelectedIndex((prev) => {
+      if (prev === null) return 0;
+      return (prev + 1) % generatedClimbs.length;
+    });
+    setEditing(false);
+  }, [generatedClimbs.length]);
+
+  const handleSwipePrev = useCallback(() => {
+    if (generatedClimbs.length === 0) return;
+    setSelectedIndex((prev) => {
+      if (prev === null) return generatedClimbs.length - 1;
+      return (prev - 1 + generatedClimbs.length) % generatedClimbs.length;
+    });
+    setEditing(false);
+  }, [generatedClimbs.length]);
+
   return (
     <div className="h-screen flex flex-col bg-zinc-950 relative">
       {/* Keyframes for mobile drawer animations */}
@@ -2150,8 +2398,8 @@ function GeneratePage() {
           <div className="w-px h-5 bg-zinc-800 hidden sm:block" />
 
           {!showDisplaySettings && (
-            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-              Display Settings
+            <span className="text-xs text-zinc-500 uppercase tracking-wider">
+              Hold Display Settings
             </span>
           )}
 
@@ -2163,7 +2411,7 @@ function GeneratePage() {
                 : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
             }`}
           >
-            <Settings className="w-4 h-4" />
+            <SunMedium className="w-4 h-4" />
           </button>
 
           {/* Settings Popover */}
@@ -2178,8 +2426,8 @@ function GeneratePage() {
                 style={{ animation: "fadeIn 0.1s ease-out" }}
               >
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                    Display Settings
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">
+                    Hold Display Settings
                   </span>
                 </div>
                 <DisplaySettingsPanel
@@ -2202,9 +2450,16 @@ function GeneratePage() {
             <span className="text-sm font-bold text-zinc-100">
               {selectedClimb.name}
             </span>
-            <span className="text-xs font-medium text-emerald-400">
-              {selectedClimb.grade}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-emerald-400">
+                {selectedClimb.grade}
+              </span>
+              {generatedClimbs.length > 1 && selectedIndex !== null && (
+                <span className="text-xs text-zinc-500">
+                  {selectedIndex + 1}/{generatedClimbs.length}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2308,6 +2563,12 @@ function GeneratePage() {
             displaySettings={displaySettings}
             editing={editing}
             onHoldClick={handleHoldClick}
+            onSwipeNext={
+              generatedClimbs.length > 1 ? handleSwipeNext : undefined
+            }
+            onSwipePrev={
+              generatedClimbs.length > 1 ? handleSwipePrev : undefined
+            }
           />
         </div>
 
