@@ -18,7 +18,7 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-from torch import Tensor
+from torch import Tensor, seed
 from sklearn.preprocessing import MinMaxScaler
 from app.config import settings
 
@@ -162,11 +162,10 @@ class Noiser(nn.Module):
 # ---------------------------------------------------------------------------
 
 class ClimbDDPM(nn.Module):
-    def __init__(self, model: nn.Module, weights_path: Path, timesteps: int = 100):
+    def __init__(self, model: nn.Module, weights_path: Path):
         super().__init__()
         self.model = model
         self.load_state_dict(clear_compile_keys(weights_path))
-        self.timesteps = timesteps
 
     def _cos_alpha_bar(self, t: Tensor) -> Tensor:
         t = t.view(-1, 1, 1)
@@ -368,7 +367,8 @@ class ClimbDDPMGenerator():
         self.scaler = scaler
         self.ddpm = ddpm
         self.hold_classifier = hold_classifier
-        self.timesteps = 100
+        self._cond_cache = {}
+        self.deterministic_noise_generator = torch.Generator(device=self.device)
 
         with sqlite3.connect(settings.DB_PATH) as conn:
             holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds", conn)
@@ -383,16 +383,17 @@ class ClimbDDPMGenerator():
                 self.holds_lookup[wall_id] = np.concatenate([self.holds_lookup[wall_id], np.array([-1, -1, -1, -1])])
 
     def _build_cond_tensor(self, n, grade, diff_scale, angle):
-        diff = GRADE_TO_DIFF[diff_scale][grade]
-        df_cond = pd.DataFrame({
-            "grade": [diff]*n,
-            "quality": [3.]*n,
-            "ascents": [1000]*n,
-            "angle": [angle]*n
-        })
-
-        cond = self.scaler.transform_climb_features(df_cond)
-        return torch.tensor(cond, device=self.device, dtype=torch.float32)
+        cache_key = (grade, diff_scale, angle)
+        if cache_key not in self._cond_cache:
+            diff = GRADE_TO_DIFF[diff_scale][grade]
+            row = np.array([[diff, 3.0, 1000, float(angle)]])
+            row[:, 1] = np.log(1 - (row[:, 1] - 3))     # quality
+            row[:, 2] = np.log(row[:, 2])               # ascents
+            scaled = self.scaler.cond_features_scaler.transform(row)
+            self._cond_cache[cache_key] = scaled[0]
+        base = self._cond_cache[cache_key]
+        tiled = np.tile(base, (n,1))
+        return torch.tensor(tiled, device=self.device, dtype=torch.float32)
     
     def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
         """
@@ -423,32 +424,22 @@ class ClimbDDPMGenerator():
         holds = self.holds_lookup[wall_id][idx]
         holds = holds.reshape(B, S)
         
-        # Mask null holds to be role 4
         is_null = (holds == -1)
         roles[is_null] = 4
         
-        # Concatenate indices and roles
         climbs = np.stack([holds, roles], axis=2)
         
         deduped_climbs = []
         for c in climbs:
-            # 2. Filter out null holds (role == 4)
             valid_mask = c[:, 1] != 4
             c_valid = c[valid_mask]
-
-            # 3. Sort by Role (column 1) ascending
-            # This ensures the lowest role-index comes first for any given hold
             c_sorted = c_valid[c_valid[:, 1].argsort()]
-
-            # 4. Keep only the first occurrence of each Hold Index (column 0)
             _, unique_indices = np.unique(c_sorted[:, 0], return_index=True)
-            
-            # 5. Extract results and convert to list
             deduped_climbs.append(c_sorted[unique_indices].tolist())
 
         return deduped_climbs
     
-    def _projection_strength(self, t: Tensor, t_start_projection: float = 1.0):
+    def _projection_strength(self, t: Tensor, t_start_projection: float):
         """Calculate the weight to assign to the projected holds based on the timestep."""
         a = (t_start_projection-t)/t_start_projection
         strength = 1 - torch.cos(a*torch.pi/2)
@@ -458,43 +449,66 @@ class ClimbDDPMGenerator():
     def generate(
         self,
         wall_id: str,
-        n: int = 1,
-        angle: int = 45,
-        grade: str = 'V4',
-        diff_scale: str = 'v_grade',
-        deterministic: bool = False
+        n: int,
+        angle: int,
+        grade: str,
+        diff_scale: str,
+        timesteps: int,
+        deterministic: bool,
+        t_start_projection: float,
+        x_offset: float | None,
+        seed: int,
     )->list[list[list[int]]]:
         """
         Generate a climb or batch of climbs with the given conditions using the standard DDPM iterative denoising process.
-        
-        :param n: Number of climbs to generate
+
+        :param wall_id: The Wall-ID on which to generate the climb.
+        :type wall_id: str
+        :param n: The number of climbs to generate.
         :type n: int
-        :param angle: Angle of the wall
+        :param angle: The current wall angle.
         :type angle: int
-        :param grade: Desired difficulty (V-grade)
-        :type grade: int | None
-        :return: A Tensor containing the denoised generated climbs as hold sets.
-        :rtype: Tensor
+        :param grade: The desired grade.
+        :type grade: str
+        :param diff_scale: The desired difficulty scale (V-scale or Font).
+        :type diff_scale: str
+        :param timesteps: Model setting: Number of diffusion timesteps to run. Higher results in better quality (Should be a divisor of 100 to retain markovian properties)
+        :type timesteps: int
+        :param deterministic: Whether to use the original noise vector in successive diffusion steps, or use a new noise vector each time.
+        :type deterministic: bool
+        :param t_start_projection: Point in the generation process to begin the projection steps. Earlier is better but more expensive.
+        :type t_start_projection: float
+        :param x_offset: Offset the climb on the X-axis.
+        :type x_offset: float | None
+        :return: A set of generated climbs according to the specified 
+        :rtype: list[list[list[int]]]
         """
-        cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
-        x_t = torch.randn((n, 20, 4), device=self.device)
-        noisy = x_t.clone()
-        t_tensor = torch.ones((n,1), device=self.device)
+        # Seed Noise Generator
+        if deterministic:
+            self.deterministic_noise_generator.manual_seed(seed)
         
-        # Randomly offset the holds-manifold to allow for climbs to be generated at different x-coordinates around the wall.
-        x_offset = max(np.random.randn(),1.3)
+        # Added x-offset logic for more variety
+        if x_offset is None:
+            x_offset = torch.randn(1, generator=self.deterministic_noise_generator).item() if deterministic else max(np.random.randn(), 1.3)
+            x_offset = max(x_offset, 1.3)
+        
         offset_manifold = self.holds_manifolds[wall_id].clone()
         offset_manifold[:,0] += x_offset*0.1
 
-        for _ in range(0, self.timesteps):
-
+        # CORE LOGIC
+        cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
+        x_t = torch.randn((n, 20, 4), device=self.device, generator=self.deterministic_noise_generator) if deterministic else torch.randn((n, 20, 4), device=self.device)
+        noisy = x_t.clone()
+        t_tensor = torch.ones((n,1), device=self.device)
+        
+        for _ in range(0, timesteps):
             gen_climbs = self.ddpm(noisy, cond_t, t_tensor)
 
-            alpha_p = self._projection_strength(t_tensor)
+            alpha_p = self._projection_strength(t_tensor, t_start_projection)
             projected_climbs = self._project_onto_manifold(gen_climbs, offset_manifold)
             gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
             
-            t_tensor -= 1.0/self.timesteps
+            t_tensor -= 1.0/timesteps
             noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
         
         return self._project_onto_indices(gen_climbs, cond_t, offset_manifold, wall_id)
@@ -502,17 +516,20 @@ class ClimbDDPMGenerator():
 # ---------------------------------------------------------------------------
 # Global ClimbGenerator Instance For Dependency Injection
 # ---------------------------------------------------------------------------
+scaler = ClimbsFeatureScaler(
+    weights_path=settings.SCALER_WEIGHTS_PATH
+)
 ddpm = ClimbDDPM(
     model=Noiser(),
     weights_path=settings.DDPM_WEIGHTS_PATH,
-    timesteps=100,
-)
-scaler = ClimbsFeatureScaler(
-    weights_path=settings.SCALER_WEIGHTS_PATH
 )
 hold_classifier = UNetHoldClassifierLogits(
     weights_path=settings.HC_WEIGHTS_PATH
 )
+
+ddpm.eval()
+hold_classifier.eval()
+
 generator = ClimbDDPMGenerator(
     scaler=scaler,
     ddpm=ddpm,

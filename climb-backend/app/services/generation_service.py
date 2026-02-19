@@ -7,8 +7,9 @@ Manages:
 - Dispatching generation requests
 """
 import logging
+from os import times
 
-from app.schemas import Holdset, GenerateRequest
+from app.schemas import Holdset, GenerateRequest, GenerateSettings
 from app.database import get_db
 from app.services.utils import generator
 from app.services.climb_service import _holds_to_holdset
@@ -28,6 +29,7 @@ def _get_wall_angle(wall_id: str, default_angle: int = 45) -> int:
 def generate_climbs(
     wall_id: str,
     request: GenerateRequest,
+    settings: GenerateSettings,
 ) -> list[Holdset]:
     """
     Generate climbs for a wall using the DDPM.
@@ -50,7 +52,11 @@ def generate_climbs(
             angle=angle,
             grade=request.grade,
             diff_scale=request.grade_scale.value,
-            deterministic=request.deterministic
+            timesteps=settings.timesteps,
+            deterministic=settings.deterministic,
+            t_start_projection=settings.t_start_projection,
+            x_offset=settings.x_offset,
+            seed=37,
         )
     except Exception as e:
         print(f'Exception: {e}')

@@ -277,11 +277,10 @@ class Noiser_V2(nn.Module):
         return result
 
 class ClimbDDPM(nn.Module):
-    def __init__(self, model: nn.Module, weights_path: Path | str, timesteps: int = 100):
+    def __init__(self, model: nn.Module, weights_path: Path | str):
         super().__init__()
         self.model = model
         self.load_state_dict(clear_compile_keys(weights_path))
-        self.timesteps = timesteps
     
     def _cos_alpha_bar(self, t: Tensor)-> Tensor:
         t = t.view(-1,1,1)

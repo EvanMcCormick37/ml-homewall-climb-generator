@@ -6,7 +6,7 @@ Endpoints:
 """
 from fastapi import APIRouter, HTTPException, Query
 
-from app.schemas.generate import GenerateRequest, GenerateResponse, GradeScale
+from app.schemas.generate import GenerateRequest, GenerateResponse, GenerateSettings, GradeScale
 from app.services import services
 
 router = APIRouter()
@@ -24,6 +24,9 @@ def generate_climbs(
     grade: str = Query("V4"),
     grade_scale: GradeScale = Query(GradeScale.V_GRADE),
     angle: int | None = Query(None, ge=0, le=90),
+    timesteps: int = Query(100, ge=1, le=100),
+    t_start_projection: float = Query(1.0, ge=0.0, le=1.0),
+    x_offset: float | None = Query(None, ge=-1.5, le=1.5),
     deterministic: bool = Query(False),
 ):
     """
@@ -46,7 +49,12 @@ def generate_climbs(
         angle=angle,
         deterministic=deterministic,
     )
-    print("hello!")
+    settings = GenerateSettings(
+        timesteps=timesteps,
+        t_start_projection=t_start_projection,
+        deterministic=deterministic,
+        x_offset=x_offset,
+    )
     # Validate wall exists
     if not services.wall_exists(wall_id):
         raise HTTPException(status_code=404, detail="Wall not found")
@@ -60,7 +68,7 @@ def generate_climbs(
         )
 
     try:
-        generated = services.generate_climbs(wall_id, request)
+        generated = services.generate_climbs(wall_id, request, settings)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

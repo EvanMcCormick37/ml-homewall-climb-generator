@@ -12,8 +12,21 @@ export interface GenerateRequest {
   grade: string;
   grade_scale: GradeScale;
   angle: number | null;
+}
+
+export interface GenerateSettings {
+  timesteps: number;
+  t_start_projection: number;
+  x_offset: number | null;
   deterministic: boolean;
 }
+
+export const DEFAULT_GENERATE_SETTINGS: GenerateSettings = {
+  timesteps: 25,
+  t_start_projection: 1.0,
+  x_offset: null,
+  deterministic: false,
+};
 
 export interface GenerateResponse {
   wall_id: string;

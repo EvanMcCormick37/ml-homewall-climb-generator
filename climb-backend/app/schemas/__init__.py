@@ -29,6 +29,7 @@ from app.schemas.climbs import (
 from app.schemas.generate import (
     GradeScale,
     GenerateRequest,
+    GenerateSettings,
     GenerateResponse,
 )
 
@@ -58,5 +59,6 @@ __all__ = [
     # Generation
     "GradeScale",
     "GenerateRequest",
+    "GenerateSettings",
     "GenerateResponse",
 ]

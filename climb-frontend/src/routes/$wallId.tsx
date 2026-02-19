@@ -15,14 +15,18 @@ import {
   Image,
   X,
   RefreshCcw,
+  Cpu,
+  ChevronDown,
 } from "lucide-react";
 import type {
   WallDetail,
   HoldDetail,
   Holdset,
   GenerateRequest,
+  GenerateSettings,
   GradeScale,
 } from "@/types";
+import { DEFAULT_GENERATE_SETTINGS } from "@/types";
 
 // --- Route Definition ---
 
@@ -577,6 +581,393 @@ function DisplaySettingsPanel({
   );
 }
 
+// --- Model Settings Panel ---
+
+interface ModelSettingsPanelProps {
+  settings: GenerateSettings;
+  onChange: (settings: GenerateSettings) => void;
+}
+
+function ModelSettingsPanel({ settings, onChange }: ModelSettingsPanelProps) {
+  const update = (patch: Partial<GenerateSettings>) =>
+    onChange({ ...settings, ...patch });
+
+  const isDefault =
+    settings.timesteps === DEFAULT_GENERATE_SETTINGS.timesteps &&
+    settings.t_start_projection ===
+      DEFAULT_GENERATE_SETTINGS.t_start_projection &&
+    settings.x_offset === DEFAULT_GENERATE_SETTINGS.x_offset;
+
+  return (
+    <div className="space-y-4 min-w-[240px]">
+      {/* Timesteps */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs text-zinc-500 uppercase tracking-wider">
+            Timesteps
+          </label>
+          <span className="text-xs text-zinc-400 font-mono">
+            {settings.timesteps}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={5}
+          max={100}
+          step={5}
+          value={settings.timesteps}
+          onChange={(e) => update({ timesteps: parseInt(e.target.value) })}
+          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer"
+        />
+        <div className="flex justify-between mt-1">
+          <span className="text-xs text-zinc-600">Faster</span>
+          <span className="text-xs text-zinc-600">Higher Quality</span>
+        </div>
+      </div>
+
+      {/* Projection start */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs text-zinc-500 uppercase tracking-wider">
+            Projection Start
+          </label>
+          <span className="text-xs text-zinc-400 font-mono">
+            t={settings.t_start_projection.toFixed(2)}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0.3}
+          max={1.0}
+          step={0.05}
+          value={settings.t_start_projection}
+          onChange={(e) =>
+            update({ t_start_projection: parseFloat(e.target.value) })
+          }
+          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer"
+        />
+        <div className="flex justify-between mt-1">
+          <span className="text-xs text-zinc-600">Later (Faster)</span>
+          <span className="text-xs text-zinc-600">Earlier</span>
+        </div>
+      </div>
+
+      {/* X Offset */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs text-zinc-500 uppercase tracking-wider">
+            X Offset
+          </label>
+          <span className="text-xs text-zinc-400 font-mono">
+            {settings.x_offset != null ? settings.x_offset.toFixed(2) : "Auto"}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={-1.5}
+          max={1.5}
+          step={0.05}
+          value={settings.x_offset ?? 0}
+          onChange={(e) => update({ x_offset: parseFloat(e.target.value) })}
+          className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer"
+        />
+        <button
+          onClick={() => update({ x_offset: null })}
+          className={`mt-1.5 w-full text-xs py-1 rounded transition-colors ${
+            settings.x_offset == null
+              ? "bg-emerald-600/20 text-emerald-400 border border-emerald-700"
+              : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          {settings.x_offset == null ? "Auto (random)" : "Reset to Auto"}
+        </button>
+      </div>
+
+      {/* Deterministic Generation toggle */}
+      <div>
+        <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
+          Generation Style
+        </label>
+        <div className="flex gap-1">
+          <button
+            onClick={() =>
+              update({
+                deterministic: true,
+              })
+            }
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+              settings.deterministic
+                ? "bg-emerald-600 text-white"
+                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Deterministic
+          </button>
+          <button
+            onClick={() =>
+              update({
+                deterministic: false,
+              })
+            }
+            className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+              settings.deterministic
+                ? "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                : "bg-emerald-600 text-white"
+            }`}
+          >
+            Nondeterministic
+          </button>
+        </div>
+      </div>
+
+      {/* Reset to defaults */}
+      {!isDefault && (
+        <button
+          onClick={() => onChange({ ...DEFAULT_GENERATE_SETTINGS })}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
+        >
+          <RotateCcw className="w-3 h-3" />
+          Reset to Defaults
+        </button>
+      )}
+
+      <p className="text-xs text-zinc-600 leading-relaxed pt-1 border-t border-zinc-800">
+        Lower timesteps are faster but may reduce climb variety. Projection
+        start controls when holds are snapped to the wall manifold.
+      </p>
+    </div>
+  );
+}
+
+// --- GenerationPanel Component ---
+
+interface GenerationPanelProps {
+  gradingScale: GradeScale;
+  gradeOptions: string[];
+  grade: string;
+  onGradingScaleChange: (scale: GradeScale) => void;
+  onGradeChange: (grade: string) => void;
+  numClimbs: number;
+  onNumClimbsChange: (n: number) => void;
+  angle: number | null;
+  angleFixed: boolean;
+  onAngleChange: (angle: number | null) => void;
+  deterministic: boolean;
+  onDeterministicChange: (d: boolean) => void;
+  generateSettings: GenerateSettings;
+  onGenerateSettingsChange: (s: GenerateSettings) => void;
+  showModelSettings: boolean;
+  onToggleModelSettings: () => void;
+  isGenerating: boolean;
+  error: string | null;
+  onGenerate: () => void;
+  holdsets: NamedHoldset[];
+  selectedIndex: number | null;
+  onSelectHoldset: (i: number) => void;
+  onDeleteHoldset: (i: number) => void;
+  onClearHoldsets: () => void;
+}
+
+function GenerationPanel({
+  gradingScale,
+  gradeOptions,
+  grade,
+  onGradingScaleChange,
+  onGradeChange,
+  numClimbs,
+  onNumClimbsChange,
+  angle,
+  angleFixed,
+  onAngleChange,
+  generateSettings,
+  onGenerateSettingsChange,
+  showModelSettings,
+  onToggleModelSettings,
+  isGenerating,
+  error,
+  onGenerate,
+  holdsets,
+  selectedIndex,
+  onSelectHoldset,
+  onDeleteHoldset,
+  onClearHoldsets,
+}: GenerationPanelProps) {
+  const hasCustomModelSettings =
+    generateSettings.timesteps !== DEFAULT_GENERATE_SETTINGS.timesteps ||
+    generateSettings.t_start_projection !==
+      DEFAULT_GENERATE_SETTINGS.t_start_projection ||
+    generateSettings.x_offset !== DEFAULT_GENERATE_SETTINGS.x_offset;
+
+  return (
+    <>
+      {/* Generation controls */}
+      <div className="p-4 border-b border-zinc-800 space-y-4 flex-shrink-0">
+        <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+          Parameters
+        </h2>
+
+        {/* Grading scale toggle */}
+        <div>
+          <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
+            Grading Scale
+          </label>
+          <div className="flex gap-1">
+            <button
+              onClick={() => onGradingScaleChange("v_grade")}
+              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                gradingScale === "v_grade"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              V-grade
+            </button>
+            <button
+              onClick={() => onGradingScaleChange("font")}
+              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
+                gradingScale === "font"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Fontainebleau
+            </button>
+          </div>
+        </div>
+
+        {/* Grade */}
+        <div>
+          <label className="text-xs text-zinc-500 block mb-1">
+            Target Grade
+          </label>
+          <select
+            value={grade}
+            onChange={(e) => onGradeChange(e.target.value)}
+            className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+          >
+            {gradeOptions.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Num climbs */}
+        <div>
+          <label className="text-xs text-zinc-500 block mb-1">
+            Number of Climbs (Fewer = Faster)
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={15}
+            value={numClimbs}
+            onChange={(e) =>
+              onNumClimbsChange(
+                Math.max(1, Math.min(15, parseInt(e.target.value) || 1)),
+              )
+            }
+            className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+          />
+        </div>
+
+        {/* Wall angle */}
+        <div>
+          <label className="text-xs text-zinc-500 block mb-1">
+            Wall Angle (Degrees)
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={90}
+            disabled={angleFixed}
+            value={angle ?? ""}
+            onChange={(e) => {
+              if (e.target.value === "") {
+                onAngleChange(null);
+              } else {
+                const parsed = parseInt(e.target.value);
+                if (!isNaN(parsed)) {
+                  onAngleChange(Math.max(0, Math.min(90, parsed)));
+                }
+              }
+            }}
+            className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+          />
+        </div>
+
+        {/* Model Settings collapsible */}
+        <div>
+          <button
+            onClick={onToggleModelSettings}
+            className="w-full flex items-center justify-between px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors text-xs text-zinc-400 hover:text-zinc-200"
+          >
+            <span className="flex items-center gap-1.5">
+              <Cpu className="w-3.5 h-3.5" />
+              Model Settings
+              {hasCustomModelSettings && (
+                <span
+                  className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"
+                  title="Custom settings active"
+                />
+              )}
+            </span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform ${showModelSettings ? "rotate-180" : ""}`}
+            />
+          </button>
+          {showModelSettings && (
+            <div className="mt-2 p-3 bg-zinc-950 border border-zinc-800 rounded">
+              <ModelSettingsPanel
+                settings={generateSettings}
+                onChange={onGenerateSettingsChange}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Generate button */}
+        <button
+          onClick={onGenerate}
+          disabled={isGenerating}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium rounded transition-colors text-sm"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4" />
+              Generate
+            </>
+          )}
+        </button>
+
+        {/* Error */}
+        {error && (
+          <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded px-3 py-2">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Generated holdsets list */}
+      <div className="flex-1 min-h-0 bg-zinc-900">
+        <HoldsetList
+          holdsets={holdsets}
+          selectedIndex={selectedIndex}
+          onSelect={onSelectHoldset}
+          onDelete={onDeleteHoldset}
+          onClear={onClearHoldsets}
+        />
+      </div>
+    </>
+  );
+}
+
 // --- HoldsetList Component ---
 
 interface HoldsetListProps {
@@ -624,12 +1015,6 @@ function HoldsetList({
         {holdsets.map((entry, i) => {
           const isSelected = selectedIndex === i;
           const { holdset } = entry;
-          const totalHolds = new Set([
-            ...holdset.start,
-            ...holdset.finish,
-            ...holdset.hand,
-            ...holdset.foot,
-          ]).size;
 
           return (
             <div
@@ -1282,7 +1667,12 @@ function GeneratePage() {
   const [numClimbs, setNumClimbs] = useState(5);
   const [grade, setGrade] = useState<string>("V4");
   const [angle, setAngle] = useState<number | null>(null);
-  const [deterministic, setDeterministic] = useState(false);
+
+  // Model / performance settings
+  const [generateSettings, setGenerateSettings] = useState<GenerateSettings>(
+    DEFAULT_GENERATE_SETTINGS,
+  );
+  const [showModelSettings, setShowModelSettings] = useState(false);
 
   // Results state
   const [generatedClimbs, setGeneratedClimbs] = useState<NamedHoldset[]>([]);
@@ -1350,11 +1740,10 @@ function GeneratePage() {
       grade: generate_grade,
       grade_scale: gradingScale,
       angle: angle ?? wall.metadata.angle,
-      deterministic,
     };
 
     try {
-      const response = await generateClimbs(wallId, request);
+      const response = await generateClimbs(wallId, request, generateSettings);
       const named: NamedHoldset[] = response.climbs.map((holdset) => ({
         name: generateClimbName(),
         grade: generate_grade,
@@ -1400,13 +1789,25 @@ function GeneratePage() {
     grade,
     gradingScale,
     gradeOptions,
-    deterministic,
+    generateSettings,
     wall.metadata.angle,
     angle,
     navigate,
     generatedClimbs.length,
   ]);
 
+  // Grading scale change — keeps grade/options in sync
+  const handleGradingScaleChange = useCallback((scale: GradeScale) => {
+    if (scale === "v_grade") {
+      setGradingScale("v_grade");
+      setGradeOptions(VGRADE_OPTIONS);
+      setGrade("V0");
+    } else {
+      setGradingScale("font");
+      setGradeOptions(FONT_OPTIONS);
+      setGrade("4a");
+    }
+  }, []);
   // Toggle editing mode
   const handleToggleEditing = useCallback(() => {
     if (!selectedHoldset) return;
@@ -1745,158 +2146,30 @@ function GeneratePage() {
       <div className="flex-1 flex min-h-0 relative">
         {/* Left panel — Generation controls */}
         <div className="hidden lg:flex w-80 flex-col border-r border-zinc-800 flex-shrink-0 bg-zinc-900">
-          {/* Generation controls */}
-          <div className="p-4 border-b border-zinc-800 space-y-4 flex-shrink-0">
-            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-              Parameters
-            </h2>
-
-            {/* Grade toggle */}
-            <div>
-              <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
-                Grading Scale
-              </label>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => {
-                    setGradingScale("v_grade");
-                    setGradeOptions(VGRADE_OPTIONS);
-                    setGrade("V0");
-                  }}
-                  className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                    gradingScale === "v_grade"
-                      ? "bg-emerald-600 text-white"
-                      : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  V-grade
-                </button>
-                <button
-                  onClick={() => {
-                    setGradingScale("font");
-                    setGradeOptions(FONT_OPTIONS);
-                    setGrade("4a");
-                  }}
-                  className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                    gradingScale === "font"
-                      ? "bg-emerald-600 text-white"
-                      : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  Fontainebleau
-                </button>
-              </div>
-            </div>
-            {/* Grade */}
-            <div>
-              <label className="text-xs text-zinc-500 block mb-1">
-                Target Grade
-              </label>
-              <select
-                value={grade}
-                onChange={(e) => setGrade(e.target.value)}
-                className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-              >
-                {gradeOptions.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Num climbs */}
-            <div>
-              <label className="text-xs text-zinc-500 block mb-1">
-                Number of Climbs
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={15}
-                value={numClimbs}
-                onChange={(e) =>
-                  setNumClimbs(
-                    Math.max(1, Math.min(15, parseInt(e.target.value) || 1)),
-                  )
-                }
-                className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-              />
-            </div>
-
-            {/* Wall angle */}
-            <div>
-              <label className="text-xs text-zinc-500 block mb-1">
-                Wall Angle (Degrees)
-              </label>
-              <input
-                type="number"
-                min={0}
-                max={90}
-                disabled={!!wall.metadata.angle}
-                value={angle ?? ""}
-                onChange={(e) => {
-                  if (e.target.value === "") {
-                    setAngle(null);
-                  } else {
-                    const parsed = parseInt(e.target.value);
-                    if (!isNaN(parsed)) {
-                      setAngle(Math.max(0, Math.min(90, parsed)));
-                    }
-                  }
-                }}
-                className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-              />
-            </div>
-
-            {/* Deterministic toggle */}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!deterministic}
-                onChange={(e) => setDeterministic(!e.target.checked)}
-                className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
-              />
-              <span className="text-sm text-zinc-300">Nondeterministic</span>
-            </label>
-
-            {/* Generate button */}
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium rounded transition-colors text-sm"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Generate
-                </>
-              )}
-            </button>
-
-            {/* Error */}
-            {error && (
-              <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded px-3 py-2">
-                {error}
-              </div>
-            )}
-          </div>
-
-          {/* Generated holdsets list */}
-          <div className="flex-1 min-h-0 bg-zinc-900">
-            <HoldsetList
-              holdsets={generatedClimbs}
-              selectedIndex={selectedIndex}
-              onSelect={handleSelectClimb}
-              onDelete={handleDeleteClimb}
-              onClear={handleClearClimbs}
-            />
-          </div>
+          <GenerationPanel
+            gradingScale={gradingScale}
+            gradeOptions={gradeOptions}
+            grade={grade}
+            onGradingScaleChange={handleGradingScaleChange}
+            onGradeChange={setGrade}
+            numClimbs={numClimbs}
+            onNumClimbsChange={setNumClimbs}
+            angle={angle}
+            angleFixed={!!wall.metadata.angle}
+            onAngleChange={setAngle}
+            generateSettings={generateSettings}
+            onGenerateSettingsChange={setGenerateSettings}
+            showModelSettings={showModelSettings}
+            onToggleModelSettings={() => setShowModelSettings((v) => !v)}
+            isGenerating={isGenerating}
+            error={error}
+            onGenerate={handleGenerate}
+            holdsets={generatedClimbs}
+            selectedIndex={selectedIndex}
+            onSelectHoldset={handleSelectClimb}
+            onDeleteHoldset={handleDeleteClimb}
+            onClearHoldsets={handleClearClimbs}
+          />
         </div>
         {/* Mobile left drawer */}
         {mobilePanel === "left" && (
@@ -1925,166 +2198,33 @@ function GeneratePage() {
                 </button>
               </div>
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {/* Generation controls */}
-                <div className="p-4 border-b border-zinc-800 bg-zinc-900 space-y-4 flex-shrink-0">
-                  <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-                    Parameters
-                  </h2>
-
-                  {/* Grade toggle */}
-                  <div>
-                    <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
-                      Grading Scale
-                    </label>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          setGradingScale("v_grade");
-                          setGradeOptions(VGRADE_OPTIONS);
-                          setGrade("V0");
-                        }}
-                        className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                          gradingScale === "v_grade"
-                            ? "bg-emerald-600 text-white"
-                            : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                        }`}
-                      >
-                        V-grade
-                      </button>
-                      <button
-                        onClick={() => {
-                          setGradingScale("font");
-                          setGradeOptions(FONT_OPTIONS);
-                          setGrade("4a");
-                        }}
-                        className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors ${
-                          gradingScale === "font"
-                            ? "bg-emerald-600 text-white"
-                            : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                        }`}
-                      >
-                        Fontainebleau
-                      </button>
-                    </div>
-                  </div>
-                  {/* Grade */}
-                  <div>
-                    <label className="text-xs text-zinc-500 block mb-1">
-                      Target Grade
-                    </label>
-                    <select
-                      value={grade}
-                      onChange={(e) => setGrade(e.target.value)}
-                      className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-                    >
-                      {gradeOptions.map((g) => (
-                        <option key={g} value={g}>
-                          {g}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Num climbs */}
-                  <div>
-                    <label className="text-xs text-zinc-500 block mb-1">
-                      Number of Climbs
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={15}
-                      value={numClimbs}
-                      onChange={(e) =>
-                        setNumClimbs(
-                          Math.max(
-                            1,
-                            Math.min(15, parseInt(e.target.value) || 1),
-                          ),
-                        )
-                      }
-                      className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-                    />
-                  </div>
-
-                  {/* Wall angle */}
-                  <div>
-                    <label className="text-xs text-zinc-500 block mb-1">
-                      Wall Angle (Degrees)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={90}
-                      disabled={!!wall.metadata.angle}
-                      value={angle ?? ""}
-                      onChange={(e) => {
-                        if (e.target.value === "") {
-                          setAngle(null);
-                        } else {
-                          const parsed = parseInt(e.target.value);
-                          if (!isNaN(parsed)) {
-                            setAngle(Math.max(0, Math.min(90, parsed)));
-                          }
-                        }
-                      }}
-                      className="w-full bg-zinc-800 text-zinc-100 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-                    />
-                  </div>
-
-                  {/* Deterministic toggle */}
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={!deterministic}
-                      onChange={(e) => setDeterministic(!e.target.checked)}
-                      className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0"
-                    />
-                    <span className="text-sm text-zinc-300">
-                      Nondeterministic
-                    </span>
-                  </label>
-
-                  {/* Generate button */}
-                  <button
-                    onClick={handleGenerate}
-                    disabled={isGenerating}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white font-medium rounded transition-colors text-sm"
-                  >
-                    {isGenerating ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        Generate
-                      </>
-                    )}
-                  </button>
-
-                  {/* Error */}
-                  {error && (
-                    <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded px-3 py-2">
-                      {error}
-                    </div>
-                  )}
-                </div>
-
-                {/* Generated holdsets list */}
-                <div className="flex-1 min-h-0 bg-zinc-900">
-                  <HoldsetList
-                    holdsets={generatedClimbs}
-                    selectedIndex={selectedIndex}
-                    onSelect={(i) => {
-                      handleSelectClimb(i);
-                      closeMobilePanel();
-                    }}
-                    onDelete={handleDeleteClimb}
-                    onClear={handleClearClimbs}
-                  />
-                </div>
+                <GenerationPanel
+                  gradingScale={gradingScale}
+                  gradeOptions={gradeOptions}
+                  grade={grade}
+                  onGradingScaleChange={handleGradingScaleChange}
+                  onGradeChange={setGrade}
+                  numClimbs={numClimbs}
+                  onNumClimbsChange={setNumClimbs}
+                  angle={angle}
+                  angleFixed={!!wall.metadata.angle}
+                  onAngleChange={setAngle}
+                  generateSettings={generateSettings}
+                  onGenerateSettingsChange={setGenerateSettings}
+                  showModelSettings={showModelSettings}
+                  onToggleModelSettings={() => setShowModelSettings((v) => !v)}
+                  isGenerating={isGenerating}
+                  error={error}
+                  onGenerate={handleGenerate}
+                  holdsets={generatedClimbs}
+                  selectedIndex={selectedIndex}
+                  onSelectHoldset={(i) => {
+                    handleSelectClimb(i);
+                    closeMobilePanel();
+                  }}
+                  onDeleteHoldset={handleDeleteClimb}
+                  onClearHoldsets={handleClearClimbs}
+                />
               </div>
             </div>
           </div>
@@ -2177,7 +2317,7 @@ function GeneratePage() {
             className="pointer-events-auto flex items-center gap-2 px-5 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-full shadow-lg shadow-black/40 text-sm border border-zinc-700 transition-colors"
           >
             <Sparkles className="w-4 h-4 text-emerald-400" />
-            Climbs
+            {generatedClimbs.length > 0 ? "Climbs" : "Generate"}
           </button>
 
           <button
