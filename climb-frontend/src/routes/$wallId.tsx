@@ -367,10 +367,10 @@ async function renderExportImage(
       if (colorMode === "uniform") {
         color = uniformColor;
       } else {
-        if (isStart) color = CATEGORY_COLORS.start;
-        else if (isFinish) color = CATEGORY_COLORS.finish;
-        else if (isHand) color = CATEGORY_COLORS.hand;
-        else if (isFoot) color = CATEGORY_COLORS.foot;
+        if (isStart) color = displaySettings.categoryColors.start;
+        else if (isFinish) color = displaySettings.categoryColors.finish;
+        else if (isHand) color = displaySettings.categoryColors.hand;
+        else if (isFoot) color = displaySettings.categoryColors.foot;
       }
     }
 
@@ -402,10 +402,10 @@ async function renderExportImage(
   const pad = Math.round(imgW * 0.02);
 
   const legendItems = [
-    { label: "Start", color: CATEGORY_COLORS.start },
-    { label: "Finish", color: CATEGORY_COLORS.finish },
-    { label: "Hand", color: CATEGORY_COLORS.hand },
-    { label: "Foot", color: CATEGORY_COLORS.foot },
+    { label: "Start", color: displaySettings.categoryColors.start },
+    { label: "Finish", color: displaySettings.categoryColors.finish },
+    { label: "Hand", color: displaySettings.categoryColors.hand },
+    { label: "Foot", color: displaySettings.categoryColors.foot },
   ];
 
   let cursorX = pad;
@@ -752,6 +752,7 @@ function ModelSettingsPanel({ settings, onChange }: ModelSettingsPanelProps) {
 // --- GenerationPanel Component ---
 
 interface GenerationPanelProps {
+  displaySettings: DisplaySettings;
   gradingScale: GradeScale;
   gradeOptions: string[];
   grade: string;
@@ -762,8 +763,6 @@ interface GenerationPanelProps {
   angle: number | null;
   angleFixed: boolean;
   onAngleChange: (angle: number | null) => void;
-  deterministic: boolean;
-  onDeterministicChange: (d: boolean) => void;
   generateSettings: GenerateSettings;
   onGenerateSettingsChange: (s: GenerateSettings) => void;
   showModelSettings: boolean;
@@ -779,6 +778,7 @@ interface GenerationPanelProps {
 }
 
 function GenerationPanel({
+  displaySettings,
   gradingScale,
   gradeOptions,
   grade,
@@ -1093,6 +1093,7 @@ function GenerationPanel({
         {/* Generated holdsets list — inline below controls, no separate flex child */}
         <HoldsetList
           holdsets={holdsets}
+          displaySettings={displaySettings}
           selectedIndex={selectedIndex}
           onSelect={onSelectHoldset}
           onDelete={onDeleteHoldset}
@@ -1108,6 +1109,7 @@ function GenerationPanel({
 
 interface HoldsetListProps {
   holdsets: NamedHoldset[];
+  displaySettings: DisplaySettings;
   selectedIndex: number | null;
   onSelect: (index: number) => void;
   onDelete: (index: number) => void;
@@ -1116,6 +1118,7 @@ interface HoldsetListProps {
 
 function HoldsetList({
   holdsets,
+  displaySettings,
   selectedIndex,
   onSelect,
   onDelete,
@@ -1181,28 +1184,37 @@ function HoldsetList({
                     <span className="flex items-center gap-1">
                       <span
                         className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: CATEGORY_COLORS.start }}
+                        style={{
+                          backgroundColor: displaySettings.categoryColors.start,
+                        }}
                       />
                       {holdset.start.length}
                     </span>
                     <span className="flex items-center gap-1">
                       <span
                         className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: CATEGORY_COLORS.finish }}
+                        style={{
+                          backgroundColor:
+                            displaySettings.categoryColors.finish,
+                        }}
                       />
                       {holdset.finish.length}
                     </span>
                     <span className="flex items-center gap-1">
                       <span
                         className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: CATEGORY_COLORS.hand }}
+                        style={{
+                          backgroundColor: displaySettings.categoryColors.hand,
+                        }}
                       />
                       {holdset.hand.length}
                     </span>
                     <span className="flex items-center gap-1">
                       <span
                         className="inline-block w-2 h-2 rounded-full"
-                        style={{ backgroundColor: CATEGORY_COLORS.foot }}
+                        style={{
+                          backgroundColor: displaySettings.categoryColors.foot,
+                        }}
                       />
                       {holdset.foot.length}
                     </span>
@@ -1241,6 +1253,7 @@ interface EditPanelProps {
   climb: NamedHoldset | null;
   gradeOptions: string[];
   onUpdateClimb: (updates: Partial<NamedHoldset>) => void;
+  displaySettings: DisplaySettings;
 }
 
 function EditPanel({
@@ -1256,6 +1269,7 @@ function EditPanel({
   climb,
   gradeOptions,
   onUpdateClimb,
+  displaySettings,
 }: EditPanelProps) {
   const holdset = climb?.holdset ?? null;
   const holdCounts = useMemo(() => {
@@ -1341,7 +1355,9 @@ function EditPanel({
                 >
                   <div
                     className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: CATEGORY_COLORS[cat] }}
+                    style={{
+                      backgroundColor: displaySettings.categoryColors[cat],
+                    }}
                   />
                   <span className="text-sm text-zinc-300">
                     {CATEGORY_LABELS[cat]}
@@ -1438,28 +1454,28 @@ function EditPanel({
           <div className="flex items-center gap-1.5">
             <span
               className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: CATEGORY_COLORS.start }}
+              style={{ backgroundColor: displaySettings.categoryColors.start }}
             />
             <span className="text-zinc-400">Start</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span
               className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: CATEGORY_COLORS.finish }}
+              style={{ backgroundColor: displaySettings.categoryColors.finish }}
             />
             <span className="text-zinc-400">Finish</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span
               className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: CATEGORY_COLORS.hand }}
+              style={{ backgroundColor: displaySettings.categoryColors.hand }}
             />
             <span className="text-zinc-400">Hand</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span
               className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: CATEGORY_COLORS.foot }}
+              style={{ backgroundColor: displaySettings.categoryColors.foot }}
             />
             <span className="text-zinc-400">Foot</span>
           </div>
@@ -1623,10 +1639,11 @@ function WallCanvas({
         if (colorMode === "uniform") {
           strokeColor = uniformColor;
         } else {
-          if (isStart) strokeColor = CATEGORY_COLORS.start;
-          else if (isFinish) strokeColor = CATEGORY_COLORS.finish;
-          else if (isHand) strokeColor = CATEGORY_COLORS.hand;
-          else if (isFoot) strokeColor = CATEGORY_COLORS.foot;
+          if (isStart) strokeColor = displaySettings.categoryColors.start;
+          else if (isFinish)
+            strokeColor = displaySettings.categoryColors.finish;
+          else if (isHand) strokeColor = displaySettings.categoryColors.hand;
+          else if (isFoot) strokeColor = displaySettings.categoryColors.foot;
         }
       }
 
@@ -2469,6 +2486,7 @@ function GeneratePage() {
         {/* Left panel — Generation controls */}
         <div className="hidden lg:flex w-80 flex-col border-r border-zinc-800 flex-shrink-0 bg-zinc-900">
           <GenerationPanel
+            displaySettings={displaySettings}
             gradingScale={gradingScale}
             gradeOptions={gradeOptions}
             grade={grade}
@@ -2521,6 +2539,7 @@ function GeneratePage() {
               </div>
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <GenerationPanel
+                  displaySettings={displaySettings}
                   gradingScale={gradingScale}
                   gradeOptions={gradeOptions}
                   grade={grade}
@@ -2587,6 +2606,7 @@ function GeneratePage() {
             climb={selectedClimb}
             gradeOptions={gradeOptions}
             onUpdateClimb={handleUpdateClimb}
+            displaySettings={displaySettings}
           />
         </div>
 
@@ -2630,6 +2650,7 @@ function GeneratePage() {
                   climb={selectedClimb}
                   gradeOptions={gradeOptions}
                   onUpdateClimb={handleUpdateClimb}
+                  displaySettings={displaySettings}
                 />
               </div>
             </div>
