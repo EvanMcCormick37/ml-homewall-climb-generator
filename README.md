@@ -27,6 +27,8 @@ This iteration of BetaZero was trained on the Aurora climbs dataset, using the a
 
 ### Model-Training (DDPM)
 
+See the write-up about DDPM training here: https://evmojo37.substack.com/p/betazero-v2-a-diffusion-model-for
+
 The latest version uses a Denoising Diffusion Probabilistic Model (DDPM) to generate climbs as point clouds, where each point corresponds to a hold used in the climb. It then guides the generated points to actual valid holds via Manifold Guidance. Finally, a U-Net hold classifier decides which holds in the climb should get which roles (Start, Finish, Hand, Foot). It only just occurred to me that it might be preferable to assign roles at the start of the denoising process and allow them to help my climb generator generate valid climbs. Oh,well. That will be in the first update. My utility classes for DDPM climb generation and model training can be found in the 'model-training' directory.
 ![GeneratingHoldsWithRoles](https://github.com/user-attachments/assets/c3375bcd-4813-4186-b58e-9d3e23d78c67)
 
