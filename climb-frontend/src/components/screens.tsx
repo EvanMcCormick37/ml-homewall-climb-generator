@@ -15,7 +15,7 @@ export function WakingScreen() {
     >
       {/* Logo */}
       <img
-        src="src/assets/logo.svg"
+        src="/logo_transparent.svg"
         alt="BetaZero"
         style={{ width: "clamp(80px, 18vw, 140px)", opacity: 0.9 }}
       />
