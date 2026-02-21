@@ -81,7 +81,6 @@ function WakingScreen() {
   return (
     <div
       style={{
-        position: "fixed",
         inset: 0,
         display: "flex",
         flexDirection: "column",
@@ -94,7 +93,7 @@ function WakingScreen() {
     >
       {/* Logo */}
       <img
-        src="../assets/logo.svg"
+        src="src/assets/logo.svg"
         alt="BetaZero"
         style={{ width: "clamp(80px, 18vw, 140px)", opacity: 0.9 }}
       />
@@ -154,9 +153,6 @@ function WakingScreen() {
 function HomePage() {
   const { walls, loading, waking, error } = useWalls();
   const navigate = useNavigate();
-
-  // Show the waking screen whenever the server is spinning up
-  if (waking) return <WakingScreen />;
 
   return (
     <>
@@ -428,21 +424,9 @@ function HomePage() {
                 — loading walls —
               </div>
             )}
-
+            {waking && <WakingScreen />}
             {/* Error */}
-            {error && (
-              <div
-                className="bz-mono"
-                style={{
-                  color: "#f87171",
-                  fontSize: "0.8rem",
-                  padding: "60px 0",
-                  textAlign: "center",
-                }}
-              >
-                {error}
-              </div>
-            )}
+            {error && <WakingScreen />}
 
             {/* Cards */}
             {!loading && !error && (
