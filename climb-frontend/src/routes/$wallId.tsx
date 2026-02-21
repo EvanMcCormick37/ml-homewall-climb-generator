@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { getWall, getWallPhotoUrl } from "@/api/walls";
+import { useWall } from "@/hooks";
 import { generateClimbs } from "@/api/generate";
 import { WakingScreen } from "@/components";
 import {
@@ -126,10 +127,7 @@ export const Route = createFileRoute("/$wallId")({
   validateSearch: (search: Record<string, unknown>): ClimbSearchParams => ({
     climb: typeof search.climb === "string" ? search.climb : undefined,
   }),
-  loader: async ({ params }) => {
-    const wall = await getWall(params.wallId);
-    return { wall };
-  },
+  // loader removed — data fetching now happens in the component via useWall
   staleTime: 3_600_000,
 });
 
@@ -1611,8 +1609,6 @@ function HoldsetList({
 // ─── EditPanel ────────────────────────────────────────────────────────────────
 
 interface EditPanelProps {
-  editing: boolean;
-  onToggleEditing: () => void;
   onReset: () => void;
   onExportImage: () => void;
   onCopyLink: () => void;
@@ -1627,8 +1623,6 @@ interface EditPanelProps {
 }
 
 function EditPanel({
-  editing,
-  onToggleEditing,
   onReset,
   onExportImage,
   onCopyLink,
@@ -1715,29 +1709,6 @@ function EditPanel({
             Edit Climb
           </span>
         </div>
-        <button
-          onClick={onToggleEditing}
-          disabled={!holdset}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "5px",
-            padding: "5px 10px",
-            fontFamily: "'Space Mono', monospace",
-            fontSize: "0.6rem",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            border: `1px solid ${editing ? "var(--cyan)" : "var(--border)"}`,
-            background: editing ? "var(--cyan-dim)" : "transparent",
-            color: editing ? "var(--cyan)" : "var(--text-muted)",
-            cursor: holdset ? "pointer" : "not-allowed",
-            opacity: holdset ? 1 : 0.4,
-            borderRadius: "var(--radius)",
-            transition: "all 0.15s",
-          }}
-        >
-          <Pencil size={10} /> {editing ? "Done" : "Edit"}
-        </button>
       </div>
 
       {holdset && (
@@ -1761,56 +1732,28 @@ function EditPanel({
               textAlign: "center",
             }}
           >
-            {editing ? (
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+            >
+              <input
+                type="text"
+                value={climb?.name || ""}
+                placeholder="Climb Name"
+                onChange={(e) => onUpdateClimb({ name: e.target.value })}
+                style={panelInput}
+              />
+              <select
+                value={climb?.grade || ""}
+                onChange={(e) => onUpdateClimb({ grade: e.target.value })}
+                style={panelInput}
               >
-                <input
-                  type="text"
-                  value={climb?.name || ""}
-                  placeholder="Climb Name"
-                  onChange={(e) => onUpdateClimb({ name: e.target.value })}
-                  style={panelInput}
-                />
-                <select
-                  value={climb?.grade || ""}
-                  onChange={(e) => onUpdateClimb({ grade: e.target.value })}
-                  style={panelInput}
-                >
-                  {gradeOptions.map((g) => (
-                    <option key={g} value={g}>
-                      {g}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <>
-                <div
-                  className="bz-oswald"
-                  style={{
-                    fontSize: "1.1rem",
-                    color: "var(--text-primary)",
-                    letterSpacing: "0.05em",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {climb?.name}
-                </div>
-                <div
-                  className="bz-mono"
-                  style={{
-                    fontSize: "0.65rem",
-                    color: "var(--cyan)",
-                    marginTop: "4px",
-                  }}
-                >
-                  {climb?.grade}
-                </div>
-              </>
-            )}
+                {gradeOptions.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Category breakdown */}
@@ -1862,33 +1805,31 @@ function EditPanel({
             )}
           </div>
 
-          {editing && (
-            <>
-              <div
+          <>
+            <div
+              style={{
+                background: "var(--bg)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+                padding: "10px",
+              }}
+            >
+              <p
+                className="bz-mono"
                 style={{
-                  background: "var(--bg)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius)",
-                  padding: "10px",
+                  fontSize: "0.6rem",
+                  color: "var(--text-primary)",
+                  lineHeight: 1.7,
                 }}
               >
-                <p
-                  className="bz-mono"
-                  style={{
-                    fontSize: "0.6rem",
-                    color: "var(--text-muted)",
-                    lineHeight: 1.7,
-                  }}
-                >
-                  Click holds on the wall to cycle through roles. Edit name and
-                  grade above.
-                </p>
-              </div>
-              <button onClick={onReset} style={actionBtn}>
-                <RotateCcw size={10} /> Reset to Generated
-              </button>
-            </>
-          )}
+                Click holds on the wall to cycle through roles. Edit name and
+                grade above.
+              </p>
+            </div>
+            <button onClick={onReset} style={actionBtn}>
+              <RotateCcw size={10} /> Reset to Generated
+            </button>
+          </>
 
           {/* Share section */}
           <div
@@ -2012,7 +1953,6 @@ interface WallCanvasProps {
   imageDimensions: { width: number; height: number };
   onImageLoad: (d: { width: number; height: number }) => void;
   displaySettings: DisplaySettings;
-  editing: boolean;
   onHoldClick: (i: number) => void;
   onSwipeNext?: () => void;
   onSwipePrev?: () => void;
@@ -2026,7 +1966,6 @@ function WallCanvas({
   imageDimensions,
   onImageLoad,
   displaySettings,
-  editing,
   onHoldClick,
   onSwipeNext,
   onSwipePrev,
@@ -2179,12 +2118,11 @@ function WallCanvas({
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
-      if (!editing) return;
       const { x, y } = getImageCoords(e);
       const hold = findHoldAt(x, y);
       if (hold) onHoldClick(hold.hold_index);
     },
-    [editing, getImageCoords, findHoldAt, onHoldClick],
+    [getImageCoords, findHoldAt, onHoldClick],
   );
 
   const handleMouseDown = useCallback(
@@ -2362,7 +2300,7 @@ function WallCanvas({
         overflow: "hidden",
         background: "var(--bg)",
         position: "relative",
-        cursor: editing ? "crosshair" : "grab",
+        cursor: "crosshair",
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -2418,8 +2356,60 @@ function WallCanvas({
 
 function GeneratePage() {
   const navigate = useNavigate();
-  const { wall } = Route.useLoaderData() as { wall: WallDetail };
+  const { wallId: wallIdParam } = Route.useParams();
   const { climb: climbParam } = Route.useSearch();
+  const { wall, loading, waking, error } = useWall(wallIdParam);
+  if (waking) return <WakingScreen />;
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          background: "var(--bg)",
+          color: "var(--text-muted)",
+          fontFamily: "'Space Mono', monospace",
+        }}
+      >
+        <Loader2 size={24} style={{ animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+  if (error || !wall) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          gap: "16px",
+          background: "var(--bg)",
+          color: "var(--text-muted)",
+          fontFamily: "'Space Mono', monospace",
+        }}
+      >
+        <p>{error ?? "Wall not found"}</p>
+        <button
+          onClick={() => navigate({ to: "/" })}
+          style={{
+            padding: "8px 16px",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            color: "var(--text-primary)",
+            cursor: "pointer",
+            borderRadius: "var(--radius)",
+            fontFamily: "'Space Mono', monospace",
+          }}
+        >
+          Back to Home
+        </button>
+      </div>
+    );
+  }
   const wallId = wall.metadata.id;
   const wallDimensions = {
     width: wall.metadata.dimensions[0],
@@ -2442,13 +2432,10 @@ function GeneratePage() {
   const [generatedClimbs, setGeneratedClimbs] = useState<NamedHoldset[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [waking, setWaking] = useState(false);
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(
     DEFAULT_DISPLAY_SETTINGS,
   );
   const [showDisplaySettings, setShowDisplaySettings] = useState(false);
-  const [editing, setEditing] = useState(false);
   const originalHoldsetsRef = useRef<Holdset[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -2484,9 +2471,6 @@ function GeneratePage() {
 
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
-    setError(null);
-    setWaking(false);
-    setEditing(false);
     const generate_grade = grade ?? gradeOptions[0];
     const request: GenerateRequest = {
       num_climbs: numClimbs ?? 3,
@@ -2494,55 +2478,32 @@ function GeneratePage() {
       grade_scale: gradingScale,
       angle: angle ?? wall.metadata.angle,
     };
-    const deadline = Date.now() + 30000;
-    const retry_interval = 1500;
-    while (true) {
-      try {
-        const response = await generateClimbs(
-          wallId,
-          request,
-          generateSettings,
-        );
-        const named: NamedHoldset[] = response.climbs.map((holdset) => ({
-          name: generateClimbName(),
-          grade: generate_grade,
-          angle: request.angle?.toString() ?? "45",
-          holdset,
-        }));
-        setGeneratedClimbs((prev) => [...named, ...prev]);
-        originalHoldsetsRef.current = [
-          ...response.climbs.map((h) => ({
-            start: [...h.start],
-            finish: [...h.finish],
-            hand: [...h.hand],
-            foot: [...h.foot],
-          })),
-          ...originalHoldsetsRef.current,
-        ];
-        if (response.climbs.length > 0) setSelectedIndex(0);
-        navigate({
-          to: "/$wallId",
-          params: { wallId },
-          search: {},
-          replace: true,
-        });
-        setWaking(false);
-        setIsGenerating(false);
-        return;
-      } catch (err) {
-        if (is502(err) && Date.now() < deadline) {
-          setWaking(true);
-          setIsGenerating(false);
-          await new Promise<void>((resolve) =>
-            setTimeout(resolve, retry_interval),
-          );
-        } else {
-          setError(err instanceof Error ? err.message : "Generation failed");
-          setIsGenerating(false);
-          return;
-        }
-      }
-    }
+    const response = await generateClimbs(wallId, request, generateSettings);
+    const named: NamedHoldset[] = response.climbs.map((holdset) => ({
+      name: generateClimbName(),
+      grade: generate_grade,
+      angle: request.angle?.toString() ?? "45",
+      holdset,
+    }));
+    setGeneratedClimbs((prev) => [...named, ...prev]);
+    originalHoldsetsRef.current = [
+      ...response.climbs.map((h) => ({
+        start: [...h.start],
+        finish: [...h.finish],
+        hand: [...h.hand],
+        foot: [...h.foot],
+      })),
+      ...originalHoldsetsRef.current,
+    ];
+    if (response.climbs.length > 0) setSelectedIndex(0);
+    navigate({
+      to: "/$wallId",
+      params: { wallId },
+      search: {},
+      replace: true,
+    });
+    setIsGenerating(false);
+    return;
   }, [
     wallId,
     numClimbs,
@@ -2566,11 +2527,6 @@ function GeneratePage() {
       setGrade("4a");
     }
   }, []);
-
-  const handleToggleEditing = useCallback(() => {
-    if (!selectedHoldset) return;
-    setEditing((prev) => !prev);
-  }, [selectedHoldset]);
 
   const handleUpdateClimb = useCallback(
     (updates: Partial<NamedHoldset>) => {
@@ -2759,7 +2715,6 @@ function GeneratePage() {
 
   const handleSelectClimb = useCallback((index: number) => {
     setSelectedIndex(index);
-    setEditing(false);
   }, []);
 
   const handleSwipeNext = useCallback(() => {
@@ -2767,7 +2722,6 @@ function GeneratePage() {
     setSelectedIndex((prev) =>
       prev === null ? 0 : (prev + 1) % generatedClimbs.length,
     );
-    setEditing(false);
   }, [generatedClimbs.length]);
 
   const handleSwipePrev = useCallback(() => {
@@ -2777,7 +2731,6 @@ function GeneratePage() {
         ? generatedClimbs.length - 1
         : (prev - 1 + generatedClimbs.length) % generatedClimbs.length,
     );
-    setEditing(false);
   }, [generatedClimbs.length]);
 
   useEffect(() => {
@@ -2832,8 +2785,6 @@ function GeneratePage() {
   };
 
   const editPanelProps = {
-    editing,
-    onToggleEditing: handleToggleEditing,
     onReset: handleResetHoldset,
     onExportImage: handleExportImage,
     onCopyLink: handleCopyLink,
@@ -3291,7 +3242,6 @@ function GeneratePage() {
               imageDimensions={imageDimensions}
               onImageLoad={handleImageLoad}
               displaySettings={displaySettings}
-              editing={editing}
               onHoldClick={handleHoldClick}
             />
           </div>
