@@ -16,3 +16,17 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+export function is502(err: unknown): boolean {
+  if (err && typeof err === "object") {
+    // Axios error shape
+    const axiosErr = err as {
+      response?: { status?: number };
+      message?: string;
+    };
+    if (axiosErr.response?.status === 502) return true;
+    // Fallback: check message string
+    if (axiosErr.message && /502/.test(axiosErr.message)) return true;
+  }
+  return false;
+}

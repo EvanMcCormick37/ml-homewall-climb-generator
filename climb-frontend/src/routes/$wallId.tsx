@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { getWall, getWallPhotoUrl } from "@/api/walls";
 import { generateClimbs } from "@/api/generate";
+import { WakingScreen } from "@/components";
 import {
   ArrowLeft,
   Sparkles,
@@ -36,6 +37,7 @@ import {
   FAST_GENERATE_SETTINGS,
   SLOW_GENERATE_SETTINGS,
 } from "@/types";
+import { is502 } from "@/api";
 
 // ─── Design tokens (matches HomePage) ───────────────────────────────────────
 const GLOBAL_STYLES = `
@@ -953,6 +955,7 @@ interface GenerationPanelProps {
   showModelSettings: boolean;
   onToggleModelSettings: () => void;
   isGenerating: boolean;
+  waking: boolean;
   error: string | null;
   onGenerate: () => void;
   holdsets: NamedHoldset[];
@@ -979,6 +982,7 @@ function GenerationPanel({
   showModelSettings,
   onToggleModelSettings,
   isGenerating,
+  waking,
   error,
   onGenerate,
   holdsets,
@@ -1334,7 +1338,7 @@ function GenerationPanel({
             </>
           )}
         </button>
-
+        {waking && <WakingScreen />}
         {error && (
           <div
             className="bz-mono"
@@ -2439,6 +2443,7 @@ function GeneratePage() {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [waking, setWaking] = useState(false);
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(
     DEFAULT_DISPLAY_SETTINGS,
   );
@@ -2480,6 +2485,7 @@ function GeneratePage() {
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
     setError(null);
+    setWaking(false);
     setEditing(false);
     const generate_grade = grade ?? gradeOptions[0];
     const request: GenerateRequest = {
@@ -2488,35 +2494,52 @@ function GeneratePage() {
       grade_scale: gradingScale,
       angle: angle ?? wall.metadata.angle,
     };
-    try {
-      const response = await generateClimbs(wallId, request, generateSettings);
-      const named: NamedHoldset[] = response.climbs.map((holdset) => ({
-        name: generateClimbName(),
-        grade: generate_grade,
-        angle: request.angle?.toString() ?? "45",
-        holdset,
-      }));
-      setGeneratedClimbs((prev) => [...named, ...prev]);
-      originalHoldsetsRef.current = [
-        ...response.climbs.map((h) => ({
-          start: [...h.start],
-          finish: [...h.finish],
-          hand: [...h.hand],
-          foot: [...h.foot],
-        })),
-        ...originalHoldsetsRef.current,
-      ];
-      if (response.climbs.length > 0) setSelectedIndex(0);
-      navigate({
-        to: "/$wallId",
-        params: { wallId },
-        search: {},
-        replace: true,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed");
-    } finally {
-      setIsGenerating(false);
+    const deadline = Date.now() + 30000;
+    const retry_interval = 1500;
+    while (isGenerating || waking) {
+      try {
+        const response = await generateClimbs(
+          wallId,
+          request,
+          generateSettings,
+        );
+        const named: NamedHoldset[] = response.climbs.map((holdset) => ({
+          name: generateClimbName(),
+          grade: generate_grade,
+          angle: request.angle?.toString() ?? "45",
+          holdset,
+        }));
+        setGeneratedClimbs((prev) => [...named, ...prev]);
+        originalHoldsetsRef.current = [
+          ...response.climbs.map((h) => ({
+            start: [...h.start],
+            finish: [...h.finish],
+            hand: [...h.hand],
+            foot: [...h.foot],
+          })),
+          ...originalHoldsetsRef.current,
+        ];
+        if (response.climbs.length > 0) setSelectedIndex(0);
+        navigate({
+          to: "/$wallId",
+          params: { wallId },
+          search: {},
+          replace: true,
+        });
+        setWaking(false);
+        setIsGenerating(false);
+      } catch (err) {
+        if (is502(err) && Date.now() < deadline) {
+          setWaking(true);
+          setIsGenerating(false);
+          await new Promise<void>((resolve) =>
+            setTimeout(resolve, retry_interval),
+          );
+        } else {
+          setError(err instanceof Error ? err.message : "Generation failed");
+          setIsGenerating(false);
+        }
+      }
     }
   }, [
     wallId,
@@ -2796,6 +2819,7 @@ function GeneratePage() {
     showModelSettings,
     onToggleModelSettings: () => setShowModelSettings((v) => !v),
     isGenerating,
+    waking,
     error,
     onGenerate: handleGenerate,
     holdsets: generatedClimbs,

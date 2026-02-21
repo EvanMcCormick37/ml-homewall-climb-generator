@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getWalls } from "@/api";
+import { getWalls, is502 } from "@/api";
 import type { WallMetadata } from "@/types";
 
 const RETRY_INTERVAL_MS = 3000;
@@ -11,20 +11,6 @@ interface UseWallsReturn {
   waking: boolean;
   error: string | null;
   refetch: () => Promise<void>;
-}
-
-function is502(err: unknown): boolean {
-  if (err && typeof err === "object") {
-    // Axios error shape
-    const axiosErr = err as {
-      response?: { status?: number };
-      message?: string;
-    };
-    if (axiosErr.response?.status === 502) return true;
-    // Fallback: check message string
-    if (axiosErr.message && /502/.test(axiosErr.message)) return true;
-  }
-  return false;
 }
 
 export function useWalls(): UseWallsReturn {

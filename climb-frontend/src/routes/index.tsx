@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useWalls } from "@/hooks/useWalls";
 import { getWallPhotoUrl } from "@/api/walls";
+import { WakingScreen } from "@/components";
 import { useEffect, useRef } from "react";
 
 export const Route = createFileRoute("/")({
@@ -20,6 +21,14 @@ const LINKS = [
   {
     label: "DDPM Model (v2)",
     href: "https://evmojo37.substack.com/p/betazero-v2-a-diffusion-model-for",
+  },
+  {
+    label: "This App",
+    href: "https://open.substack.com/pub/evmojo37/p/how-to-turn-an-ml-model-into-a-functioning?r=2380nh&utm_campaign=post&utm_medium=web&showWelcomeOnShare=true",
+  },
+  {
+    label: "Buy me a Coffee",
+    href: "https://ko-fi.com/B0B81E9CGS",
   },
 ];
 
@@ -73,80 +82,6 @@ function HoldGridCanvas() {
       className="absolute inset-0 w-full h-full pointer-events-none"
       aria-hidden="true"
     />
-  );
-}
-
-/** Full-screen loading overlay shown while the server is waking up */
-function WakingScreen() {
-  return (
-    <div
-      style={{
-        inset: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "32px",
-        background: "var(--bg)",
-        zIndex: 50,
-      }}
-    >
-      {/* Logo */}
-      <img
-        src="src/assets/logo.svg"
-        alt="BetaZero"
-        style={{ width: "clamp(80px, 18vw, 140px)", opacity: 0.9 }}
-      />
-
-      {/* Animated dots loader */}
-      <div style={{ display: "flex", gap: "10px" }} aria-hidden="true">
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            style={{
-              width: "8px",
-              height: "8px",
-              borderRadius: "50%",
-              background: "var(--cyan)",
-              animation: `bzPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Status text */}
-      <div style={{ textAlign: "center" }}>
-        <p
-          className="bz-mono"
-          style={{
-            fontSize: "0.75rem",
-            color: "var(--text-muted)",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            marginBottom: "6px",
-          }}
-        >
-          The slumbering server is waking up…
-        </p>
-        <p
-          className="bz-mono"
-          style={{
-            fontSize: "0.65rem",
-            color: "rgba(113,113,122,0.55)",
-            letterSpacing: "0.06em",
-          }}
-        >
-          This takes about 10-20 seconds on first visit.
-        </p>
-      </div>
-
-      <style>{`
-        @keyframes bzPulse {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
-          40%            { transform: scale(1);   opacity: 1;   }
-        }
-      `}</style>
-    </div>
   );
 }
 
@@ -233,7 +168,7 @@ function HomePage() {
 
         .bz-nav-link {
           font-family: 'Space Mono', monospace;
-          font-size: 0.7rem;
+          font-size: 0.5rem;
           color: var(--text-muted);
           text-decoration: none;
           text-transform: uppercase;
@@ -291,7 +226,14 @@ function HomePage() {
             borderBottom: "1px solid var(--border)",
           }}
         >
-          <div style={{ display: "flex", gap: "28px", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "28px",
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
             {LINKS.map((link) => (
               <a
                 key={link.label}
@@ -426,7 +368,21 @@ function HomePage() {
             )}
             {waking && <WakingScreen />}
             {/* Error */}
-            {error && <WakingScreen />}
+            {error && (
+              <div
+                className="bz-mono"
+                style={{
+                  fontSize: "0.65rem",
+                  color: "#f87171",
+                  background: "rgba(248,113,113,0.08)",
+                  border: "1px solid rgba(248,113,113,0.2)",
+                  borderRadius: "var(--radius)",
+                  padding: "8px 10px",
+                }}
+              >
+                {error}
+              </div>
+            )}
 
             {/* Cards */}
             {!loading && !error && (
@@ -435,7 +391,10 @@ function HomePage() {
                   <button
                     key={wall.id}
                     onClick={() =>
-                      navigate({ to: "/$wallId", params: { wallId: wall.id } })
+                      navigate({
+                        to: "/$wallId",
+                        params: { wallId: wall.id },
+                      })
                     }
                     className="bz-card"
                   >
