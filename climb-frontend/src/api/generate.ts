@@ -25,6 +25,9 @@ export async function generateClimbs(
       params.x_offset = settings.x_offset.toString();
     }
     params.deterministic = settings.deterministic.toString();
+    if (settings.seed != null) {
+      params.seed = settings.seed.toString();
+    }
   }
 
   const response = await apiClient.get<GenerateResponse>(

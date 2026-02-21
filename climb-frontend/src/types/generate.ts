@@ -19,20 +19,23 @@ export interface GenerateSettings {
   t_start_projection: number;
   x_offset: number | null;
   deterministic: boolean;
+  seed: number;
 }
 
 export const DEFAULT_GENERATE_SETTINGS: GenerateSettings = {
-  timesteps: 50,
-  t_start_projection: 0.5,
-  x_offset: null,
-  deterministic: false,
-};
-
-export const FAST_GENERATE_SETTINGS: GenerateSettings = {
   timesteps: 25,
   t_start_projection: 0.0,
   x_offset: null,
   deterministic: false,
+  seed: 37,
+};
+
+export const FAST_GENERATE_SETTINGS: GenerateSettings = {
+  timesteps: 10,
+  t_start_projection: 0.0,
+  x_offset: null,
+  deterministic: false,
+  seed: 37,
 };
 
 export const SLOW_GENERATE_SETTINGS: GenerateSettings = {
@@ -40,6 +43,7 @@ export const SLOW_GENERATE_SETTINGS: GenerateSettings = {
   t_start_projection: 1.0,
   x_offset: null,
   deterministic: false,
+  seed: 37,
 };
 
 export interface GenerateResponse {

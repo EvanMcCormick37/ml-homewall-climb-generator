@@ -47,12 +47,10 @@ function HoldGridCanvas() {
 
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          // Slight random offset to feel organic, like real hold placement
           const jitter = spacing * 0.18;
           const x = c * spacing + (Math.random() - 0.5) * jitter;
           const y = r * spacing + (Math.random() - 0.5) * jitter;
 
-          // Vary opacity and size for depth
           const opacity = 0.04 + Math.random() * 0.09;
           const radius = 2 + Math.random() * 3;
 
@@ -78,9 +76,87 @@ function HoldGridCanvas() {
   );
 }
 
+/** Full-screen loading overlay shown while the server is waking up */
+function WakingScreen() {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "32px",
+        background: "var(--bg)",
+        zIndex: 50,
+      }}
+    >
+      {/* Logo */}
+      <img
+        src="../assets/logo.svg"
+        alt="BetaZero"
+        style={{ width: "clamp(80px, 18vw, 140px)", opacity: 0.9 }}
+      />
+
+      {/* Animated dots loader */}
+      <div style={{ display: "flex", gap: "10px" }} aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              background: "var(--cyan)",
+              animation: `bzPulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Status text */}
+      <div style={{ textAlign: "center" }}>
+        <p
+          className="bz-mono"
+          style={{
+            fontSize: "0.75rem",
+            color: "var(--text-muted)",
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            marginBottom: "6px",
+          }}
+        >
+          The slumbering server is waking up…
+        </p>
+        <p
+          className="bz-mono"
+          style={{
+            fontSize: "0.65rem",
+            color: "rgba(113,113,122,0.55)",
+            letterSpacing: "0.06em",
+          }}
+        >
+          This takes about 10-20 seconds on first visit.
+        </p>
+      </div>
+
+      <style>{`
+        @keyframes bzPulse {
+          0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+          40%            { transform: scale(1);   opacity: 1;   }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function HomePage() {
-  const { walls, loading, error } = useWalls();
+  const { walls, loading, waking, error } = useWalls();
   const navigate = useNavigate();
+
+  // Show the waking screen whenever the server is spinning up
+  if (waking) return <WakingScreen />;
 
   return (
     <>
@@ -120,7 +196,6 @@ function HomePage() {
           font-family: 'Space Mono', monospace;
         }
 
-        /* Fade-up keyframe for staggered intro */
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(20px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -133,13 +208,11 @@ function HomePage() {
         .bz-anim-4 { animation-delay: 0.5s; }
         .bz-anim-5 { animation-delay: 0.65s; }
 
-        /* Horizontal rule accent */
         .bz-rule {
           border: none;
           border-top: 1px solid var(--border);
         }
 
-        /* Wall card */
         .bz-card {
           background: var(--surface);
           border: 1px solid var(--border);
@@ -162,7 +235,6 @@ function HomePage() {
           transition: transform 0.35s ease;
         }
 
-        /* Nav link */
         .bz-nav-link {
           font-family: 'Space Mono', monospace;
           font-size: 0.7rem;
@@ -174,7 +246,6 @@ function HomePage() {
         }
         .bz-nav-link:hover { color: var(--cyan); }
 
-        /* Scroll cue bounce */
         @keyframes bounce {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(6px); }
@@ -183,7 +254,6 @@ function HomePage() {
           animation: bounce 1.8s ease-in-out infinite;
         }
 
-        /* Section label */
         .bz-section-label {
           font-family: 'Space Mono', monospace;
           font-size: 0.65rem;
@@ -192,7 +262,6 @@ function HomePage() {
           color: var(--text-muted);
         }
 
-        /* Cyan accent bar */
         .bz-accent-bar {
           width: 40px;
           height: 2px;
@@ -200,7 +269,6 @@ function HomePage() {
           flex-shrink: 0;
         }
 
-        /* Grid for wall cards */
         .bz-wall-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -251,10 +319,8 @@ function HomePage() {
             borderBottom: "1px solid var(--border)",
           }}
         >
-          {/* Atmospheric hold-grid background */}
           <HoldGridCanvas />
 
-          {/* Subtle left-edge cyan glow */}
           <div
             style={{
               position: "absolute",
@@ -276,7 +342,6 @@ function HomePage() {
               margin: "0 auto",
             }}
           >
-            {/* Eyebrow */}
             <div
               className="bz-anim bz-anim-1"
               style={{
@@ -287,17 +352,13 @@ function HomePage() {
               }}
             >
               <div className="bz-accent-bar" />
-              <span className="bz-section-label">
-                Diffusion Climb Generation
-              </span>
+              <span className="bz-section-label">Welcome to</span>
             </div>
 
-            {/* Main title */}
             <h1 className="bz-hero-title bz-anim bz-anim-2">
               Beta<span>Zero</span>
             </h1>
 
-            {/* Subhead */}
             <p
               className="bz-mono bz-anim bz-anim-3"
               style={{
@@ -312,7 +373,6 @@ function HomePage() {
               learning.
             </p>
 
-            {/* Scroll cue */}
             <div
               className="bz-anim bz-anim-4"
               style={{
@@ -354,7 +414,7 @@ function HomePage() {
           }}
         >
           <div className="bz-anim bz-anim-5">
-            {/* Loading */}
+            {/* Initial loading (first attempt, not yet known if 502) */}
             {loading && (
               <div
                 className="bz-mono"
@@ -447,7 +507,7 @@ function HomePage() {
                       </div>
                     </div>
 
-                    {/* Bottom accent line that slides in on hover */}
+                    {/* Bottom accent line */}
                     <div
                       style={{
                         height: "2px",

@@ -20,6 +20,8 @@ import {
   Target,
   Turtle,
   SunMedium,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type {
   WallDetail,
@@ -43,6 +45,7 @@ const GLOBAL_STYLES = `
     --cyan: #06b6d4;
     --cyan-dim: rgba(6,182,212,0.15);
     --cyan-glow: rgba(6,182,212,0.25);
+    --ruby: #5a0e15;
     --bg: #09090b;
     --surface: #111113;
     --surface2: #18181b;
@@ -237,7 +240,7 @@ const ADJECTIVES = [
   "Angry",
   "Bold",
   "Cosmic",
-  "Daring",
+  "Dancing",
   "Electric",
   "Fierce",
   "Gnarly",
@@ -285,7 +288,7 @@ const ANIMALS = [
   "Urchin",
   "Viper",
   "Wolf",
-  "Xerus",
+  "Xingu River Ray",
   "Yak",
   "Zebra",
 ];
@@ -301,6 +304,7 @@ interface NamedHoldset {
   name: string;
   holdset: Holdset;
   grade: string;
+  angle: string;
 }
 
 // ─── Sharing utilities ────────────────────────────────────────────────────────
@@ -309,6 +313,7 @@ function encodeClimbToParam(entry: NamedHoldset): string {
   const compact = {
     n: entry.name,
     g: entry.grade,
+    a: entry.angle,
     s: entry.holdset.start,
     f: entry.holdset.finish,
     h: entry.holdset.hand,
@@ -326,8 +331,9 @@ function decodeClimbFromParam(param: string): NamedHoldset | null {
     const compact = JSON.parse(atob(b64));
     if (!compact) return null;
     return {
-      name: typeof compact.n !== "string" ? compact.n : "Unnamed",
+      name: typeof compact.n === "string" ? compact.n : "Unnamed",
       grade: typeof compact.g === "string" ? compact.g : "V?",
+      angle: typeof compact.a === "string" ? compact.a : "?",
       holdset: {
         start: Array.isArray(compact.s) ? compact.s : [],
         finish: Array.isArray(compact.f) ? compact.f : [],
@@ -492,16 +498,20 @@ function TogglePair({
   onChange: (v: string) => void;
 }) {
   return (
-    <div style={{ display: "flex", gap: "2px" }}>
+    <div style={{ display: "flex", gap: "2px", width: "100%" }}>
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
           style={{
-            flex: 1,
+            flex: value == opt.value ? "1 0 auto" : "1 1 30%",
             padding: "6px 8px",
+            minWidth: 0,
+            fontSize: "clamp(0.35rem, 2.5vw, 0.65rem)",
             fontFamily: "'Space Mono', monospace",
-            fontSize: "0.65rem",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
             letterSpacing: "0.06em",
             textTransform: "uppercase",
             border: `1px solid ${value === opt.value ? "var(--cyan)" : "var(--border)"}`,
@@ -844,6 +854,40 @@ function ModelSettingsPanel({
           value={settings.deterministic ? "det" : "non"}
           onChange={(v) => update({ deterministic: v === "det" })}
         />
+        {settings.deterministic && (
+          <div>
+            <span
+              className="bz-mono"
+              style={{
+                fontSize: "0.6rem",
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "var(--text-muted)",
+              }}
+            >
+              generation seed
+            </span>
+            <input
+              type="number"
+              style={{
+                marginTop: "8px",
+                width: "100%",
+                padding: "5px",
+                fontFamily: "'Space Mono', monospace",
+                fontSize: "0.6rem",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}
+              value={settings.seed ?? ""}
+              onChange={(e) => {
+                if (e.target.value != "") {
+                  const s = parseInt(e.target.value);
+                  if (!isNaN(s)) update({ seed: s });
+                }
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {!isDefault && (
@@ -1487,7 +1531,7 @@ function HoldsetList({
                     className="bz-mono"
                     style={{ fontSize: "0.6rem", color: "var(--cyan)" }}
                   >
-                    {entry.grade}
+                    {entry.grade} @ {entry.angle}°
                   </span>
                   {(["start", "hand", "foot", "finish"] as HoldCategory[]).map(
                     (cat) => (
@@ -2384,7 +2428,7 @@ function GeneratePage() {
   });
   const [gradingScale, setGradingScale] = useState<GradeScale>("v_grade");
   const [gradeOptions, setGradeOptions] = useState(VGRADE_OPTIONS);
-  const [numClimbs, setNumClimbs] = useState<number | null>(5);
+  const [numClimbs, setNumClimbs] = useState<number | null>(3);
   const [grade, setGrade] = useState<string>("V4");
   const [angle, setAngle] = useState<number | null>(null);
   const [generateSettings, setGenerateSettings] = useState<GenerateSettings>(
@@ -2439,7 +2483,7 @@ function GeneratePage() {
     setEditing(false);
     const generate_grade = grade ?? gradeOptions[0];
     const request: GenerateRequest = {
-      num_climbs: numClimbs ?? 5,
+      num_climbs: numClimbs ?? 3,
       grade: generate_grade,
       grade_scale: gradingScale,
       angle: angle ?? wall.metadata.angle,
@@ -2449,6 +2493,7 @@ function GeneratePage() {
       const named: NamedHoldset[] = response.climbs.map((holdset) => ({
         name: generateClimbName(),
         grade: generate_grade,
+        angle: request.angle?.toString() ?? "45",
         holdset,
       }));
       setGeneratedClimbs((prev) => [...named, ...prev]);
@@ -2710,6 +2755,29 @@ function GeneratePage() {
     setEditing(false);
   }, [generatedClimbs.length]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept arrow keys if the user is typing in an input or select
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      if (e.key === "ArrowLeft") {
+        if (generatedClimbs.length > 1) handleSwipePrev();
+      } else if (e.key === "ArrowRight") {
+        if (generatedClimbs.length > 1) handleSwipeNext();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [generatedClimbs.length, handleSwipeNext, handleSwipePrev]);
   // Shared panel props
   const generationPanelProps = {
     displaySettings,
@@ -2948,47 +3016,106 @@ function GeneratePage() {
           >
             <div
               style={{
-                background: "rgba(17,17,19,0.92)",
-                backdropFilter: "blur(8px)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius)",
-                padding: "8px 18px",
                 display: "flex",
-                flexDirection: "column",
                 alignItems: "center",
+                gap: "12px",
                 pointerEvents: "auto",
                 animation: "bzFadeUp 0.2s ease-out",
               }}
             >
-              <span
-                className="bz-oswald"
-                style={{ fontSize: "0.8rem", color: "var(--text-primary)" }}
-              >
-                {selectedClimb.name}
-              </span>
+              {/* Left Chevron */}
+              {generatedClimbs.length > 1 && (
+                <button
+                  onClick={handleSwipePrev}
+                  style={{
+                    background: "rgba(17,17,19,0.92)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius)",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--text-primary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+              )}
+
+              {/* Center Title Chip */}
               <div
                 style={{
+                  background: "rgba(17,17,19,0.92)",
+                  backdropFilter: "blur(8px)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius)",
+                  padding: "8px 18px",
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
-                  gap: "8px",
-                  marginTop: "2px",
                 }}
               >
                 <span
-                  className="bz-mono"
-                  style={{ fontSize: "0.6rem", color: "var(--cyan)" }}
+                  className="bz-oswald text-center text-[1.6rem] lg:text-[3rem]"
+                  style={{
+                    color: "var(--text-primary)",
+                  }}
                 >
-                  {selectedClimb.grade}
+                  {selectedClimb.name}
                 </span>
-                {generatedClimbs.length > 1 && selectedIndex !== null && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginTop: "2px",
+                  }}
+                >
+                  <span
+                    className="bz-mono text-[0.6rem] lg:text-[0.8rem]"
+                    style={{ fontSize: "0.6rem", color: "var(--cyan)" }}
+                  >
+                    {selectedClimb.grade} | {selectedClimb.angle}°
+                  </span>
                   <span
                     className="bz-mono"
-                    style={{ fontSize: "0.6rem", color: "var(--text-dim)" }}
-                  >
-                    {selectedIndex + 1}/{generatedClimbs.length}
-                  </span>
-                )}
+                    style={{ fontSize: "0.6rem", color: "var(--ruby)" }}
+                  ></span>
+                  {generatedClimbs.length > 1 && selectedIndex !== null && (
+                    <span
+                      className="bz-mono"
+                      style={{ fontSize: "0.6rem", color: "var(--text-dim)" }}
+                    >
+                      {selectedIndex + 1}/{generatedClimbs.length}
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {/* Right Chevron */}
+              {generatedClimbs.length > 1 && (
+                <button
+                  onClick={handleSwipeNext}
+                  style={{
+                    background: "rgba(17,17,19,0.92)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius)",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--text-primary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -3007,12 +3134,11 @@ function GeneratePage() {
             style={{
               width: "300px",
               flexShrink: 0,
-              display: "none",
               flexDirection: "column",
               borderRight: "1px solid var(--border)",
               background: "var(--surface)",
             }}
-            className="lg:flex"
+            className="hidden lg:flex"
           >
             <GenerationPanel {...generationPanelProps} />
           </div>
@@ -3125,19 +3251,13 @@ function GeneratePage() {
               displaySettings={displaySettings}
               editing={editing}
               onHoldClick={handleHoldClick}
-              onSwipeNext={
-                generatedClimbs.length > 1 ? handleSwipeNext : undefined
-              }
-              onSwipePrev={
-                generatedClimbs.length > 1 ? handleSwipePrev : undefined
-              }
             />
           </div>
 
           {/* Right panel (desktop) */}
           <div
-            style={{ width: "260px", flexShrink: 0, display: "none" }}
-            className="lg:flex"
+            style={{ width: "260px", flexShrink: 0 }}
+            className="hidden lg:flex"
           >
             <EditPanel {...editPanelProps} />
           </div>
@@ -3229,17 +3349,16 @@ function GeneratePage() {
           <div
             style={{
               position: "absolute",
-              bottom: "24px",
+              bottom: "48px",
               left: 0,
               right: 0,
-              display: "flex",
               justifyContent: "center",
               gap: "10px",
               zIndex: 30,
               pointerEvents: "none",
               padding: "0 16px",
             }}
-            className="lg:hidden"
+            className="flex lg:hidden"
           >
             <button
               onClick={() =>

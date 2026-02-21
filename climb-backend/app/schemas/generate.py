@@ -19,6 +19,7 @@ class GenerateSettings(BaseModel):
     deterministic: bool = Field(False, description="Use initial noise upon iteration. Can be used to visualize the reverse diffusion process.")
     t_start_projection: float = Field(1.0, description="The time to start projection onto the climbing wall holds")
     x_offset: float | None = Field(None, description="Offset the center of the generated climb to use parts of the wall. Too large an offset will degrade the generated results.")
+    seed: int | None = Field(None, description="Random seed for deterministic climb generation.")
 
 class GenerateRequest(BaseModel):
     """Request schema for generating climbs via the DDPM."""

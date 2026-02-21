@@ -28,6 +28,7 @@ def generate_climbs(
     t_start_projection: float = Query(1.0, ge=0.0, le=1.0),
     x_offset: float | None = Query(None, ge=-1.5, le=1.5),
     deterministic: bool = Query(False),
+    seed: int | None = Query(None),
 ):
     """
     Generate climbs for a given wall.
@@ -54,6 +55,7 @@ def generate_climbs(
         t_start_projection=t_start_projection,
         deterministic=deterministic,
         x_offset=x_offset,
+        seed=seed,
     )
     # Validate wall exists
     if not services.wall_exists(wall_id):

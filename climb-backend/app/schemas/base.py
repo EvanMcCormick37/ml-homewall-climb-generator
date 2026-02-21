@@ -6,7 +6,7 @@ from typing import Annotated
 PositiveInt = Annotated[int,Field(ge=0)]
 HoldPosition = Annotated[list[PositiveInt],Field(
         ...,
-        min_length=1, 
+        min_length=1,
         max_length=2,
     )]
 
