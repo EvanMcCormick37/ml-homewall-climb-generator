@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { getWall, getWallPhotoUrl } from "@/api/walls";
+import { getWallPhotoUrl } from "@/api/walls";
 import { useWall } from "@/hooks";
 import { generateClimbs } from "@/api/generate";
 import { WakingScreen } from "@/components";
@@ -26,7 +26,6 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type {
-  WallDetail,
   HoldDetail,
   Holdset,
   GenerateRequest,
@@ -38,7 +37,6 @@ import {
   FAST_GENERATE_SETTINGS,
   SLOW_GENERATE_SETTINGS,
 } from "@/types";
-import { is502 } from "@/api";
 
 // ─── Design tokens (matches HomePage) ───────────────────────────────────────
 const GLOBAL_STYLES = `
