@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getWalls } from "@/api";
+import { getWalls, getWall } from "@/api";
 import type { WallMetadata, WallDetail } from "@/types";
 
 interface UseWallsReturn {
