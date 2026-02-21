@@ -2496,7 +2496,7 @@ function GeneratePage() {
     };
     const deadline = Date.now() + 30000;
     const retry_interval = 1500;
-    while (isGenerating || waking) {
+    while (true) {
       try {
         const response = await generateClimbs(
           wallId,
@@ -2528,6 +2528,7 @@ function GeneratePage() {
         });
         setWaking(false);
         setIsGenerating(false);
+        return;
       } catch (err) {
         if (is502(err) && Date.now() < deadline) {
           setWaking(true);
@@ -2538,6 +2539,7 @@ function GeneratePage() {
         } else {
           setError(err instanceof Error ? err.message : "Generation failed");
           setIsGenerating(false);
+          return;
         }
       }
     }
@@ -2932,6 +2934,24 @@ function GeneratePage() {
             </div>
           </div>
 
+          {/* Center: Feedback link */}
+          <a
+            href={
+              "https://docs.google.com/forms/d/e/1FAIpQLSeYDIel5MMjj0X3zlXFe4N4FZdUcXadAL5bR-Wjb4W7SVZ5SQ/viewform?usp=dialog"
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bz-mono"
+            style={{
+              fontSize: "0.55rem",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--text-dim)",
+            }}
+          >
+            Give Feedback
+          </a>
+
           {/* Right: display settings */}
           <div
             style={{
@@ -3166,7 +3186,6 @@ function GeneratePage() {
           >
             <GenerationPanel {...generationPanelProps} />
           </div>
-
           {/* Mobile left drawer */}
           {mobilePanel === "left" && (
             <div
@@ -3262,7 +3281,6 @@ function GeneratePage() {
               </div>
             </div>
           )}
-
           {/* Canvas */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <WallCanvas
@@ -3277,7 +3295,6 @@ function GeneratePage() {
               onHoldClick={handleHoldClick}
             />
           </div>
-
           {/* Right panel (desktop) */}
           <div
             style={{ width: "260px", flexShrink: 0 }}
@@ -3285,7 +3302,6 @@ function GeneratePage() {
           >
             <EditPanel {...editPanelProps} />
           </div>
-
           {/* Mobile right drawer */}
           {mobilePanel === "right" && (
             <div
@@ -3368,8 +3384,63 @@ function GeneratePage() {
               </div>
             </div>
           )}
-
           {/* Mobile FABs */}
+          {generatedClimbs.length > 1 && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: "96px",
+                left: 0,
+                right: 0,
+                justifyContent: "center",
+                gap: "10px",
+                zIndex: 30,
+                pointerEvents: "auto",
+                padding: "0 16px",
+              }}
+              className="flex lg:hidden"
+            >
+              {/* Left Chevron */}
+              <button
+                onClick={handleSwipePrev}
+                style={{
+                  background: "rgba(17,17,19,0.92)",
+                  backdropFilter: "blur(8px)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius)",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                }}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              {/* Right Chevron */}
+              <button
+                onClick={handleSwipeNext}
+                style={{
+                  background: "rgba(17,17,19,0.92)",
+                  backdropFilter: "blur(8px)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius)",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                }}
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          )}
+
           <div
             style={{
               position: "absolute",

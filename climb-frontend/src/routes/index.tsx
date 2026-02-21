@@ -24,11 +24,15 @@ const LINKS = [
   },
   {
     label: "This App",
-    href: "https://open.substack.com/pub/evmojo37/p/how-to-turn-an-ml-model-into-a-functioning?r=2380nh&utm_campaign=post&utm_medium=web&showWelcomeOnShare=true",
+    href: "https://open.substack.com/pub/evmojo37/p/how-to-turn-an-ml-model-into-a-functioning",
   },
   {
     label: "Buy me a Coffee",
     href: "https://ko-fi.com/B0B81E9CGS",
+  },
+  {
+    label: "Give Feedback",
+    href: "https://docs.google.com/forms/d/e/1FAIpQLSeYDIel5MMjj0X3zlXFe4N4FZdUcXadAL5bR-Wjb4W7SVZ5SQ/viewform?usp=publish-editor",
   },
 ];
 
