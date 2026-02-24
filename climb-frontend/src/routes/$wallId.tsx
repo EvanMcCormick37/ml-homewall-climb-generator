@@ -1,4 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  useNavigate,
+  type UseNavigateResult,
+} from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { getWallPhotoUrl } from "@/api/walls";
 import { useWall } from "@/hooks";
@@ -31,6 +35,7 @@ import type {
   GenerateRequest,
   GenerateSettings,
   GradeScale,
+  WallDetail,
 } from "@/types";
 import {
   DEFAULT_GENERATE_SETTINGS,
@@ -951,7 +956,6 @@ interface GenerationPanelProps {
   showModelSettings: boolean;
   onToggleModelSettings: () => void;
   isGenerating: boolean;
-  waking: boolean;
   error: string | null;
   onGenerate: () => void;
   holdsets: NamedHoldset[];
@@ -978,7 +982,6 @@ function GenerationPanel({
   showModelSettings,
   onToggleModelSettings,
   isGenerating,
-  waking,
   error,
   onGenerate,
   holdsets,
@@ -1334,7 +1337,6 @@ function GenerationPanel({
             </>
           )}
         </button>
-        {waking && <WakingScreen />}
         {error && (
           <div
             className="bz-mono"
@@ -2366,8 +2368,8 @@ function GeneratePage() {
           alignItems: "center",
           justifyContent: "center",
           height: "100vh",
-          background: "var(--bg)",
-          color: "var(--text-muted)",
+          background: "#000000",
+          color: "#ffffff",
           fontFamily: "'Space Mono', monospace",
         }}
       >
@@ -2407,7 +2409,28 @@ function GeneratePage() {
         </button>
       </div>
     );
+  } else {
+    return (
+      <MainGeneratePage
+        wall={wall}
+        climbParam={climbParam}
+        navigate={navigate}
+      />
+    );
   }
+}
+
+interface MainGeneratePageProps {
+  wall: WallDetail;
+  climbParam: string | undefined;
+  navigate: UseNavigateResult<string>;
+}
+
+function MainGeneratePage({
+  wall,
+  climbParam,
+  navigate,
+}: MainGeneratePageProps) {
   const wallId = wall.metadata.id;
   const wallDimensions = {
     width: wall.metadata.dimensions[0],
@@ -2430,6 +2453,7 @@ function GeneratePage() {
   const [generatedClimbs, setGeneratedClimbs] = useState<NamedHoldset[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(
     DEFAULT_DISPLAY_SETTINGS,
   );
@@ -2468,40 +2492,45 @@ function GeneratePage() {
   );
 
   const handleGenerate = useCallback(async () => {
-    setIsGenerating(true);
-    const generate_grade = grade ?? gradeOptions[0];
-    const request: GenerateRequest = {
-      num_climbs: numClimbs ?? 3,
-      grade: generate_grade,
-      grade_scale: gradingScale,
-      angle: angle ?? wall.metadata.angle,
-    };
-    const response = await generateClimbs(wallId, request, generateSettings);
-    const named: NamedHoldset[] = response.climbs.map((holdset) => ({
-      name: generateClimbName(),
-      grade: generate_grade,
-      angle: request.angle?.toString() ?? "45",
-      holdset,
-    }));
-    setGeneratedClimbs((prev) => [...named, ...prev]);
-    originalHoldsetsRef.current = [
-      ...response.climbs.map((h) => ({
-        start: [...h.start],
-        finish: [...h.finish],
-        hand: [...h.hand],
-        foot: [...h.foot],
-      })),
-      ...originalHoldsetsRef.current,
-    ];
-    if (response.climbs.length > 0) setSelectedIndex(0);
-    navigate({
-      to: "/$wallId",
-      params: { wallId },
-      search: {},
-      replace: true,
-    });
-    setIsGenerating(false);
-    return;
+    try {
+      setIsGenerating(true);
+      const generate_grade = grade ?? gradeOptions[0];
+      const request: GenerateRequest = {
+        num_climbs: numClimbs ?? 3,
+        grade: generate_grade,
+        grade_scale: gradingScale,
+        angle: angle ?? wall.metadata.angle,
+      };
+      const response = await generateClimbs(wallId, request, generateSettings);
+      const named: NamedHoldset[] = response.climbs.map((holdset) => ({
+        name: generateClimbName(),
+        grade: generate_grade,
+        angle: request.angle?.toString() ?? "45",
+        holdset,
+      }));
+      setGeneratedClimbs((prev) => [...named, ...prev]);
+      originalHoldsetsRef.current = [
+        ...response.climbs.map((h) => ({
+          start: [...h.start],
+          finish: [...h.finish],
+          hand: [...h.hand],
+          foot: [...h.foot],
+        })),
+        ...originalHoldsetsRef.current,
+      ];
+      if (response.climbs.length > 0) setSelectedIndex(0);
+      navigate({
+        to: "/$wallId",
+        params: { wallId },
+        search: {},
+        replace: true,
+      });
+      setIsGenerating(false);
+      return;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+      setIsGenerating(false);
+    }
   }, [
     wallId,
     numClimbs,
@@ -2772,7 +2801,6 @@ function GeneratePage() {
     showModelSettings,
     onToggleModelSettings: () => setShowModelSettings((v) => !v),
     isGenerating,
-    waking,
     error,
     onGenerate: handleGenerate,
     holdsets: generatedClimbs,
