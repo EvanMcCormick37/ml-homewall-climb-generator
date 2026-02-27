@@ -2,7 +2,7 @@
 Service layer initialization with dependency injection.
 """
 from app.services.container import ServiceContainer
-from app.services import wall_service, climb_service, generation_service
+from app.services import wall_service, climb_service, generation_service, user_service
 
 
 # Build the container with all dependencies wired up
@@ -27,6 +27,9 @@ services = ServiceContainer(
     
     # Generation
     generate_climbs=generation_service.generate_climbs,
+
+    # User Managmeent
+    ensure_user_exists=user_service.ensure_user_exists,
 )
 
 __all__ = ["services"]

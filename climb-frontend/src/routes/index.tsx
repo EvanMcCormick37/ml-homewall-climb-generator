@@ -1,3 +1,4 @@
+import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useWalls } from "@/hooks/useWalls";
 import { getWallPhotoUrl } from "@/api/walls";
@@ -249,6 +250,37 @@ function HomePage() {
                 {link.label}
               </a>
             ))}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <SignedOut>
+              <button
+                onClick={() => navigate({ to: "/signIn" })}
+                className="bz-mono"
+                style={{
+                  fontSize: "0.65rem",
+                  color: "var(--cyan)",
+                  background: "none",
+                  border: "1px solid var(--cyan)",
+                  borderRadius: "4px",
+                  padding: "6px 16px",
+                  cursor: "pointer",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Sign In
+              </button>
+            </SignedOut>
+            <SignedIn>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: { width: 32, height: 32 },
+                  },
+                }}
+              />
+            </SignedIn>
           </div>
         </nav>
 

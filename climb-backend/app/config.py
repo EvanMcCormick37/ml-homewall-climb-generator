@@ -16,6 +16,10 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
+
+    # User Authentication Settings
+    CLERK_ISSUER: str = ""
+    CLERK_SECRET_KEY: str = ""
     
     # App metadata
     NAME: str = "Beta Zero API"
@@ -34,9 +38,6 @@ class Settings(BaseSettings):
     
     # Pagination defaults
     LIMIT: int = 50
-
-    # Test settings
-    TEST_ASSETS_DIR: Path = Path("test_assets")
 
 
 @lru_cache

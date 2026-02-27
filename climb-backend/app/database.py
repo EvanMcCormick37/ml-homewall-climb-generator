@@ -39,6 +39,18 @@ def init_db():
     
     with get_db() as conn:
         cursor = conn.cursor()
+
+        # Users table - user data
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,           -- Clerk user ID (e.g., "user_2x...")
+                email TEXT NOT NULL,
+                display_name TEXT,
+                avatar_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         
         # Walls table - basic metadata (detailed data in JSON files)
         cursor.execute("""

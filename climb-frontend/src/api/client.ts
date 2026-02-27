@@ -7,7 +7,22 @@ export const apiClient = axios.create({
   },
 });
 
-// Optional: Add interceptors for error handling, auth, etc.
+let getTokenFn: (() => Promise<string | null>) | null = null;
+
+export function setAuthTokenProvider(fn: () => Promise<string | null>) {
+  getTokenFn = fn;
+}
+
+apiClient.interceptors.request.use(async (config) => {
+  if (getTokenFn) {
+    const token = await getTokenFn();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
