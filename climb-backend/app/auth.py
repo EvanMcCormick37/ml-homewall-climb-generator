@@ -7,6 +7,8 @@ Keys are cached to avoid hitting Clerk on every request.
 import time
 import httpx
 import jwt as pyjwt
+from jwt.algorithms import RSAAlgorithm
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from fastapi import Depends, HTTPException, Request, Query
 from functools import lru_cache
 from app.config import settings
@@ -53,7 +55,9 @@ def _verify_clerk_token(token: str) -> dict:
     matching_key = None
     for key_data in jwks:
         if key_data["kid"] == kid:
-            matching_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(key_data)
+            matching_key = RSAAlgorithm.from_jwk(key_data)
+            if not isinstance(matching_key, RSAPublicKey):
+                raise ValueError("Expected RSA public key from JWKS")
             break
 
     if not matching_key:
@@ -65,7 +69,7 @@ def _verify_clerk_token(token: str) -> dict:
         matching_key,
         algorithms=["RS256"],
         issuer=settings.CLERK_ISSUER,
-        options={"verify_aud": False},  # Clerk doesn't always set aud
+        options={"verify_aud": False},
     )
     return payload
 
@@ -87,9 +91,8 @@ async def get_current_user(request: Request) -> dict | None:
             "email": payload.get("email"),
             "name": payload.get("name"),
         }
-    except Exception:
-        # Invalid token — treat as anonymous rather than erroring,
-        # unless you want strict auth on all endpoints
+    except Exception as e:
+        print(f"Auth verification failed: {e}")
         return None
 
 
@@ -99,3 +102,10 @@ async def require_auth(user: dict | None = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=401, detail="Authentication required")
     services.ensure_user_exists(user["user_id"], user.get("email"), user.get("name"))
     return user
+
+async def sync_auth(user: dict | None = Depends(get_current_user)) -> None:
+    """Synchronize user authentication with the database if we can."""
+    print("User: ")
+    if user is not None:
+        print(user["user_id"], user.get("email"), user.get("name"))
+        services.ensure_user_exists(user["user_id"], user.get("email"), user.get("name"))

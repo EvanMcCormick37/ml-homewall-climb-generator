@@ -48,7 +48,6 @@ def generate_climbs(
         grade=grade,
         grade_scale=grade_scale,
         angle=angle,
-        deterministic=deterministic,
     )
     settings = GenerateSettings(
         timesteps=timesteps,

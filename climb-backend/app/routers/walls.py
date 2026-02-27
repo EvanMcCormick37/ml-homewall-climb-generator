@@ -6,7 +6,7 @@ Endpoints:
 - GET  /walls/{wall_id}    - Get wall details
 - GET  /walls/{wall_id}/photo    - Get wall photo
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 
 from app.schemas import (
@@ -14,6 +14,7 @@ from app.schemas import (
     WallListResponse,
 )
 from app.services import services
+from app.auth import sync_auth
 
 router = APIRouter()
 
@@ -64,7 +65,7 @@ def get_wall_photo(wall_id: str):
     summary="Get wall details",
     description="Returns full wall details including holds.",
 )
-def get_wall(wall_id: str):
+def get_wall(wall_id: str, _=Depends(sync_auth)):
     """Get detailed wall info including holds."""
     wall = services.get_wall(wall_id)
     if wall is None:
