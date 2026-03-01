@@ -23,6 +23,7 @@ export interface Climb {
   quality: number | null;
   ascents: number;
   setter_name: string | null;
+  setter_id: string | null;
   tags: string[] | null;
   created_at: Date;
 }
@@ -32,7 +33,8 @@ export interface ClimbCreate {
   holdset: Holdset;
   angle: number;
   grade: string | null;
-  setter_name: string | null;
+  setter_name: string;
+  setter_id: string;
   tags: string[] | null;
 }
 

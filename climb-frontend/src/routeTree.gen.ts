@@ -11,8 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignUpRouteImport } from './routes/signUp'
 import { Route as SignInRouteImport } from './routes/signIn'
-import { Route as WallIdRouteImport } from './routes/$wallId'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WallIdViewRouteImport } from './routes/$wallId/view'
+import { Route as WallIdSetRouteImport } from './routes/$wallId/set'
 
 const SignUpRoute = SignUpRouteImport.update({
   id: '/signUp',
@@ -24,49 +25,64 @@ const SignInRoute = SignInRouteImport.update({
   path: '/signIn',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallIdRoute = WallIdRouteImport.update({
-  id: '/$wallId',
-  path: '/$wallId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WallIdViewRoute = WallIdViewRouteImport.update({
+  id: '/$wallId/view',
+  path: '/$wallId/view',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WallIdSetRoute = WallIdSetRouteImport.update({
+  id: '/$wallId/set',
+  path: '/$wallId/set',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/$wallId': typeof WallIdRoute
   '/signIn': typeof SignInRoute
   '/signUp': typeof SignUpRoute
+  '/$wallId/set': typeof WallIdSetRoute
+  '/$wallId/view': typeof WallIdViewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$wallId': typeof WallIdRoute
   '/signIn': typeof SignInRoute
   '/signUp': typeof SignUpRoute
+  '/$wallId/set': typeof WallIdSetRoute
+  '/$wallId/view': typeof WallIdViewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/$wallId': typeof WallIdRoute
   '/signIn': typeof SignInRoute
   '/signUp': typeof SignUpRoute
+  '/$wallId/set': typeof WallIdSetRoute
+  '/$wallId/view': typeof WallIdViewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$wallId' | '/signIn' | '/signUp'
+  fullPaths: '/' | '/signIn' | '/signUp' | '/$wallId/set' | '/$wallId/view'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$wallId' | '/signIn' | '/signUp'
-  id: '__root__' | '/' | '/$wallId' | '/signIn' | '/signUp'
+  to: '/' | '/signIn' | '/signUp' | '/$wallId/set' | '/$wallId/view'
+  id:
+    | '__root__'
+    | '/'
+    | '/signIn'
+    | '/signUp'
+    | '/$wallId/set'
+    | '/$wallId/view'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  WallIdRoute: typeof WallIdRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
+  WallIdSetRoute: typeof WallIdSetRoute
+  WallIdViewRoute: typeof WallIdViewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -85,13 +101,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignInRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$wallId': {
-      id: '/$wallId'
-      path: '/$wallId'
-      fullPath: '/$wallId'
-      preLoaderRoute: typeof WallIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -99,14 +108,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$wallId/view': {
+      id: '/$wallId/view'
+      path: '/$wallId/view'
+      fullPath: '/$wallId/view'
+      preLoaderRoute: typeof WallIdViewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$wallId/set': {
+      id: '/$wallId/set'
+      path: '/$wallId/set'
+      fullPath: '/$wallId/set'
+      preLoaderRoute: typeof WallIdSetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  WallIdRoute: WallIdRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
+  WallIdSetRoute: WallIdSetRoute,
+  WallIdViewRoute: WallIdViewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

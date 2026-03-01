@@ -91,7 +91,8 @@ function HoldGridCanvas() {
 }
 
 function HomePage() {
-  const { walls, loading, waking, error } = useWalls();
+  const { walls, selectedWallId, setSelectedWallId, loading, waking, error } =
+    useWalls();
   const navigate = useNavigate();
 
   return (
@@ -423,79 +424,101 @@ function HomePage() {
             {/* Cards */}
             {!loading && !error && (
               <div className="bz-wall-grid">
-                {walls.map((wall) => (
-                  <button
-                    key={wall.id}
-                    onClick={() =>
-                      navigate({
-                        to: "/$wallId",
-                        params: { wallId: wall.id },
-                      })
-                    }
-                    className="bz-card"
-                  >
-                    {/* Photo */}
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "180px",
-                        overflow: "hidden",
-                        background: "#1c1c1e",
-                      }}
+                {walls.map((wall) =>
+                  selectedWallId === wall.id ? (
+                    <div key={wall.id}>
+                      <button
+                        className="bz-card"
+                        onClick={() =>
+                          navigate({
+                            to: "/$wallId/set",
+                            params: { wallId: wall.id },
+                          })
+                        }
+                      >
+                        Generate/Set on {wall.name}
+                      </button>
+                      <button
+                        className="bz-card"
+                        onClick={() =>
+                          navigate({
+                            to: "/$wallId/view",
+                            params: { wallId: wall.id },
+                          })
+                        }
+                      >
+                        View {wall.num_climbs} Climbs
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      key={wall.id}
+                      onClick={() => setSelectedWallId(wall.id)}
+                      className="bz-card"
                     >
-                      <img
-                        src={getWallPhotoUrl(wall.id)}
-                        alt={wall.name}
-                        className="bz-card-img"
+                      {/* Photo */}
+                      <div
                         style={{
                           width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
+                          height: "180px",
+                          overflow: "hidden",
+                          background: "#1c1c1e",
+                        }}
+                      >
+                        <img
+                          src={getWallPhotoUrl(wall.id)}
+                          alt={wall.name}
+                          className="bz-card-img"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      </div>
+
+                      {/* Info */}
+                      <div style={{ padding: "16px 18px 18px" }}>
+                        <div
+                          style={{
+                            fontFamily: "'Oswald', sans-serif",
+                            fontSize: "1.15rem",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                            color: "var(--text-primary)",
+                            marginBottom: "6px",
+                          }}
+                        >
+                          {wall.name}
+                        </div>
+                        <div
+                          className="bz-mono"
+                          style={{
+                            fontSize: "0.65rem",
+                            color: "var(--text-muted)",
+                            letterSpacing: "0.06em",
+                          }}
+                        >
+                          {wall.num_holds} holds
+                          {wall.dimensions &&
+                            ` · ${wall.dimensions[0]}×${wall.dimensions[1]} ft`}
+                          {wall.angle != null && ` · ${wall.angle}°`}
+                        </div>
+                      </div>
+
+                      {/* Bottom accent line */}
+                      <div
+                        style={{
+                          height: "2px",
+                          background: "var(--cyan)",
+                          opacity: 0.9,
                         }}
                       />
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ padding: "16px 18px 18px" }}>
-                      <div
-                        style={{
-                          fontFamily: "'Oswald', sans-serif",
-                          fontSize: "1.15rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.04em",
-                          color: "var(--text-primary)",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        {wall.name}
-                      </div>
-                      <div
-                        className="bz-mono"
-                        style={{
-                          fontSize: "0.65rem",
-                          color: "var(--text-muted)",
-                          letterSpacing: "0.06em",
-                        }}
-                      >
-                        {wall.num_holds} holds
-                        {wall.dimensions &&
-                          ` · ${wall.dimensions[0]}×${wall.dimensions[1]} ft`}
-                        {wall.angle != null && ` · ${wall.angle}°`}
-                      </div>
-                    </div>
-
-                    {/* Bottom accent line */}
-                    <div
-                      style={{
-                        height: "2px",
-                        background: "var(--cyan)",
-                        opacity: 0.9,
-                      }}
-                    />
-                  </button>
-                ))}
+                    </button>
+                  ),
+                )}
               </div>
             )}
           </div>

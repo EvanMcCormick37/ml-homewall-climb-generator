@@ -1,22 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getWalls, getWall } from "@/api";
 import type { WallMetadata, WallDetail } from "@/types";
-
-interface UseWallsReturn {
-  walls: WallMetadata[];
-  loading: boolean;
-  waking: boolean;
-  error: string | null;
-  refetch: () => Promise<void>;
-}
-
-interface UseWallsReturn {
-  walls: WallMetadata[];
-  loading: boolean;
-  waking: boolean;
-  error: string | null;
-  refetch: () => Promise<void>;
-}
 import { is502 } from "@/api";
 
 const DEFAULT_RETRY_INTERVAL_MS = 3000;
@@ -77,8 +61,9 @@ export async function fetchWithWakeRetry<T>(
   }
 }
 
-export function useWalls(): UseWallsReturn {
+export function useWalls() {
   const [walls, setWalls] = useState<WallMetadata[]>([]);
+  const [selectedWallId, setSelectedWallId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [waking, setWaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +105,15 @@ export function useWalls(): UseWallsReturn {
     return () => abortRef.current?.abort();
   }, [fetchWalls]);
 
-  return { walls, loading, waking, error, refetch: fetchWalls };
+  return {
+    walls,
+    selectedWallId,
+    setSelectedWallId,
+    loading,
+    waking,
+    error,
+    refetch: fetchWalls,
+  };
 }
 
 interface UseWallReturn {
@@ -172,5 +165,11 @@ export function useWall(wallId: string): UseWallReturn {
     return () => abortRef.current?.abort();
   }, [fetchWall]);
 
-  return { wall, loading, waking, error, refetch: fetchWall };
+  return {
+    wall,
+    loading,
+    waking,
+    error,
+    refetch: fetchWall,
+  };
 }
