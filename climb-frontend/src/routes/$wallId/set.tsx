@@ -1323,7 +1323,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
   const selectedHoldset = selectedClimb?.holdset ?? null;
 
   // Auth state
-  const { isSignedIn, isLoaded, user } = useUser();
+  const { isSignedIn, user } = useUser();
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 

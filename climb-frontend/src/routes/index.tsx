@@ -424,101 +424,147 @@ function HomePage() {
             {/* Cards */}
             {!loading && !error && (
               <div className="bz-wall-grid">
-                {walls.map((wall) =>
-                  selectedWallId === wall.id ? (
-                    <div key={wall.id}>
-                      <button
-                        className="bz-card"
-                        onClick={() =>
-                          navigate({
-                            to: "/$wallId/set",
-                            params: { wallId: wall.id },
-                          })
-                        }
-                      >
-                        Generate/Set on {wall.name}
-                      </button>
-                      <button
-                        className="bz-card"
-                        onClick={() =>
-                          navigate({
-                            to: "/$wallId/view",
-                            params: { wallId: wall.id },
-                          })
-                        }
-                      >
-                        View {wall.num_climbs} Climbs
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      key={wall.id}
-                      onClick={() => setSelectedWallId(wall.id)}
-                      className="bz-card"
+                {walls.map((wall) => (
+                  <button
+                    key={wall.id}
+                    onClick={() => setSelectedWallId(wall.id)}
+                    className="bz-card"
+                  >
+                    {/* Photo */}
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "180px",
+                        overflow: "hidden",
+                        background: "#1c1c1e",
+                      }}
                     >
-                      {/* Photo */}
-                      <div
+                      <img
+                        src={getWallPhotoUrl(wall.id)}
+                        alt={wall.name}
+                        className="bz-card-img"
                         style={{
                           width: "100%",
-                          height: "180px",
-                          overflow: "hidden",
-                          background: "#1c1c1e",
-                        }}
-                      >
-                        <img
-                          src={getWallPhotoUrl(wall.id)}
-                          alt={wall.name}
-                          className="bz-card-img"
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: "block",
-                          }}
-                        />
-                      </div>
-
-                      {/* Info */}
-                      <div style={{ padding: "16px 18px 18px" }}>
-                        <div
-                          style={{
-                            fontFamily: "'Oswald', sans-serif",
-                            fontSize: "1.15rem",
-                            fontWeight: 700,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.04em",
-                            color: "var(--text-primary)",
-                            marginBottom: "6px",
-                          }}
-                        >
-                          {wall.name}
-                        </div>
-                        <div
-                          className="bz-mono"
-                          style={{
-                            fontSize: "0.65rem",
-                            color: "var(--text-muted)",
-                            letterSpacing: "0.06em",
-                          }}
-                        >
-                          {wall.num_holds} holds
-                          {wall.dimensions &&
-                            ` · ${wall.dimensions[0]}×${wall.dimensions[1]} ft`}
-                          {wall.angle != null && ` · ${wall.angle}°`}
-                        </div>
-                      </div>
-
-                      {/* Bottom accent line */}
-                      <div
-                        style={{
-                          height: "2px",
-                          background: "var(--cyan)",
-                          opacity: 0.9,
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
                         }}
                       />
-                    </button>
-                  ),
-                )}
+                    </div>
+
+                    {/* Info */}
+                    <div style={{ padding: "16px 18px 18px" }}>
+                      <div
+                        style={{
+                          fontFamily: "'Oswald', sans-serif",
+                          fontSize: "1.15rem",
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.04em",
+                          color: "var(--text-primary)",
+                          marginBottom: "6px",
+                        }}
+                      >
+                        {wall.name}
+                      </div>
+                      <div
+                        className="bz-mono"
+                        style={{
+                          fontSize: "0.65rem",
+                          color: "var(--text-muted)",
+                          letterSpacing: "0.06em",
+                        }}
+                      >
+                        {wall.num_holds} holds
+                        {wall.dimensions &&
+                          ` · ${wall.dimensions[0]}×${wall.dimensions[1]} ft`}
+                        {wall.angle != null && ` · ${wall.angle}°`}
+                      </div>
+                      {selectedWallId === wall.id && (
+                        <span
+                          className="bz-mono"
+                          style={{
+                            position: "absolute",
+                            bottom: "96px",
+                            left: 0,
+                            right: 0,
+                            justifyContent: "center",
+                            gap: "10px",
+                            zIndex: 30,
+                            pointerEvents: "auto",
+                            padding: "0 16px",
+                          }}
+                        >
+                          <button
+                            className="bz-card"
+                            style={{
+                              background: "rgba(17,17,19,0.8)",
+                              backdropFilter: "blur(2px)",
+                              border: "1px solid var(--border)",
+                              borderRadius: "var(--radius)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "var(--text-primary)",
+                              cursor: "pointer",
+                              fontFamily: "'Oswald', sans-serif",
+                              fontSize: "1.15rem",
+                              fontWeight: 700,
+                              padding: 20,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.04em",
+                            }}
+                            onClick={() =>
+                              navigate({
+                                to: "/$wallId/set",
+                                params: { wallId: wall.id },
+                              })
+                            }
+                          >
+                            Generate/Set
+                          </button>
+                          <button
+                            className="bz-card"
+                            style={{
+                              background: "rgba(17,17,19,0.8)",
+                              backdropFilter: "blur(2px)",
+                              border: "1px solid var(--border)",
+                              borderRadius: "var(--radius)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "var(--text-dim)",
+                              cursor: "pointer",
+                              fontFamily: "'Oswald', sans-serif",
+                              fontSize: "1.15rem",
+                              padding: 20,
+                              fontWeight: 700,
+                              textTransform: "uppercase",
+                              letterSpacing: "0.04em",
+                            }}
+                            onClick={() =>
+                              navigate({
+                                to: "/$wallId/view",
+                                params: { wallId: wall.id },
+                              })
+                            }
+                          >
+                            View {wall.num_climbs} Climbs
+                          </button>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Bottom accent line */}
+                    <div
+                      style={{
+                        height: "2px",
+                        background: "var(--cyan)",
+                        opacity: 0.9,
+                      }}
+                    />
+                  </button>
+                ))}
               </div>
             )}
           </div>
