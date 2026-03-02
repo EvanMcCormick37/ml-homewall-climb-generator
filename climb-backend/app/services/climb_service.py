@@ -153,6 +153,17 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
     hold_list = _holdset_to_holds(climb_data.holdset)
     holds = json.dumps(hold_list)
     with get_db() as conn:
+        duplicate = conn.execute(
+            """
+            SELECT id FROM climbs
+            WHERE wall_id = ? AND name = ? AND angle = ? AND setter_id = ?
+            """,
+            (wall_id, climb_data.name, angle, climb_data.setter_id),
+        ).fetchone()
+        if duplicate:
+            raise ValueError(
+                f"A climb with the same name, angle, and setter already exists (id: {duplicate['id']})"
+            )
         conn.execute(
             """
             INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, quality, ascents, setter_name, setter_id)

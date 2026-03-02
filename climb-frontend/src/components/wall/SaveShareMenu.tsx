@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Link,
   Check,
@@ -8,6 +8,7 @@ import {
   Database,
   Save,
   Lock,
+  XCircle,
 } from "lucide-react";
 import { SectionLabel } from "./ui";
 
@@ -25,6 +26,7 @@ export interface SaveShareMenuProps {
   isSignedIn: boolean;
   hasClimb: boolean;
   saveSuccess: boolean;
+  saveError: string | null;
 }
 
 // ─── Mobile: popup menu triggered from FAB ───────────────────────────────────
@@ -41,8 +43,17 @@ export function SaveShareMenu({
   isSignedIn,
   hasClimb,
   saveSuccess,
+  saveError,
 }: SaveShareMenuProps) {
   const [open, setOpen] = useState(false);
+
+  // Keep menu open while saving; auto-close once saved or after showing error
+  useEffect(() => {
+    if ((saveSuccess || saveError) && open) {
+      const t = setTimeout(() => setOpen(false), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [saveSuccess, saveError, open]);
 
   const menuBtn: React.CSSProperties = {
     display: "flex",
@@ -112,12 +123,16 @@ export function SaveShareMenu({
               overflow: "hidden",
             }}
           >
+            <style>{`
+              .ssm-btn:hover, .ssm-btn:focus { color: var(--cyan) !important; outline: none; }
+            `}</style>
             {/* Copy Link */}
             <button
               onClick={() => {
                 onCopyLink();
               }}
               style={menuBtn}
+              className="ssm-btn"
             >
               {linkCopied ? (
                 <>
@@ -138,6 +153,7 @@ export function SaveShareMenu({
               }}
               disabled={isExporting}
               style={{ ...menuBtn, opacity: isExporting ? 0.5 : 1 }}
+              className="ssm-btn"
             >
               {isExporting ? (
                 <>
@@ -162,6 +178,7 @@ export function SaveShareMenu({
                   setOpen(false);
                 }}
                 style={menuBtn}
+                className="ssm-btn"
               >
                 <Share2 size={12} /> Share…
               </button>
@@ -170,10 +187,7 @@ export function SaveShareMenu({
             {/* Save to Database */}
             <button
               onClick={() => {
-                if (isSignedIn && !isSaving) {
-                  onSaveToDatabase();
-                  setOpen(false);
-                }
+                if (isSignedIn && !isSaving) onSaveToDatabase();
               }}
               disabled={!isSignedIn || isSaving}
               style={{
@@ -181,12 +195,25 @@ export function SaveShareMenu({
                 borderBottom: "none",
                 color: !isSignedIn
                   ? "var(--text-dim)"
-                  : saveSuccess
-                    ? "var(--cyan)"
-                    : "var(--text-muted)",
+                  : saveError
+                    ? "#f87171"
+                    : saveSuccess
+                      ? "var(--cyan)"
+                      : "var(--text-muted)",
                 cursor: !isSignedIn || isSaving ? "not-allowed" : "pointer",
                 opacity: !isSignedIn ? 0.5 : 1,
+                borderTop: saveError
+                  ? "1px solid rgba(248,113,113,0.4)"
+                  : saveSuccess
+                    ? "1px solid var(--cyan)"
+                    : undefined,
+                background: saveError
+                  ? "rgba(248,113,113,0.1)"
+                  : saveSuccess
+                    ? "var(--cyan-dim)"
+                    : "transparent",
               }}
+              className="ssm-btn"
               title={!isSignedIn ? "Sign in to save climbs" : undefined}
             >
               {!isSignedIn ? (
@@ -209,6 +236,10 @@ export function SaveShareMenu({
                     style={{ animation: "spin 1s linear infinite" }}
                   />{" "}
                   Saving…
+                </>
+              ) : saveError ? (
+                <>
+                  <XCircle size={12} style={{ color: "#f87171" }} /> {saveError}
                 </>
               ) : saveSuccess ? (
                 <>
@@ -241,6 +272,7 @@ export function DesktopSaveSharePanel({
   isSignedIn,
   hasClimb,
   saveSuccess,
+  saveError,
 }: SaveShareMenuProps) {
   if (!hasClimb) return null;
 
@@ -338,13 +370,23 @@ export function DesktopSaveSharePanel({
           ...actionBtn,
           color: !isSignedIn
             ? "var(--text-dim)"
-            : saveSuccess
-              ? "var(--cyan)"
-              : "var(--text-muted)",
+            : saveError
+              ? "#f87171"
+              : saveSuccess
+                ? "var(--cyan)"
+                : "var(--text-muted)",
           cursor: !isSignedIn || isSaving ? "not-allowed" : "pointer",
           opacity: !isSignedIn ? 0.5 : 1,
-          borderColor: saveSuccess ? "var(--cyan)" : "var(--border)",
-          background: saveSuccess ? "var(--cyan-dim)" : "transparent",
+          borderColor: saveError
+            ? "rgba(248,113,113,0.4)"
+            : saveSuccess
+              ? "var(--cyan)"
+              : "var(--border)",
+          background: saveError
+            ? "rgba(248,113,113,0.1)"
+            : saveSuccess
+              ? "var(--cyan-dim)"
+              : "transparent",
         }}
         title={
           !isSignedIn
@@ -363,6 +405,10 @@ export function DesktopSaveSharePanel({
               style={{ animation: "spin 1s linear infinite" }}
             />{" "}
             Saving…
+          </>
+        ) : saveError ? (
+          <>
+            <XCircle size={10} style={{ color: "#f87171" }} /> {saveError}
           </>
         ) : saveSuccess ? (
           <>

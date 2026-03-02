@@ -1327,6 +1327,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
   const { isSignedIn, user } = useUser();
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Reset save success when switching climbs
   useEffect(() => {
@@ -1488,8 +1489,8 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
         wall.metadata.name,
         wall.holds ?? [],
         wallDimensions,
-        selectedClimb.holdset,
-        selectedClimb.name,
+        selectedClimb,
+        user?.fullName ?? null,
         displaySettings,
       );
       const url = URL.createObjectURL(blob);
@@ -1568,6 +1569,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
     if (!selectedClimb || !isSignedIn) return;
     setIsSaving(true);
     setSaveSuccess(false);
+    setSaveError(null);
     try {
       await createClimb(wallId, {
         name: selectedClimb.name,
@@ -1582,10 +1584,19 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      console.error("Failed to save climb:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to save climb to database",
-      );
+      const status = (err as { response?: { status?: number } }).response
+        ?.status;
+      if (status === 409) {
+        setSaveError("Already saved");
+        setTimeout(() => setSaveError(null), 3000);
+      } else {
+        console.error("Failed to save climb:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to save climb to database",
+        );
+      }
     } finally {
       setIsSaving(false);
     }
@@ -1732,6 +1743,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
     isSignedIn: !!isSignedIn,
     hasClimb: !!selectedClimb,
     saveSuccess,
+    saveError,
   };
 
   return (

@@ -62,7 +62,10 @@ def create_climb(
     """Save a climb to a wall. Requires authentication + wall access."""
     if not services.wall_exists(wall_id):
         raise HTTPException(status_code=404, detail="Wall not found")
-    climb_id = services.create_climb(wall_id, climb_create)
+    try:
+        climb_id = services.create_climb(wall_id, climb_create)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     return ClimbCreateResponse(id=climb_id)
 
 

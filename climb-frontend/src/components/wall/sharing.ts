@@ -1,6 +1,10 @@
 import { getWallPhotoUrl } from "@/api/walls";
-import type { HoldDetail, Holdset } from "@/types";
-import { HOLD_STROKE_COLOR, type DisplaySettings, type NamedHoldset } from "./types";
+import type { Climb, HoldDetail, Holdset } from "@/types";
+import {
+  HOLD_STROKE_COLOR,
+  type DisplaySettings,
+  type NamedHoldset,
+} from "./types";
 
 // ─── URL encoding / decoding ─────────────────────────────────────────────────
 
@@ -53,8 +57,8 @@ export async function renderExportImage(
   wallName: string,
   holds: HoldDetail[],
   wallDimensions: { width: number; height: number },
-  holdset: Holdset,
-  climbName: string,
+  climb: NamedHoldset,
+  setterName: string | null,
   displaySettings: DisplaySettings,
 ): Promise<Blob> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -64,6 +68,7 @@ export async function renderExportImage(
     el.onerror = reject;
     el.src = getWallPhotoUrl(wallId);
   });
+
   const imgW = img.width,
     imgH = img.height;
   const topBannerH = Math.round(imgH * 0.06);
@@ -72,25 +77,49 @@ export async function renderExportImage(
   canvas.width = imgW;
   canvas.height = imgH + topBannerH + bottomBannerH;
   const ctx = canvas.getContext("2d")!;
+
   ctx.fillStyle = "#09090b";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#111113";
   ctx.fillRect(0, 0, imgW, topBannerH);
+
+  // 1. Draw the Climb Name
   ctx.fillStyle = "#f4f4f5";
   ctx.font = `bold ${Math.round(topBannerH * 0.55)}px sans-serif`;
   ctx.textBaseline = "middle";
-  ctx.fillText(climbName, Math.round(imgW * 0.02), topBannerH / 2);
+  const nameStartX = Math.round(imgW * 0.02);
+  ctx.fillText(climb.name, nameStartX, topBannerH / 2);
+
+  // 2. Format and Draw the Subtitle Text
+  // Measure the width of the name we just drew to know where to start the subtitle
+  const nameWidth = ctx.measureText(climb.name).width;
+  const subtitleGap = Math.round(imgW * 0.015); // Gap between name and subtitle
+
+  // Handle nulls and formatting
+  const gradeStr = climb.grade !== null ? climb.grade : "?";
+  const setterStr = setterName || "Unknown";
+  const dateStr = new Date().toLocaleString();
+
+  const subtitle = `${gradeStr} @ ${climb.angle}° | ${setterStr}, ${dateStr}`;
+
+  ctx.fillStyle = "#a1a1aa"; // A muted gray color so it doesn't fight the main title
+  ctx.font = `normal ${Math.round(topBannerH * 0.4)}px sans-serif`;
+  ctx.fillText(subtitle, nameStartX + nameWidth + subtitleGap, topBannerH / 2);
+
+  // 3. Draw the Wall Name (Right aligned)
   ctx.fillStyle = "#71717a";
   ctx.font = `${Math.round(topBannerH * 0.4)}px sans-serif`;
   ctx.textAlign = "right";
   ctx.fillText(wallName, imgW - Math.round(imgW * 0.02), topBannerH / 2);
+
+  // Reset alignment before drawing the image
   ctx.textAlign = "left";
   ctx.drawImage(img, 0, topBannerH);
 
-  const startSet = new Set(holdset.start),
-    finishSet = new Set(holdset.finish);
-  const handSet = new Set(holdset.hand),
-    footSet = new Set(holdset.foot);
+  const startSet = new Set(climb.holdset.start),
+    finishSet = new Set(climb.holdset.finish);
+  const handSet = new Set(climb.holdset.hand),
+    footSet = new Set(climb.holdset.foot);
   const usedSet = new Set([...startSet, ...finishSet, ...handSet, ...footSet]);
   const {
     scale: userScale,
@@ -103,7 +132,7 @@ export async function renderExportImage(
   holds.forEach((hold) => {
     const px = (hold.x / wallDimensions.width) * imgW;
     const py = (1 - hold.y / wallDimensions.height) * imgH + topBannerH;
-    const baseScale = imgH / 1000;
+    const baseScale = imgH / 500;
     const radius = 10 * baseScale * userScale;
     const isUsed = usedSet.has(hold.hold_index);
     const isStart = startSet.has(hold.hold_index),
