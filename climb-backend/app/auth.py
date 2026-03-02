@@ -20,7 +20,6 @@ JWKS_CACHE_TTL = 3600  # seconds
 
 def _get_clerk_jwks_url() -> str:
     """Construct the JWKS URL from Clerk's issuer."""
-    # Your Clerk frontend API domain, e.g. "https://your-app.clerk.accounts.dev"
     return f"{settings.CLERK_ISSUER}/.well-known/jwks.json"
 
 
