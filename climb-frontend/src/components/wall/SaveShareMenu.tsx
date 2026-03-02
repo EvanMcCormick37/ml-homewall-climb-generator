@@ -58,7 +58,6 @@ export function SaveShareMenu({
     border: "none",
     borderBottom: "1px solid var(--border)",
     color: "var(--text-muted)",
-    cursor: "pointer",
     transition: "all 0.15s",
     textAlign: "left" as const,
   };
@@ -114,7 +113,12 @@ export function SaveShareMenu({
             }}
           >
             {/* Copy Link */}
-            <button onClick={() => { onCopyLink(); }} style={menuBtn}>
+            <button
+              onClick={() => {
+                onCopyLink();
+              }}
+              style={menuBtn}
+            >
               {linkCopied ? (
                 <>
                   <Check size={12} style={{ color: "var(--cyan)" }} />
@@ -129,13 +133,19 @@ export function SaveShareMenu({
 
             {/* Save Image */}
             <button
-              onClick={() => { onExportImage(); }}
+              onClick={() => {
+                onExportImage();
+              }}
               disabled={isExporting}
               style={{ ...menuBtn, opacity: isExporting ? 0.5 : 1 }}
             >
               {isExporting ? (
                 <>
-                  <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Rendering…
+                  <Loader2
+                    size={12}
+                    style={{ animation: "spin 1s linear infinite" }}
+                  />{" "}
+                  Rendering…
                 </>
               ) : (
                 <>
@@ -147,7 +157,10 @@ export function SaveShareMenu({
             {/* Native Share */}
             {hasNativeShare && (
               <button
-                onClick={() => { onNativeShare(); setOpen(false); }}
+                onClick={() => {
+                  onNativeShare();
+                  setOpen(false);
+                }}
                 style={menuBtn}
               >
                 <Share2 size={12} /> Share…
@@ -179,13 +192,23 @@ export function SaveShareMenu({
               {!isSignedIn ? (
                 <>
                   <Lock size={12} /> Set to Database
-                  <span style={{ fontSize: "0.5rem", color: "var(--text-dim)", marginLeft: "auto" }}>
+                  <span
+                    style={{
+                      fontSize: "0.5rem",
+                      color: "var(--text-dim)",
+                      marginLeft: "auto",
+                    }}
+                  >
                     Sign in
                   </span>
                 </>
               ) : isSaving ? (
                 <>
-                  <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> Saving…
+                  <Loader2
+                    size={12}
+                    style={{ animation: "spin 1s linear infinite" }}
+                  />{" "}
+                  Saving…
                 </>
               ) : saveSuccess ? (
                 <>
@@ -251,7 +274,9 @@ export function DesktopSaveSharePanel({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <div style={{ width: "2px", height: "10px", background: "var(--cyan)" }} />
+        <div
+          style={{ width: "2px", height: "10px", background: "var(--cyan)" }}
+        />
         <SectionLabel>Save & Share</SectionLabel>
       </div>
 
@@ -275,7 +300,11 @@ export function DesktopSaveSharePanel({
       >
         {isExporting ? (
           <>
-            <Loader2 size={10} style={{ animation: "spin 1s linear infinite" }} /> Rendering…
+            <Loader2
+              size={10}
+              style={{ animation: "spin 1s linear infinite" }}
+            />{" "}
+            Rendering…
           </>
         ) : (
           <>
@@ -317,7 +346,11 @@ export function DesktopSaveSharePanel({
           borderColor: saveSuccess ? "var(--cyan)" : "var(--border)",
           background: saveSuccess ? "var(--cyan-dim)" : "transparent",
         }}
-        title={!isSignedIn ? "Sign in to save climbs to the global database" : undefined}
+        title={
+          !isSignedIn
+            ? "Sign in to save climbs to the global database"
+            : undefined
+        }
       >
         {!isSignedIn ? (
           <>
@@ -325,7 +358,11 @@ export function DesktopSaveSharePanel({
           </>
         ) : isSaving ? (
           <>
-            <Loader2 size={10} style={{ animation: "spin 1s linear infinite" }} /> Saving…
+            <Loader2
+              size={10}
+              style={{ animation: "spin 1s linear infinite" }}
+            />{" "}
+            Saving…
           </>
         ) : saveSuccess ? (
           <>

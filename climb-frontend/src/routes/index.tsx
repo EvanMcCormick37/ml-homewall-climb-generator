@@ -252,8 +252,8 @@ function HomePage() {
               </a>
             ))}
           </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {/* Desktop Sign-In */}
+          <div className="hidden lg:flex">
             <SignedOut>
               <button
                 onClick={() => navigate({ to: "/signIn" })}
@@ -261,10 +261,10 @@ function HomePage() {
                 style={{
                   fontSize: "0.65rem",
                   color: "var(--cyan)",
-                  background: "none",
+                  background: "var(--surface)",
                   border: "1px solid var(--cyan)",
                   borderRadius: "4px",
-                  padding: "6px 16px",
+                  padding: "4px 12px",
                   cursor: "pointer",
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
@@ -273,17 +273,52 @@ function HomePage() {
                 Sign In
               </button>
             </SignedOut>
-            <SignedIn>
-              <UserButton
-                appearance={{
-                  elements: {
-                    avatarBox: { width: 32, height: 32 },
-                  },
-                }}
-              />
-            </SignedIn>
           </div>
+          <SignedIn>
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: { width: 32, height: 32 },
+                },
+              }}
+            />
+          </SignedIn>
         </nav>
+
+        {/* {Mobile Sign-in} */}
+        <div
+          style={{
+            position: "fixed",
+            bottom: "48px",
+            left: 0,
+            right: 0,
+            justifyContent: "center",
+            gap: "10px",
+            zIndex: 30,
+            padding: "0 16px",
+          }}
+          className="flex lg:hidden"
+        >
+          <SignedOut>
+            <button
+              onClick={() => navigate({ to: "/signIn" })}
+              className="bz-mono"
+              style={{
+                fontSize: "0.65rem",
+                color: "var(--cyan)",
+                background: "var(--surface)",
+                border: "1px solid var(--cyan)",
+                borderRadius: "4px",
+                padding: "4px 12px",
+                cursor: "pointer",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              Sign In
+            </button>
+          </SignedOut>
+        </div>
 
         {/* ── Hero ── */}
         <section

@@ -5,15 +5,13 @@ import { WakingScreen } from "@/components";
 import {
   ArrowLeft,
   Loader2,
-  Layers,
+  ChartNetwork,
   User,
   Calendar,
   Hash,
   Tag,
   Search,
   SunMedium,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   X,
   SlidersHorizontal,
@@ -36,6 +34,7 @@ import {
   type DisplaySettings,
   TogglePair,
   SectionLabel,
+  MobileSwipeNav,
   WallCanvas,
   DisplaySettingsPanel,
 } from "@/components/wall";
@@ -592,7 +591,7 @@ function ClimbList({
               gap: "10px",
             }}
           >
-            <Layers size={28} style={{ color: "var(--text-dim)" }} />
+            <ChartNetwork size={28} style={{ color: "var(--text-dim)" }} />
             <p
               className="bz-mono"
               style={{
@@ -711,8 +710,6 @@ function ClimbDetails({
     day: "numeric",
   });
 
-  const { start, finish, hand, foot } = climb.holdset;
-  const totalHolds = new Set([...start, ...finish, ...hand, ...foot]).size;
   const color = gradeToColor(climb.grade);
 
   const detailRow: React.CSSProperties = {
@@ -812,66 +809,6 @@ function ClimbDetails({
         >
           {createdDate}
         </span>
-      </div>
-
-      <div style={detailRow}>
-        <Hash size={12} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
-        <span
-          className="bz-mono"
-          style={{ fontSize: "0.6rem", color: "var(--text-muted)", flex: 1 }}
-        >
-          Holds
-        </span>
-        <span
-          className="bz-mono"
-          style={{ fontSize: "0.6rem", color: "var(--text-primary)" }}
-        >
-          {totalHolds} total
-        </span>
-      </div>
-
-      {/* Hold category breakdown */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-        {(["start", "hand", "foot", "finish"] as HoldCategory[]).map((cat) => (
-          <div
-            key={cat}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "6px 10px",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            <div
-              style={{
-                width: "6px",
-                height: "6px",
-                borderRadius: "50%",
-                background: displaySettings.categoryColors[cat],
-                flexShrink: 0,
-              }}
-            />
-            <span
-              className="bz-mono"
-              style={{
-                fontSize: "0.55rem",
-                color: "var(--text-muted)",
-                flex: 1,
-              }}
-            >
-              {CATEGORY_LABELS[cat]}
-            </span>
-            <span
-              className="bz-mono"
-              style={{ fontSize: "0.55rem", color: "var(--text-primary)" }}
-            >
-              {climb.holdset[cat].length}
-            </span>
-          </div>
-        ))}
       </div>
 
       {/* Tags */}
@@ -1288,7 +1225,10 @@ function MainViewPage({
             >
               <span
                 className="bz-oswald"
-                style={{ fontSize: "1rem", color: "var(--text-primary)" }}
+                style={{
+                  fontSize: "1.6rem",
+                  color: gradeToColor(selectedClimb.grade),
+                }}
               >
                 {selectedClimb.name || "Unnamed"}
               </span>
@@ -1296,8 +1236,8 @@ function MainViewPage({
                 className="bz-mono"
                 style={{ fontSize: "0.6rem", color: "var(--cyan)" }}
               >
-                {gradeToString(selectedClimb.grade)} · {selectedClimb.ascents}{" "}
-                ascents
+                {gradeToString(selectedClimb.grade)} @ {selectedClimb.angle} ·{" "}
+                {selectedClimb.setter_name}
               </span>
             </div>
           </div>
@@ -1493,7 +1433,7 @@ function MainViewPage({
                   gap: "10px",
                 }}
               >
-                <Layers size={28} style={{ color: "var(--text-dim)" }} />
+                <ChartNetwork size={28} style={{ color: "var(--text-dim)" }} />
                 <p
                   className="bz-mono"
                   style={{
@@ -1597,59 +1537,11 @@ function MainViewPage({
           )}
 
           {/* Mobile FABs - climb navigation */}
-          {climbs.length > 1 && (
-            <div
-              style={{
-                position: "absolute",
-                bottom: "96px",
-                left: 0,
-                right: 0,
-                justifyContent: "center",
-                gap: "10px",
-                zIndex: 30,
-                pointerEvents: "auto",
-                padding: "0 16px",
-              }}
-              className="flex lg:hidden"
-            >
-              <button
-                onClick={handleSwipePrev}
-                style={{
-                  background: "rgba(17,17,19,0.92)",
-                  backdropFilter: "blur(8px)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius)",
-                  width: "36px",
-                  height: "36px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--text-primary)",
-                  cursor: "pointer",
-                }}
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button
-                onClick={handleSwipeNext}
-                style={{
-                  background: "rgba(17,17,19,0.92)",
-                  backdropFilter: "blur(8px)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius)",
-                  width: "36px",
-                  height: "36px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--text-primary)",
-                  cursor: "pointer",
-                }}
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          )}
+          <MobileSwipeNav
+            count={climbs.length}
+            onPrev={handleSwipePrev}
+            onNext={handleSwipeNext}
+          />
           {/* Mobile FABs */}
           <div
             style={{
@@ -1687,10 +1579,10 @@ function MainViewPage({
                 boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
               }}
             >
-              <Layers size={12} style={{ color: "var(--cyan)" }} /> Climbs
+              <ChartNetwork size={12} style={{ color: "var(--cyan)" }} /> Climbs
             </button>
 
-            {selectedClimb && (
+            {false && (
               <button
                 onClick={() =>
                   setMobilePanel((p) => (p === "right" ? "none" : "right"))

@@ -57,6 +57,7 @@ import {
   TogglePair,
   BzRange,
   // Components
+  MobileSwipeNav,
   WallCanvas,
   DisplaySettingsPanel,
   SaveShareMenu,
@@ -2298,59 +2299,11 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
           )}
 
           {/* Mobile FABs - climb navigation */}
-          {generatedClimbs.length > 1 && (
-            <div
-              style={{
-                position: "absolute",
-                bottom: "96px",
-                left: 0,
-                right: 0,
-                justifyContent: "center",
-                gap: "10px",
-                zIndex: 30,
-                pointerEvents: "auto",
-                padding: "0 16px",
-              }}
-              className="flex lg:hidden"
-            >
-              <button
-                onClick={handleSwipePrev}
-                style={{
-                  background: "rgba(17,17,19,0.92)",
-                  backdropFilter: "blur(8px)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius)",
-                  width: "36px",
-                  height: "36px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--text-primary)",
-                  cursor: "pointer",
-                }}
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button
-                onClick={handleSwipeNext}
-                style={{
-                  background: "rgba(17,17,19,0.92)",
-                  backdropFilter: "blur(8px)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius)",
-                  width: "36px",
-                  height: "36px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--text-primary)",
-                  cursor: "pointer",
-                }}
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          )}
+          <MobileSwipeNav
+            count={generatedClimbs.length}
+            onPrev={handleSwipePrev}
+            onNext={handleSwipeNext}
+          />
 
           {/* Mobile FABs - main actions */}
           <div
@@ -2362,7 +2315,6 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
               justifyContent: "center",
               gap: "10px",
               zIndex: 30,
-              pointerEvents: "none",
               padding: "0 16px",
             }}
             className="flex lg:hidden"

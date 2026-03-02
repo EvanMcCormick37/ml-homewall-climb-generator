@@ -20,6 +20,7 @@ export { VGRADE_OPTIONS, FONT_OPTIONS, generateClimbName } from "./constants";
 export { SectionLabel, TogglePair, BzRange } from "./ui";
 
 // Components
+export { MobileSwipeNav } from "./MobileSwipeNav";
 export { WallCanvas, type WallCanvasProps } from "./WallCanvas";
 export { DisplaySettingsPanel } from "./DisplaySettingsPanel";
 export {

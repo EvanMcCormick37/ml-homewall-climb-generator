@@ -103,24 +103,24 @@ export function gradeToColor(grade: number | null): string {
 
   // Color gradient from green (easy) to purple (hard)
   const colors = [
-    "#22c55e", // V0
-    "#00c717ff", // V1
-    "#4acc16ff", // V2
-    "#68cc16ff", // V3
-    "#b9ea08ff", // V4
-    "#d9ff00ff", // V5
-    "#e8dc00ff", // V6
-    "#ffee00ff", // V7
-    "#e6b000ff", // V8
-    "#dc6f26ff", // V9
-    "#dc3826ff", // V10
-    "#b91c1c", // V11
-    "#991b2cff", // V12
-    "#8a042cff", // V13
-    "#8b0071ff", // V14
-    "#79007dff", // V15
-    "#6c007cff", // V16
-    "#3e0075ff", // V17
+    "rgb(0, 235, 25)", // V0
+    "rgb(0, 175, 125)", // V1
+    "rgb(0, 200, 200)", // V2
+    "rgb(0, 100, 225)", // V3
+    "rgb(0, 0, 255)", // V4
+    "rgb(255, 255, 0)", // V5
+    "rgb(255, 205, 0)", // V6
+    "rgb(255, 180, 0)", // V7
+    "rgb(255, 140, 0)", // V8
+    "rgb(255, 100, 0)", // V9
+    "rgb(220, 55, 25)", // V10
+    "rgb(190, 25, 25)", // V11
+    "rgb(165, 0, 25)", // V12
+    "rgb(165, 0, 55)", // V13
+    "rgb(135, 0, 90)", // V14
+    "rgb(120, 0, 125)", // V15
+    "rgb(100, 0, 100)", // V16
+    "rgb(50, 0, 75)", // V17
   ];
 
   return colors[vGrade];

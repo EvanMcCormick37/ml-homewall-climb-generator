@@ -43,6 +43,9 @@ export function useClimbs(
       const response = await getClimbs(wallId, filters);
       setClimbs(response.climbs);
       setTotal(response.total);
+      if (response.total > 0) {
+        setSelectedClimb(response.climbs[0]);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to fetch climbs";
