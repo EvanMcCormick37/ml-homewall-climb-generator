@@ -1149,7 +1149,7 @@ function MainViewPage({
               })
             }
           >
-            Set/Generate
+            Set
           </button>
           <a
             href="https://docs.google.com/forms/d/e/1FAIpQLSeYDIel5MMjj0X3zlXFe4N4FZdUcXadAL5bR-Wjb4W7SVZ5SQ/viewform?usp=dialog"
