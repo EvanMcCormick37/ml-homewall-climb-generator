@@ -14,16 +14,27 @@ import {
   SunMedium,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
+  SlidersHorizontal,
 } from "lucide-react";
-import type { Climb, WallDetail } from "@/types";
+import {
+  type Climb,
+  type WallDetail,
+  type GradeScale,
+  type ClimbFilters,
+  DEFAULT_CLIMB_FILTERS,
+} from "@/types";
 import { gradeToString, gradeToColor } from "@/utils/climbs";
 import {
   GLOBAL_STYLES,
   CATEGORY_LABELS,
+  VGRADE_OPTIONS,
+  FONT_OPTIONS,
   DEFAULT_DISPLAY_SETTINGS,
   type HoldCategory,
   type DisplaySettings,
+  TogglePair,
   SectionLabel,
   WallCanvas,
   DisplaySettingsPanel,
@@ -36,6 +47,333 @@ export const Route = createFileRoute("/$wallId/view")({
   staleTime: 3_600_000,
 });
 
+// ─── Grade helpers ────────────────────────────────────────────────────────────
+
+const SORT_OPTIONS = [
+  { label: "Date Added", value: "date" },
+  { label: "Ascents", value: "ascents" },
+  { label: "Grade", value: "grade" },
+  { label: "Quality", value: "quality" },
+];
+
+// ─── FilterPanel ─────────────────────────────────────────────────────────────
+
+const selectStyle: React.CSSProperties = {
+  width: "100%",
+  background: "var(--bg)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius)",
+  color: "var(--text-primary)",
+  fontFamily: "'Space Mono', monospace",
+  fontSize: "0.6rem",
+  padding: "5px 8px",
+  outline: "none",
+  cursor: "pointer",
+  appearance: "none",
+  WebkitAppearance: "none",
+};
+
+const labelStyle: React.CSSProperties = {
+  fontFamily: "'Space Mono', monospace",
+  fontSize: "0.55rem",
+  color: "var(--text-dim)",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  marginBottom: "4px",
+  display: "block",
+};
+
+function FilterPanel({
+  filters,
+  onChange,
+  onReset,
+}: {
+  filters: ClimbFilters;
+  onChange: (f: ClimbFilters) => void;
+  onReset: () => void;
+}) {
+  const set = <K extends keyof ClimbFilters>(key: K, val: ClimbFilters[K]) =>
+    onChange({ ...filters, [key]: val });
+  const [gradeOptions, setGradeOptions] = useState(VGRADE_OPTIONS);
+  const changeGradeScale = useCallback((scale: GradeScale) => {
+    if (scale === "v_grade") {
+      set("gradeScale", "v_grade");
+      setGradeOptions(VGRADE_OPTIONS);
+      set("minGrade", "V0-");
+      set("maxGrade", "V16");
+    } else {
+      set("gradeScale", "font");
+      setGradeOptions(FONT_OPTIONS);
+      set("minGrade", "4a");
+      set("maxGrade", "8c+");
+    }
+  }, []);
+
+  const hasChanges =
+    filters.minGrade !== DEFAULT_CLIMB_FILTERS.minGrade ||
+    filters.maxGrade !== DEFAULT_CLIMB_FILTERS.maxGrade ||
+    !filters.includeProjects ||
+    filters.setterName !== "" ||
+    filters.after !== "" ||
+    filters.sortBy !== DEFAULT_CLIMB_FILTERS.sortBy ||
+    filters.descending !== DEFAULT_CLIMB_FILTERS.descending;
+
+  return (
+    <div
+      style={{
+        padding: "10px 12px",
+        borderBottom: "1px solid var(--border)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        background: "var(--bg)",
+        animation: "bzFadeUp 0.15s ease-out",
+      }}
+    >
+      {/* Sort row */}
+      <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>Sort By</label>
+          <div style={{ position: "relative" }}>
+            <select
+              value={filters.sortBy}
+              onChange={(e) => set("sortBy", e.target.value)}
+              style={selectStyle}
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={10}
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-dim)",
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>Direction</label>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {[
+              { label: "↓ Desc", val: true },
+              { label: "↑ Asc", val: false },
+            ].map(({ label, val }) => (
+              <button
+                key={label}
+                onClick={() => set("descending", val)}
+                style={{
+                  flex: 1,
+                  padding: "5px 0",
+                  fontFamily: "'Space Mono', monospace",
+                  fontSize: "0.55rem",
+                  border: `1px solid ${filters.descending === val ? "var(--cyan)" : "var(--border)"}`,
+                  background:
+                    filters.descending === val
+                      ? "var(--cyan-dim)"
+                      : "transparent",
+                  color:
+                    filters.descending === val
+                      ? "var(--cyan)"
+                      : "var(--text-muted)",
+                  borderRadius: "var(--radius)",
+                  cursor: "pointer",
+                  transition: "all 0.12s",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Grade range */}
+      <div>
+        <label style={labelStyle}>Grade Range</label>
+        <TogglePair
+          options={[
+            { value: "v_grade", label: "V-grade" },
+            { value: "font", label: "Fontainebleau" },
+          ]}
+          value={filters.gradeScale}
+          onChange={(v) => changeGradeScale(v as GradeScale)}
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div style={{ flex: 1, position: "relative" }}>
+            <select
+              value={filters.minGrade}
+              onChange={(e) => {
+                set("minGrade", e.target.value);
+              }}
+              style={selectStyle}
+            >
+              {gradeOptions.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={10}
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-dim)",
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+          <span
+            style={{
+              fontFamily: "'Space Mono', monospace",
+              fontSize: "0.55rem",
+              color: "var(--text-dim)",
+            }}
+          >
+            to
+          </span>
+          <div style={{ flex: 1, position: "relative" }}>
+            <select
+              value={filters.maxGrade}
+              onChange={(e) => {
+                set("maxGrade", e.target.value);
+              }}
+              style={selectStyle}
+            >
+              {gradeOptions.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={10}
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-dim)",
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Include projects toggle */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'Space Mono', monospace",
+            fontSize: "0.6rem",
+            color: "var(--text-muted)",
+          }}
+        >
+          Include ungraded
+        </span>
+        <button
+          onClick={() => set("includeProjects", !filters.includeProjects)}
+          style={{
+            width: "36px",
+            height: "18px",
+            borderRadius: "9px",
+            border: "none",
+            cursor: "pointer",
+            position: "relative",
+            background: filters.includeProjects
+              ? "var(--cyan)"
+              : "var(--border)",
+            transition: "background 0.15s",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              width: "12px",
+              height: "12px",
+              borderRadius: "50%",
+              background: "#fff",
+              position: "absolute",
+              top: "3px",
+              left: filters.includeProjects ? "21px" : "3px",
+              transition: "left 0.15s",
+            }}
+          />
+        </button>
+      </div>
+
+      {/* Setter name */}
+      <div>
+        <label style={labelStyle}>Setter</label>
+        <input
+          type="text"
+          placeholder="Filter by setter name…"
+          value={filters.setterName}
+          onChange={(e) => set("setterName", e.target.value)}
+          style={{
+            ...selectStyle,
+            padding: "5px 8px",
+          }}
+        />
+      </div>
+
+      {/* After date */}
+      <div>
+        <label style={labelStyle}>Added After</label>
+        <input
+          type="date"
+          value={filters.after}
+          onChange={(e) => set("after", e.target.value)}
+          style={{
+            ...selectStyle,
+            padding: "4px 8px",
+            colorScheme: "dark",
+          }}
+        />
+      </div>
+
+      {/* Reset */}
+      {hasChanges && (
+        <button
+          onClick={onReset}
+          style={{
+            alignSelf: "flex-start",
+            background: "transparent",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius)",
+            color: "var(--text-dim)",
+            fontFamily: "'Space Mono', monospace",
+            fontSize: "0.55rem",
+            padding: "4px 10px",
+            cursor: "pointer",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+          }}
+        >
+          Reset filters
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── ClimbList ───────────────────────────────────────────────────────────────
 
 interface ClimbListProps {
@@ -46,6 +384,9 @@ interface ClimbListProps {
   total: number;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  filters: ClimbFilters;
+  onFiltersChange: (f: ClimbFilters) => void;
+  onFiltersReset: () => void;
 }
 
 function ClimbList({
@@ -56,18 +397,37 @@ function ClimbList({
   total,
   searchQuery,
   onSearchChange,
+  filters,
+  onFiltersChange,
+  onFiltersReset,
 }: ClimbListProps) {
+  const [showFilters, setShowFilters] = useState(false);
+
+  const activeFilterCount = [
+    filters.minGrade !== DEFAULT_CLIMB_FILTERS.minGrade,
+    filters.maxGrade !== DEFAULT_CLIMB_FILTERS.maxGrade,
+    !filters.includeProjects,
+    filters.setterName !== "",
+    filters.after !== "",
+    filters.sortBy !== DEFAULT_CLIMB_FILTERS.sortBy,
+    filters.descending !== DEFAULT_CLIMB_FILTERS.descending,
+  ].filter(Boolean).length;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Search bar */}
+      {/* Search + filter toggle bar */}
       <div
         style={{
           padding: "10px 12px",
-          borderBottom: "1px solid var(--border)",
+          borderBottom: showFilters ? "none" : "1px solid var(--border)",
+          display: "flex",
+          gap: "6px",
+          alignItems: "center",
         }}
       >
         <div
           style={{
+            flex: 1,
             display: "flex",
             alignItems: "center",
             gap: "8px",
@@ -112,7 +472,71 @@ function ClimbList({
             </button>
           )}
         </div>
+        {/* Filter toggle button */}
+        <button
+          onClick={() => setShowFilters((v) => !v)}
+          title="Filter & Sort"
+          style={{
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "30px",
+            height: "30px",
+            flexShrink: 0,
+            border: `1px solid ${showFilters || activeFilterCount > 0 ? "var(--cyan)" : "var(--border)"}`,
+            background:
+              showFilters || activeFilterCount > 0
+                ? "var(--cyan-dim)"
+                : "transparent",
+            borderRadius: "var(--radius)",
+            color:
+              showFilters || activeFilterCount > 0
+                ? "var(--cyan)"
+                : "var(--text-muted)",
+            cursor: "pointer",
+            transition: "all 0.12s",
+          }}
+        >
+          <SlidersHorizontal size={12} />
+          {activeFilterCount > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                top: "-4px",
+                right: "-4px",
+                width: "12px",
+                height: "12px",
+                borderRadius: "50%",
+                background: "var(--cyan)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'Space Mono', monospace",
+                  fontSize: "0.45rem",
+                  color: "#09090b",
+                  fontWeight: 700,
+                }}
+              >
+                {activeFilterCount}
+              </span>
+            </div>
+          )}
+        </button>
       </div>
+
+      {/* Filter panel */}
+      {showFilters && (
+        <FilterPanel
+          filters={filters}
+          onChange={onFiltersChange}
+          onReset={onFiltersReset}
+        />
+      )}
 
       {/* Header count */}
       <div
@@ -127,6 +551,14 @@ function ClimbList({
         <SectionLabel>
           {total} Climb{total !== 1 ? "s" : ""}
         </SectionLabel>
+        <span
+          className="bz-mono"
+          style={{ fontSize: "0.5rem", color: "var(--text-dim)" }}
+        >
+          {SORT_OPTIONS.find((o) => o.value === filters.sortBy)?.label ??
+            "Date"}{" "}
+          {filters.descending ? "↓" : "↑"}
+        </span>
       </div>
 
       {/* List body */}
@@ -561,19 +993,20 @@ function MainViewPage({
   );
   const [showDisplaySettings, setShowDisplaySettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilters, setActiveFilters] = useState<ClimbFilters>(
+    DEFAULT_CLIMB_FILTERS,
+  );
   const [mobilePanel, setMobilePanel] = useState<"none" | "left" | "right">(
     "none",
   );
   const closeMobilePanel = useCallback(() => setMobilePanel("none"), []);
 
-  const { climbs, loading, total, selectedClimb, setSelectedClimb } = useClimbs(
-    wallId,
-    {
-      limit: 100,
-      sort_by: "ascents",
-      descending: true,
-      name_includes: searchQuery || undefined,
-    },
+  const { climbs, loading, total, selectedClimb, setSelectedClimb } =
+    useClimbs(wallId);
+
+  const handleFiltersReset = useCallback(
+    () => setActiveFilters(DEFAULT_CLIMB_FILTERS),
+    [],
   );
 
   const selectedHoldset = selectedClimb?.holdset ?? null;
@@ -916,6 +1349,9 @@ function MainViewPage({
                 total={total}
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
+                filters={activeFilters}
+                onFiltersChange={setActiveFilters}
+                onFiltersReset={handleFiltersReset}
               />
             </div>
           </div>
@@ -1007,6 +1443,9 @@ function MainViewPage({
                     total={total}
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
+                    filters={activeFilters}
+                    onFiltersChange={setActiveFilters}
+                    onFiltersReset={handleFiltersReset}
                   />
                 </div>
               </div>

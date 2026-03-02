@@ -1,10 +1,11 @@
 import { apiClient } from "./client";
-import type {
-  ClimbListResponse,
-  ClimbCreate,
-  ClimbCreateResponse,
-  ClimbDeleteResponse,
-  ClimbFilters,
+import {
+  type ClimbListResponse,
+  type ClimbCreate,
+  type ClimbCreateResponse,
+  type ClimbDeleteResponse,
+  type ClimbFilters,
+  DEFAULT_CLIMB_FILTERS,
 } from "@/types";
 
 /**
@@ -12,36 +13,35 @@ import type {
  */
 export async function getClimbs(
   wallId: string,
-  filters: ClimbFilters = {}
+  filters: ClimbFilters = DEFAULT_CLIMB_FILTERS,
 ): Promise<ClimbListResponse> {
   const params = new URLSearchParams();
 
-  if (filters.grade_range) {
-    params.append("grade_range", filters.grade_range[0].toString());
-    params.append("grade_range", filters.grade_range[1].toString());
+  params.append("grade_scale", filters.gradeScale);
+  params.append("min_grade", filters.minGrade);
+  params.append("max_grade", filters.maxGrade);
+  if (filters.includeProjects !== undefined) {
+    params.append("include_projects", String(filters.includeProjects));
   }
-  if (filters.include_projects !== undefined) {
-    params.append("include_projects", String(filters.include_projects));
+  if (filters.setterName) {
+    params.append("setter_name", filters.setterName);
   }
-  if (filters.setter_name) {
-    params.append("setter", filters.setter_name);
+  if (filters.nameIncludes) {
+    params.append("name_includes", filters.nameIncludes);
   }
-  if (filters.name_includes) {
-    params.append("name_includes", filters.name_includes);
-  }
-  if (filters.holds_include) {
-    filters.holds_include.forEach((h) =>
-      params.append("holds_include", h.toString())
+  if (filters.holdsInclude) {
+    filters.holdsInclude.forEach((h) =>
+      params.append("holds_include", h.toString()),
     );
   }
-  if (filters.tags_include) {
-    filters.tags_include.forEach((t) => params.append("tags_include", t));
+  if (filters.tagsInclude) {
+    filters.tagsInclude.forEach((t) => params.append("tags_include", t));
   }
   if (filters.after) {
     params.append("after", filters.after);
   }
-  if (filters.sort_by) {
-    params.append("sort_by", filters.sort_by);
+  if (filters.sortBy) {
+    params.append("sort_by", filters.sortBy);
   }
   if (filters.descending !== undefined) {
     params.append("descending", String(filters.descending));
@@ -65,7 +65,7 @@ export async function getClimbs(
  */
 export async function createClimb(
   wallId: string,
-  data: ClimbCreate
+  data: ClimbCreate,
 ): Promise<ClimbCreateResponse> {
   // Validate holds before sending
   if (data.holdset.start.length === 0) {
@@ -83,7 +83,7 @@ export async function createClimb(
 
   const response = await apiClient.post<ClimbCreateResponse>(
     `/walls/${wallId}/climbs`,
-    data
+    data,
   );
 
   return response.data;
@@ -94,10 +94,10 @@ export async function createClimb(
  */
 export async function deleteClimb(
   wallId: string,
-  climbId: string
+  climbId: string,
 ): Promise<ClimbDeleteResponse> {
   const response = await apiClient.delete<ClimbDeleteResponse>(
-    `/walls/${wallId}/climbs/${climbId}`
+    `/walls/${wallId}/climbs/${climbId}`,
   );
   return response.data;
 }

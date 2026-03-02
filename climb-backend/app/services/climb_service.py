@@ -14,11 +14,18 @@ from app.schemas import Climb, ClimbCreate, ClimbSortBy, Holdset
 from app.services.utils import GRADE_TO_DIFF, _get_wall_angle
 
 
+def _grade_range(min_grade: str, max_grade: str, grade_scale: str):
+    """Compute the difficulty range (in integer 'diff' scale) from the min/max grade strings"""
+    min_grade = GRADE_TO_DIFF[grade_scale][min_grade]
+    max_grade = GRADE_TO_DIFF[grade_scale][max_grade]
+    return min_grade, max_grade
 
 def get_climbs(
     wall_id: str,
+    grade_scale: str,
+    min_grade: str,
+    max_grade: str,
     angle: int | None = None,
-    grade_range: list[int] = [0,39],
     include_projects: bool = True,
     setter_name: str | None = None,
     name_includes: str | None = None,
@@ -51,7 +58,8 @@ def get_climbs(
     Returns:
         Tuple of (list of climbs, total count, limit, offset)
     """
-    # Build WHERE clauses
+    grade_range = _grade_range(min_grade, max_grade, grade_scale)
+    
     conditions = ["wall_id = ?"]
     params: list = [wall_id]
     

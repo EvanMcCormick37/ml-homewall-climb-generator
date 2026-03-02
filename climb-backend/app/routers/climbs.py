@@ -19,7 +19,9 @@ router = APIRouter()
 def list_climbs(
     wall_id: str,
     angle: int | None = Query(None),
-    grade_range: list[int] = Query([0, 180], min_length=2, max_length=2),
+    grade_scale: str = Query("v_grade"),
+    min_grade: str = Query("V0-"),
+    max_grade: str = Query("V15"),
     include_projects: bool = Query(True),
     setter_name: str | None = Query(None),
     name_includes: str | None = Query(None),
@@ -34,7 +36,9 @@ def list_climbs(
     climbs, total, limit, offset = services.get_climbs(
         wall_id=wall_id,
         angle=angle,
-        grade_range=grade_range,
+        grade_scale=grade_scale,
+        min_grade=min_grade,
+        max_grade=max_grade,
         include_projects=include_projects,
         setter_name=setter_name,
         name_includes=name_includes,

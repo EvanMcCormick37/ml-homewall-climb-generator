@@ -427,7 +427,12 @@ function HomePage() {
                 {walls.map((wall) => (
                   <button
                     key={wall.id}
-                    onClick={() => setSelectedWallId(wall.id)}
+                    onClick={() =>
+                      navigate({
+                        to: "/$wallId/set",
+                        params: { wallId: wall.id },
+                      })
+                    }
                     className="bz-card"
                     style={{ position: "relative" }}
                   >
@@ -481,75 +486,6 @@ function HomePage() {
                           ` · ${wall.dimensions[0]}×${wall.dimensions[1]} ft`}
                         {wall.angle != null && ` · ${wall.angle}°`}
                       </div>
-                      {selectedWallId === wall.id && (
-                        <span
-                          className="bz-mono"
-                          style={{
-                            position: "absolute",
-                            bottom: "96px",
-                            left: 0,
-                            right: 0,
-                            justifyContent: "center",
-                            zIndex: 30,
-                            pointerEvents: "auto",
-                          }}
-                        >
-                          <button
-                            className="bz-card"
-                            style={{
-                              background: "rgba(17,17,19,0.8)",
-                              backdropFilter: "blur(2px)",
-                              border: "1px solid var(--border)",
-                              borderRadius: "var(--radius)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer",
-                              fontFamily: "'Oswald', sans-serif",
-                              fontSize: "1.15rem",
-                              fontWeight: 700,
-                              padding: 20,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.04em",
-                            }}
-                            onClick={() =>
-                              navigate({
-                                to: "/$wallId/set",
-                                params: { wallId: wall.id },
-                              })
-                            }
-                          >
-                            Generate/Set
-                          </button>
-                          <button
-                            className="bz-card"
-                            style={{
-                              background: "rgba(17,17,19,0.8)",
-                              backdropFilter: "blur(2px)",
-                              border: "1px solid var(--border)",
-                              borderRadius: "var(--radius)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer",
-                              fontFamily: "'Oswald', sans-serif",
-                              fontSize: "1.15rem",
-                              padding: 20,
-                              fontWeight: 700,
-                              textTransform: "uppercase",
-                              letterSpacing: "0.04em",
-                            }}
-                            onClick={() =>
-                              navigate({
-                                to: "/$wallId/view",
-                                params: { wallId: wall.id },
-                              })
-                            }
-                          >
-                            View {wall.num_climbs} Climbs
-                          </button>
-                        </span>
-                      )}
                     </div>
 
                     {/* Bottom accent line */}

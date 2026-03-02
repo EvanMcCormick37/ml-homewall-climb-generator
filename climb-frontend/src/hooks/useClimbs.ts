@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getClimbs, deleteClimb } from "@/api/climbs";
-import type { Climb, ClimbFilters } from "@/types";
+import { DEFAULT_CLIMB_FILTERS, type Climb, type ClimbFilters } from "@/types";
 
 interface UseClimbsReturn {
   climbs: Climb[];
@@ -24,7 +24,7 @@ interface UseClimbsReturn {
  */
 export function useClimbs(
   wallId: string,
-  initialFilters: ClimbFilters = {}
+  initialFilters: ClimbFilters = DEFAULT_CLIMB_FILTERS,
 ): UseClimbsReturn {
   const [climbs, setClimbs] = useState<Climb[]>([]);
   const [total, setTotal] = useState(0);
@@ -68,7 +68,7 @@ export function useClimbs(
         setSelectedClimb(null);
       }
     },
-    [wallId, selectedClimb]
+    [wallId, selectedClimb],
   );
 
   return {
