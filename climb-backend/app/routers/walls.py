@@ -1,10 +1,5 @@
 """
-Router for wall-related endpoints (MVP — read-only).
-
-Endpoints:
-- GET  /walls              - List all walls
-- GET  /walls/{wall_id}    - Get wall details
-- GET  /walls/{wall_id}/photo    - Get wall photo
+Router for wall-related endpoints.
 """
 from fastapi import APIRouter, Form, File, UploadFile, HTTPException, Depends
 from fastapi.responses import FileResponse
@@ -19,7 +14,7 @@ from app.schemas import (
     SetHoldsResponse,
 )
 from app.services import services
-from app.auth import sync_auth
+from app.auth import require_auth, sync_auth, get_accessible_wall, require_wall_owner
 
 router = APIRouter()
 
@@ -28,11 +23,14 @@ router = APIRouter()
     "",
     response_model=WallListResponse,
     summary="List all walls",
-    description="Returns metadata for all walls (without hold details).",
 )
-def list_walls():
-    """Get all walls with basic metadata."""
-    walls = services.get_all_walls()
+def list_walls(user: dict | None = Depends(sync_auth)):
+    """
+    Returns public walls + the authenticated user's own walls.
+    Anonymous users see only public walls.
+    """
+    user_id = user["user_id"] if user else None
+    walls = services.get_all_walls(owner_id=user_id)  # service filters accordingly
     return WallListResponse(walls=walls, total=len(walls))
 
 
@@ -40,14 +38,9 @@ def list_walls():
     "/{wall_id}/photo",
     response_class=FileResponse,
     summary="Get wall photo",
-    description="Returns the wall photo as a binary image.",
-    responses={
-        200: {"content": {"image/jpeg": {}, "image/png": {}}},
-        404: {"description": "Wall or photo not found"},
-    },
 )
-def get_wall_photo(wall_id: str):
-    """Get wall photo."""
+def get_wall_photo(wall_id: str, wall=Depends(get_accessible_wall)):
+    """Get wall photo — respects visibility."""
     photo_path = services.get_photo_path(wall_id)
     if photo_path is None:
         raise HTTPException(status_code=404, detail="Photo not found")
@@ -68,14 +61,13 @@ def get_wall_photo(wall_id: str):
     "/{wall_id}",
     response_model=WallDetail,
     summary="Get wall details",
-    description="Returns full wall details including holds.",
 )
-def get_wall(wall_id: str, _=Depends(sync_auth)):
-    """Get detailed wall info including holds."""
-    wall = services.get_wall(wall_id)
-    if wall is None:
+def get_wall(wall_id: str, _=Depends(get_accessible_wall)):
+    """Get detailed wall info including holds — respects visibility."""
+    full_wall = services.get_wall(wall_id)
+    if full_wall is None:
         raise HTTPException(status_code=404, detail="Wall not found")
-    return wall
+    return full_wall
 
 
 @router.post(
@@ -83,88 +75,92 @@ def get_wall(wall_id: str, _=Depends(sync_auth)):
     response_model=WallCreateResponse,
     status_code=201,
     summary="Create a new wall",
-    description="Create a new wall with holdset, metadata, and photo.",
 )
 def create_wall(
     name: str = Form(..., min_length=1, max_length=100),
-    photo: UploadFile = File(..., description="Wall photo (JPEG or PNG)"),
-    dimensions: str = Form(None, description="Comma-separated 'width,height' in feet"),
-    angle: int | None = Form(None, description="Wall angle in degrees from vertical"),
+    photo: UploadFile = File(...),
+    dimensions: str = Form(None),
+    angle: int | None = Form(None),
+    visibility: str = Form("public"),
+    user: dict = Depends(require_auth),
 ):
-    """Create a new wall from holdset, metadata, and photo."""
-    
-    # Validate photo type
+    """Create a new wall. Requires authentication."""
     if photo.content_type not in ["image/jpeg", "image/png"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file type. Only JPEG and PNG are supported.",
-        )
-    
-    # Parse dimensions
+        raise HTTPException(status_code=400, detail="Only JPEG and PNG are supported.")
+
+    if visibility not in ("public", "private", "unlisted"):
+        raise HTTPException(status_code=400, detail="Invalid visibility value.")
+
     dims = None
     if dimensions:
         try:
             parts = dimensions.split(",")
             dims = (int(parts[0].strip()), int(parts[1].strip()))
-        except:
-            raise HTTPException(status_code=400, detail="Invalid dimensions format. Use 'width,height'")
-    
-    # Create wall data object
-    wall_data = WallCreate(
-        name=name,
-        dimensions=dims,
-        angle=angle,
-    )
-    
-    # Create wall with photo
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid dimensions. Use 'width,height'.")
+
+    wall_data = WallCreate(name=name, dimensions=dims, angle=angle, visibility=visibility)
+
     try:
-        wall_id = services.create_wall(wall_data, photo)
+        wall_id = services.create_wall(wall_data, photo, owner_id=user["user_id"])
         return WallCreateResponse(id=wall_id, name=wall_data.name)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create wall: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create wall: {e}")
 
 
 @router.put(
-        "/{wall_id}/holds",
-        status_code=201,
-        summary="Add or replace a wall's holdset",
-        description="Add or replace the holdset of a wall with a new list of holds. Hold data includes x, y, pull_x, pull_y, useability"
+    "/{wall_id}/holds",
+    status_code=201,
+    summary="Set holds (owner only)",
 )
 def set_holds(
     wall_id: str,
-    holds: str = Form(..., description="JSON array of hold objects"),
-    ) -> SetHoldsResponse:
-    """Set or replace virtual holds on an existing wall."""
+    holds: str = Form(...),
+    _wall=Depends(require_wall_owner),  # 401/403 if not owner
+) -> SetHoldsResponse:
+    """Set or replace holds. Owner only."""
     try:
         holds_data = json.loads(holds)
         holds_list = [HoldDetail(**hold) for hold in holds_data]
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid holds JSON. {str(e)}")
-    
+        raise HTTPException(status_code=400, detail=f"Invalid holds JSON: {e}")
+
     success = services.set_holds(wall_id, holds_list)
     if not success:
         raise HTTPException(status_code=404, detail="Wall not found")
     return SetHoldsResponse(id=wall_id)
 
+
 @router.put(
     "/{wall_id}/photo",
     status_code=200,
-    summary="Upload wall photo",
-    description="Upload or replace the wall photo.",
+    summary="Upload wall photo (owner only)",
 )
 def upload_wall_photo(
     wall_id: str,
-    photo: UploadFile = File(..., description="Wall photo (JPEG or PNG)"),
+    photo: UploadFile = File(...),
+    _wall=Depends(require_wall_owner),  # 401/403 if not owner
 ):
-    """Upload or replace wall photo."""
-    # Validate file type
+    """Upload or replace wall photo. Owner only."""
     if photo.content_type not in ["image/jpeg", "image/png"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file type. Only JPEG and PNG are supported.",
-        )
-
+        raise HTTPException(status_code=400, detail="Only JPEG and PNG are supported.")
     success = services.replace_photo(wall_id, photo)
     if not success:
         raise HTTPException(status_code=404, detail="Wall not found")
     return {"message": "Photo uploaded successfully"}
+
+
+@router.delete(
+    "/{wall_id}",
+    status_code=200,
+    summary="Delete a wall (owner only)",
+)
+def delete_wall(
+    wall_id: str,
+    _wall=Depends(require_wall_owner),
+):
+    """Delete a wall and all its climbs. Owner only."""
+    success = services.delete_wall(wall_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    return {"id": wall_id}

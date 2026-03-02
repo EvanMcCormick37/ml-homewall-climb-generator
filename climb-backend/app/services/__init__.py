@@ -12,6 +12,7 @@ services = ServiceContainer(
     get_num_holds=wall_service.get_num_holds,
     get_all_walls=wall_service.get_all_walls,
     get_wall=wall_service.get_wall,
+    get_wall_visibility=wall_service.get_wall_visibility,
     create_wall=wall_service.create_wall,
     delete_wall=wall_service.delete_wall,
     set_holds=wall_service.set_holds,

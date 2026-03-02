@@ -1571,6 +1571,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
       await createClimb(wallId, {
         name: selectedClimb.name,
         holdset: selectedClimb.holdset,
+        scale: gradingScale,
         grade: selectedClimb.grade,
         angle: parseInt(selectedClimb.angle),
         setter_name: user.fullName!,

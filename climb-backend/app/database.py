@@ -82,6 +82,7 @@ def init_db():
                 quality REAL DEFAULT 2.5,
                 ascents INTEGER DEFAULT 0,
                 setter_name TEXT,
+                setter_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (wall_id) REFERENCES walls(id) ON DELETE CASCADE
             )

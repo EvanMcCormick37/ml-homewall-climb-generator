@@ -10,7 +10,6 @@ import jwt as pyjwt
 from jwt.algorithms import RSAAlgorithm
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from fastapi import Depends, HTTPException, Request, Query
-from functools import lru_cache
 from app.config import settings
 from app.services import services
 
@@ -103,9 +102,51 @@ async def require_auth(user: dict | None = Depends(get_current_user)) -> dict:
     services.ensure_user_exists(user["user_id"], user.get("email"), user.get("name"))
     return user
 
-async def sync_auth(user: dict | None = Depends(get_current_user)) -> None:
+async def sync_auth(user: dict | None = Depends(get_current_user)) -> dict | None:
     """Synchronize user authentication with the database if we can."""
-    print("User: ")
     if user is not None:
-        print(user["user_id"], user.get("email"), user.get("name"))
         services.ensure_user_exists(user["user_id"], user.get("email"), user.get("name"))
+    return user
+
+async def get_accessible_wall(
+    wall_id: str,
+    user: dict | None = Depends(get_current_user),
+    share_token: str | None = Query(None),
+) -> dict:
+    """
+    Dependency that returns a wall dict if the requesting user has access.
+    
+    Access rules:
+    - Public walls: anyone
+    - Owner: always
+    - Private/unlisted with valid share_token: anyone with the token
+    - Otherwise: 403
+    """
+    wall = services.get_wall_visibility(wall_id)
+    if not wall:
+        raise HTTPException(status_code=404, detail="Wall not found")
+
+    if wall["visibility"] == "public":
+        return wall
+    if user and wall["owner_id"] == user["user_id"]:
+        return wall
+    if wall["share_token"] and share_token == wall["share_token"]:
+        return wall
+
+    raise HTTPException(status_code=403, detail="Access denied")
+
+
+async def require_wall_owner(
+    wall_id: str,
+    user: dict = Depends(require_auth),  # 401 if not logged in
+) -> dict:
+    """
+    Dependency that requires the requesting user to be the wall owner.
+    Used for mutating operations (edit holds, delete, etc.)
+    """
+    wall = services.get_wall_visibility(wall_id)
+    if not wall:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    if wall["owner_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="You don't own this wall")
+    return wall

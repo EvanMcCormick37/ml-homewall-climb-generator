@@ -11,20 +11,10 @@ from os import times
 
 from app.schemas import Holdset, GenerateRequest, GenerateSettings
 from app.database import get_db
-from app.services.utils import generator
+from app.services.utils import generator, _get_wall_angle
 from app.services.climb_service import _holds_to_holdset
 
 logger = logging.getLogger(__name__)
-
-def _get_wall_angle(wall_id: str, default_angle: int = 45) -> int:
-    """Get the default wall angle from the database. If there is no default wall angle, return 45."""
-    with get_db() as conn:
-        row = conn.execute(
-            "SELECT angle FROM walls WHERE id = ?", (wall_id,)
-        ).fetchone()
-    if row and row["angle"] is not None:
-        return row["angle"]
-    return default_angle
 
 def generate_climbs(
     wall_id: str,

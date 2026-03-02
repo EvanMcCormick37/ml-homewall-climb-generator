@@ -92,11 +92,17 @@ def get_holds(wall_id: str) -> list[HoldDetail]:
     return [_row_to_hold_detail(row) for row in rows]
 
 
-def get_all_walls() -> list[WallMetadata]:
+def get_all_walls(owner_id: str | None = None) -> list[WallMetadata]:
     """Get all walls with basic metadata."""
+    if owner_id is not None:
+        where_clause = "WHERE owner_id = ? OR visibility = 'public'"
+        params = (owner_id,)
+    else:
+        where_clause = "WHERE visibility = 'public'"
+        params = ()
     with get_db() as conn:
         # Get all walls with climb and model counts
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             SELECT 
                 w.id,
                 w.name,
@@ -106,14 +112,12 @@ def get_all_walls() -> list[WallMetadata]:
                 w.num_holds,
                 w.created_at,
                 w.updated_at,
-                COUNT(DISTINCT c.id) AS num_climbs,
-                COUNT(DISTINCT m.id) AS num_models
-            FROM walls w
+                COUNT(DISTINCT c.id) AS num_climbs
+            FROM (SELECT * FROM walls {where_clause}) AS w
             LEFT JOIN climbs c ON c.wall_id = w.id
-            LEFT JOIN models m ON m.wall_id = w.id
             GROUP BY w.id
             ORDER BY w.created_at DESC
-        """).fetchall()
+        """, params).fetchall()
     
     walls = []
     for row in rows:
@@ -123,7 +127,6 @@ def get_all_walls() -> list[WallMetadata]:
             photo_url=row["photo_path"],
             num_holds=row["num_holds"] or 0,
             num_climbs=row["num_climbs"],
-            num_models=row["num_models"],
             dimensions=_parse_dimensions(row["dimensions"]),
             angle=row["angle"],
             created_at=datetime.fromisoformat(row["created_at"]) 
@@ -149,13 +152,10 @@ def get_wall(wall_id: str) -> WallDetail | None:
                 w.angle,
                 w.created_at,
                 w.updated_at,
-                COUNT(DISTINCT c.id) AS num_climbs,
-                COUNT(DISTINCT m.id) AS num_models
+                COUNT(DISTINCT c.id) AS num_climbs
             FROM walls w
             LEFT JOIN climbs c ON c.wall_id = w.id
-            LEFT JOIN models m ON m.wall_id = w.id
             WHERE w.id = ?
-            GROUP BY w.id
         """, (wall_id,)).fetchone()
     
     if not row:
@@ -170,7 +170,6 @@ def get_wall(wall_id: str) -> WallDetail | None:
         photo_url=row["photo_path"],
         num_holds=row["num_holds"] or 0,
         num_climbs=row["num_climbs"],
-        num_models=row["num_models"],
         dimensions=_parse_dimensions(row["dimensions"]),
         angle=row["angle"],
         created_at=datetime.fromisoformat(row["created_at"]) 
@@ -183,10 +182,21 @@ def get_wall(wall_id: str) -> WallDetail | None:
         holds=holds
     )
 
+def get_wall_visibility(wall_id: str) -> dict | None:
+    """Fetch just the ownership/visibility fields for access checks."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, owner_id, visibility, share_token FROM walls WHERE id = ?",
+            (wall_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
 
 def create_wall(
     wall_data: WallCreate,
-    photo: UploadFile
+    photo: UploadFile,
+    visibility: str,
+    user_id: str,
 ) -> str:
     """
     Create a new wall.
@@ -198,8 +208,10 @@ def create_wall(
     Returns:
         The new wall ID
     """
+    assert photo.filename
     # Create wall-id and wall-id subdirectory
     wall_id = f"wall-{uuid.uuid4().hex[:12]}"
+    share_token = uuid.uuid4().hex
     wall_dir = settings.WALLS_DIR / wall_id
     wall_dir.mkdir(parents=True, exist_ok=True)
 
@@ -221,10 +233,10 @@ def create_wall(
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO walls (id, name, photo_path, dimensions, angle, created_at, updated_at)
+            INSERT INTO walls (id, name, photo_path, dimensions, angle, created_at, updated_at, owner_id, visibility, share_token)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (wall_id, wall_data.name, photo_path.name, dim_str, angle, created_at, created_at),
+            (wall_id, wall_data.name, photo_path.name, dim_str, angle, created_at, created_at, user_id, visibility, share_token),
         )
     
     return wall_id
@@ -326,6 +338,7 @@ def replace_photo(wall_id: str, photo: UploadFile) -> bool:
 
 def save_photo(wall_id: str, photo: UploadFile):
     """Save a photo for a wall and update the database."""
+    assert photo.filename
     # Get the extension from the incoming file and create the new photo path
     ext = Path(photo.filename).suffix
     photo_path = settings.WALLS_DIR / wall_id / f"photo{ext}"

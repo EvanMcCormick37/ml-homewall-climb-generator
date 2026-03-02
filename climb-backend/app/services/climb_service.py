@@ -11,6 +11,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.schemas import Climb, ClimbCreate, ClimbSortBy, Holdset
+from app.services.utils import GRADE_TO_DIFF, _get_wall_angle
 
 
 
@@ -19,7 +20,7 @@ def get_climbs(
     angle: int | None = None,
     grade_range: list[int] = [0,39],
     include_projects: bool = True,
-    setter_name: str | None = None,        
+    setter_name: str | None = None,
     name_includes: str | None = None,
     holds_include: list[int] | None = None,
     tags_include: list[str] | None = None,
@@ -138,26 +139,29 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
     Returns:
         The new climb ID
     """
-    id = f"climb-{uuid.uuid4().hex[:12]}"
+    id = f"climb-{uuid.uuid4().hex[:15]}"
+    angle = climb_data.angle if climb_data.angle else _get_wall_angle(wall_id)
+    grade = GRADE_TO_DIFF[climb_data.scale][climb_data.grade] if (climb_data.scale and climb_data.grade) else None
     hold_list = _holdset_to_holds(climb_data.holdset)
     holds = json.dumps(hold_list)
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, quality, ascents, setter_name)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO climbs (id, wall_id, angle, name, holds, tags, grade, quality, ascents, setter_name, setter_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 id,
                 wall_id,
-                climb_data.angle,
+                angle,
                 climb_data.name,
                 holds,
                 json.dumps(climb_data.tags) if climb_data.tags else None,
-                climb_data.grade,
+                grade,
                 climb_data.quality,
                 climb_data.ascents,
                 climb_data.setter_name,
+                climb_data.setter_id,
             ),
         )
     
@@ -292,6 +296,7 @@ def _row_to_climb(row) -> Climb:
         quality=row["quality"] if row["quality"] else None,
         ascents=row["ascents"],
         setter_name=row["setter_name"] if row["setter_name"] else None,
+        setter_id=row["setter_id"] if row["setter_id"] else None,
         tags=json.loads(row["tags"]) if row["tags"] else None,
         created_at=row["created_at"],
     )
@@ -310,7 +315,7 @@ def _get_sort_column(sort_by: ClimbSortBy) -> str:
         case _:
             return "created_at"
 
-def _holds_to_holdset(holds: list[list[int,int]]):
+def _holds_to_holdset(holds: list[list[int]]):
     """Converts a list of [hold_idx, role] back to a Holdset object."""
     roles = [[],[],[],[]]
     for h in holds:
@@ -322,7 +327,7 @@ def _holds_to_holdset(holds: list[list[int,int]]):
         foot=roles[3],
     )
 
-def _holdset_to_holds(holdset: Holdset) -> list[list[int,int]]:
+def _holdset_to_holds(holdset: Holdset) -> list[list[int]]:
     """Converts a Holdset object into a list of [idx, role] for each hold within the holdset."""
     holds = []
     for role, hold_list in enumerate([holdset.start, holdset.finish, holdset.hand, holdset.foot]):

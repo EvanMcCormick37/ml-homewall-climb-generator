@@ -16,6 +16,7 @@ class ServiceContainer:
     get_num_holds: Callable
     get_all_walls: Callable
     get_wall: Callable
+    get_wall_visibility: Callable
     create_wall: Callable
     delete_wall: Callable
     set_holds: Callable

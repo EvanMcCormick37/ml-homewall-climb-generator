@@ -24,6 +24,7 @@ class Climb(BaseModel):
     grade: float | None = None
     quality: float | None = None
     ascents: int
+    setter_name: str | None = None
     setter_id: str | None = None
     tags: list[str] | None = None
     created_at: datetime
@@ -32,8 +33,9 @@ class ClimbCreate(BaseModel):
     """Schema for creating a climb."""
     name: str
     holdset: Holdset
-    angle: int
-    grade: float | None = Field(None, ge=0, le=39)
+    angle: int | None
+    scale: str | None = Field(None)
+    grade: str | None = Field(None)
     quality: float | None = Field(2.5, ge=0, le=4)
     ascents: int | None = Field(0, ge=0)
     setter_name: str | None = None

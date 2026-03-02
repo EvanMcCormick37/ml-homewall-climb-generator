@@ -15,7 +15,6 @@ class WallMetadata(BaseModel):
     photo_url: str
     num_holds: int
     num_climbs: int = 0
-    num_models: int = 0
     dimensions: tuple[int, int] | None = None
     angle: int | None = None
     created_at: datetime
@@ -27,6 +26,7 @@ class WallCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     dimensions: tuple[int, int] | None = None
     angle: int | None = None
+    visibility: str = "public"
 
 
 class WallDetail(BaseModel):

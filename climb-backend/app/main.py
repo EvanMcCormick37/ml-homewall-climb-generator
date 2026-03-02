@@ -4,7 +4,7 @@ Climb Generator API - Main Application (MVP)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import walls, generate
+from app.routers import walls, generate, climbs
 from app.database import init_db
 
 app = FastAPI(
@@ -25,6 +25,7 @@ app.add_middleware(
 # Include routers — only read-only walls + generate for MVP
 app.include_router(walls.router, prefix="/api/v1/walls", tags=["walls"])
 app.include_router(generate.router, prefix="/api/v1/walls/{wall_id}/generate", tags=["generate"])
+app.include_router(climbs.router, prefix="/api/v1/walls/{wall_id}/climbs", tags=["climbs"])
 
 
 @app.on_event("startup")

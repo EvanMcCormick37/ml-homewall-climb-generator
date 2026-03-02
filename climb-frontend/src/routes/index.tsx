@@ -429,6 +429,7 @@ function HomePage() {
                     key={wall.id}
                     onClick={() => setSelectedWallId(wall.id)}
                     className="bz-card"
+                    style={{ position: "relative" }}
                   >
                     {/* Photo */}
                     <div
@@ -489,10 +490,8 @@ function HomePage() {
                             left: 0,
                             right: 0,
                             justifyContent: "center",
-                            gap: "10px",
                             zIndex: 30,
                             pointerEvents: "auto",
-                            padding: "0 16px",
                           }}
                         >
                           <button
@@ -505,7 +504,6 @@ function HomePage() {
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              color: "var(--text-primary)",
                               cursor: "pointer",
                               fontFamily: "'Oswald', sans-serif",
                               fontSize: "1.15rem",
@@ -533,7 +531,6 @@ function HomePage() {
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              color: "var(--text-dim)",
                               cursor: "pointer",
                               fontFamily: "'Oswald', sans-serif",
                               fontSize: "1.15rem",

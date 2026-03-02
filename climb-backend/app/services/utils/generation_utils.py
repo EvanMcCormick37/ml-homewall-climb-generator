@@ -21,6 +21,7 @@ import torch.nn as nn
 from torch import Tensor, seed
 from sklearn.preprocessing import MinMaxScaler
 from app.config import settings
+from app.database import get_db
 
 from pathlib import Path
 
@@ -293,6 +294,17 @@ GRADE_TO_DIFF = {
         "V15": 32, "V15+": 32.5, "V16": 33,
     },
 }
+
+
+def _get_wall_angle(wall_id: str, default_angle: int = 45) -> int:
+    """Get the default wall angle from the database. If there is no default wall angle, return 45."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT angle FROM walls WHERE id = ?", (wall_id,)
+        ).fetchone()
+    if row and row["angle"] is not None:
+        return row["angle"]
+    return default_angle
 
 
 #-----------------------------------------------------------------------
