@@ -1519,8 +1519,8 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
           wall.metadata.name,
           wall.holds ?? [],
           wallDimensions,
-          selectedClimb.holdset,
-          selectedClimb.name,
+          selectedClimb,
+          user?.fullName ?? null,
           displaySettings,
         );
         file = new File(

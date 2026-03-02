@@ -91,8 +91,7 @@ function HoldGridCanvas() {
 }
 
 function HomePage() {
-  const { walls, selectedWallId, setSelectedWallId, loading, waking, error } =
-    useWalls();
+  const { walls, loading, waking, error } = useWalls();
   const navigate = useNavigate();
 
   return (
