@@ -79,7 +79,7 @@ function NewWallPage() {
         setStep("crop");
       }
     },
-    [setImage]
+    [setImage],
   );
 
   const handleDrop = useCallback(
@@ -96,7 +96,7 @@ function NewWallPage() {
         setStep("crop");
       }
     },
-    [setImage]
+    [setImage],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -159,7 +159,7 @@ function NewWallPage() {
         setIsSubmitting(false);
       }
     },
-    [croppedBlob, name, width, height, angle, navigate]
+    [croppedBlob, name, width, height, angle, navigate],
   );
 
   // Auth check — wait for Clerk to load
@@ -438,8 +438,7 @@ function NewWallPage() {
                       fontSize: "0.55rem",
                       letterSpacing: "0.12em",
                       textTransform: "uppercase",
-                      color:
-                        step === s ? "var(--cyan)" : "var(--text-muted)",
+                      color: step === s ? "var(--cyan)" : "var(--text-muted)",
                     }}
                   >
                     {STEP_LABELS[s]}
@@ -450,9 +449,7 @@ function NewWallPage() {
                         width: "32px",
                         height: "1px",
                         background:
-                          stepIndex > i
-                            ? "var(--cyan)"
-                            : "var(--border)",
+                          stepIndex > i ? "var(--cyan)" : "var(--border)",
                         transition: "background 0.2s",
                       }}
                     />
@@ -578,7 +575,8 @@ function NewWallPage() {
                       transition: "all 0.15s",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-active)";
+                      e.currentTarget.style.borderColor =
+                        "var(--border-active)";
                       e.currentTarget.style.color = "var(--text-primary)";
                     }}
                     onMouseLeave={(e) => {
@@ -698,8 +696,7 @@ function NewWallPage() {
                       marginBottom: "8px",
                     }}
                   >
-                    Wall Name{" "}
-                    <span style={{ color: "#f87171" }}>*</span>
+                    Wall Name <span style={{ color: "#f87171" }}>*</span>
                   </label>
                   <input
                     id="wall-name"
@@ -735,7 +732,8 @@ function NewWallPage() {
                       marginBottom: "8px",
                     }}
                   >
-                    Dimensions
+                    Wall Dimensions (exact height and width of the cropped area,
+                    in feet.)
                   </label>
                   <div
                     style={{
@@ -813,7 +811,11 @@ function NewWallPage() {
                     <span style={{ color: "var(--text-dim)" }}>(optional)</span>
                   </label>
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
                   >
                     <input
                       id="wall-angle"
@@ -877,7 +879,8 @@ function NewWallPage() {
                       transition: "all 0.15s",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-active)";
+                      e.currentTarget.style.borderColor =
+                        "var(--border-active)";
                       e.currentTarget.style.color = "var(--text-primary)";
                     }}
                     onMouseLeave={(e) => {
@@ -926,16 +929,15 @@ function NewWallPage() {
                       fontWeight: 700,
                       textTransform: "uppercase",
                       cursor:
-                        isSubmitting ||
-                        !name.trim() ||
-                        !width ||
-                        !height
+                        isSubmitting || !name.trim() || !width || !height
                           ? "not-allowed"
                           : "pointer",
                       transition: "all 0.15s",
                     }}
                   >
-                    {isSubmitting ? "Creating Wall…" : "Create Wall & Add Holds"}
+                    {isSubmitting
+                      ? "Creating Wall…"
+                      : "Create Wall & Add Holds"}
                   </button>
                 </div>
               </form>
