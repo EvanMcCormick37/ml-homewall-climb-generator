@@ -4,7 +4,7 @@
  * These types mirror the Pydantic schemas in climb-api/app/schemas/
  * Keep in sync manually, or use Option 2 (openapi-typescript) for auto-generation.
  */
-export type Tag = "pinch" | "macro" | "sloper";
+export type Tag = "pinch" | "macro" | "sloper" | "jug";
 
 export interface HoldDetail {
   hold_index: number;

@@ -3,14 +3,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { getWall, getWallPhotoUrl, setHolds } from "@/api/walls";
 import { useHolds } from "@/hooks/useHolds";
 import { HoldFeaturesSidebar, EnabledFeaturesMenu } from "@/components";
-import {
-  Eraser,
-  PlusCircle,
-  Hand,
-  Settings,
-  Plus,
-  Edit,
-} from "lucide-react";
+import { Eraser, PlusCircle, Hand, Settings, Plus, Edit } from "lucide-react";
 import type { HoldDetail, WallDetail, HoldMode, Tag } from "@/types";
 
 export const Route = createFileRoute("/$wallId/holds")({
@@ -174,14 +167,14 @@ function HoldsEditorPage() {
       const rect = canvas.getBoundingClientRect();
       return {
         x: Math.round(
-          (e.clientX - rect.left) * (imageDimensions.width / rect.width)
+          (e.clientX - rect.left) * (imageDimensions.width / rect.width),
         ),
         y: Math.round(
-          (e.clientY - rect.top) * (imageDimensions.height / rect.height)
+          (e.clientY - rect.top) * (imageDimensions.height / rect.height),
         ),
       };
     },
-    [imageDimensions]
+    [imageDimensions],
   );
 
   const calculateHoldParams = useCallback(
@@ -203,7 +196,7 @@ function HoldsEditorPage() {
         y: feetCoords.y,
       };
     },
-    [toFeetCoords, enabledFeatures, lockedUseability, useabilityLocked]
+    [toFeetCoords, enabledFeatures, lockedUseability, useabilityLocked],
   );
 
   const getHoldColor = useCallback((u: number, isFoot: boolean) => {
@@ -221,7 +214,7 @@ function HoldsEditorPage() {
 
   const getUseabilityColor = useCallback(
     (u: number) => getHoldColor(u, false),
-    [getHoldColor]
+    [getHoldColor],
   );
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -245,7 +238,7 @@ function HoldsEditorPage() {
           undefined,
           undefined,
           undefined,
-          enabledFeatures.footholds && isAddFoot ? 1 : 0
+          enabledFeatures.footholds && isAddFoot ? 1 : 0,
         );
         setActiveHoldIndex(idx);
       } else {
@@ -310,7 +303,7 @@ function HoldsEditorPage() {
         enabledFeatures.direction ? params.pull_x : undefined,
         enabledFeatures.direction ? params.pull_y : undefined,
         enabledFeatures.useability ? params.useability : undefined,
-        enabledFeatures.footholds && isAddFoot ? 1 : 0
+        enabledFeatures.footholds && isAddFoot ? 1 : 0,
       );
       setActiveHoldIndex(idx);
       setAddHoldState({
@@ -401,9 +394,14 @@ function HoldsEditorPage() {
     const handleKeydown = (e: KeyboardEvent) => {
       if (!enabledFeatures.tags || activeHoldIndex === null) return;
       const tagMap: Record<string, Tag> = {
-        p: "pinch", P: "pinch",
-        m: "macro",  M: "macro",
-        s: "sloper", S: "sloper",
+        p: "pinch",
+        P: "pinch",
+        m: "macro",
+        M: "macro",
+        s: "sloper",
+        S: "sloper",
+        j: "jug",
+        J: "jug",
       };
       const tag = tagMap[e.key];
       if (!tag) return;
@@ -479,19 +477,19 @@ function HoldsEditorPage() {
         ctx.beginPath();
         ctx.moveTo(
           endX + (arrowSize / 2.0) * Math.cos(angle - Math.PI / 4),
-          endY + (arrowSize / 2.0) * Math.sin(angle - Math.PI / 4)
+          endY + (arrowSize / 2.0) * Math.sin(angle - Math.PI / 4),
         );
         ctx.lineTo(
           endX - headLength * Math.cos(angle - Math.PI / 4),
-          endY - headLength * Math.sin(angle - Math.PI / 4)
+          endY - headLength * Math.sin(angle - Math.PI / 4),
         );
         ctx.moveTo(
           endX + (arrowSize / 2.0) * Math.cos(angle + Math.PI / 4),
-          endY + (arrowSize / 2.0) * Math.sin(angle + Math.PI / 4)
+          endY + (arrowSize / 2.0) * Math.sin(angle + Math.PI / 4),
         );
         ctx.lineTo(
           endX - headLength * Math.cos(angle + Math.PI / 4),
-          endY - headLength * Math.sin(angle + Math.PI / 4)
+          endY - headLength * Math.sin(angle + Math.PI / 4),
         );
         ctx.stroke();
       }
@@ -540,7 +538,7 @@ function HoldsEditorPage() {
         pixelCoords.x,
         pixelCoords.y,
         dragX,
-        dragY
+        dragY,
       );
       const sizeMultiplier = originalHold.is_foot ? 0.5 : 1;
       const color = getHoldColor(params.useability, originalHold.is_foot === 1);
@@ -586,7 +584,7 @@ function HoldsEditorPage() {
           addHoldState.holdX,
           addHoldState.holdY,
           addHoldState.dragX,
-          addHoldState.dragY
+          addHoldState.dragY,
         ),
       }
     : editHoldState.isDragging && editHoldState.originalHold
@@ -597,7 +595,7 @@ function HoldsEditorPage() {
               pixelCoords.x,
               pixelCoords.y,
               editHoldState.dragX,
-              editHoldState.dragY
+              editHoldState.dragY,
             );
           })(),
         }
@@ -605,7 +603,7 @@ function HoldsEditorPage() {
 
   const modeButtonStyle = (
     isActive: boolean,
-    activeColor: string
+    activeColor: string,
   ): React.CSSProperties => ({
     padding: "6px 10px",
     borderRadius: "var(--radius)",
@@ -728,11 +726,17 @@ function HoldsEditorPage() {
                   mode === "add",
                   enabledFeatures.footholds && isAddFoot
                     ? "#9333ea"
-                    : "#06b6d4"
+                    : "#06b6d4",
                 )}
               >
                 {mode === "add" ? (
-                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
                     <Plus size={12} />
                     {enabledFeatures.footholds && isAddFoot ? "FOOT" : "HAND"}
                   </span>
@@ -794,7 +798,9 @@ function HoldsEditorPage() {
               CLEAR
             </button>
             <button
-              onClick={() => navigate({ to: "/$wallId/set", params: { wallId } })}
+              onClick={() =>
+                navigate({ to: "/$wallId/set", params: { wallId } })
+              }
               className="bz-mono"
               style={{
                 padding: "6px 12px",
@@ -826,7 +832,7 @@ function HoldsEditorPage() {
                   navigate({ to: "/$wallId/set", params: { wallId } });
                 } catch (err) {
                   setError(
-                    err instanceof Error ? err.message : "Failed to save holds"
+                    err instanceof Error ? err.message : "Failed to save holds",
                   );
                 } finally {
                   setIsSubmitting(false);

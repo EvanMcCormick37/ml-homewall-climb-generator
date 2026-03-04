@@ -31,7 +31,11 @@ function PullDirectionArrow({
   const headLength = 10;
 
   return (
-    <svg width={size} height={size} style={{ display: "block", margin: "0 auto" }}>
+    <svg
+      width={size}
+      height={size}
+      style={{ display: "block", margin: "0 auto" }}
+    >
       <circle
         cx={centerX}
         cy={centerY}
@@ -78,10 +82,22 @@ export function EnabledFeaturesMenu({
   onClose,
 }: EnabledFeaturesMenuProps) {
   const FEATURES: { key: FeatureLabel; label: string; desc: string }[] = [
-    { key: "direction", label: "Direction", desc: "Pull direction (pull_x, pull_y)" },
-    { key: "useability", label: "Useability", desc: "Hold quality / difficulty" },
+    {
+      key: "direction",
+      label: "Direction",
+      desc: "Pull direction (pull_x, pull_y)",
+    },
+    {
+      key: "useability",
+      label: "Useability",
+      desc: "Hold quality / difficulty",
+    },
     { key: "footholds", label: "Foot Holds", desc: "Enable foot-only holds" },
-    { key: "tags", label: "Tags", desc: "Hold type labels (pinch / macro / sloper)" },
+    {
+      key: "tags",
+      label: "Tags",
+      desc: "Hold type labels (pinch / macro / sloper / jug)",
+    },
   ];
 
   return (
@@ -133,17 +149,34 @@ export function EnabledFeaturesMenu({
           ✕
         </button>
       </div>
-      <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: "8px" }}>
+      <div
+        style={{
+          padding: "10px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+        }}
+      >
         {FEATURES.map(({ key, label, desc }) => (
           <label
             key={key}
-            style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              cursor: "pointer",
+            }}
           >
             <input
               type="checkbox"
               checked={enabledFeatures[key]}
               onChange={() => onToggle(key)}
-              style={{ width: "14px", height: "14px", accentColor: "var(--cyan)", flexShrink: 0 }}
+              style={{
+                width: "14px",
+                height: "14px",
+                accentColor: "var(--cyan)",
+                flexShrink: 0,
+              }}
             />
             <div>
               <div
@@ -184,7 +217,8 @@ export function EnabledFeaturesMenu({
             margin: 0,
           }}
         >
-          <span style={{ color: "var(--text-muted)" }}>Note:</span> x and y always saved
+          <span style={{ color: "var(--text-muted)" }}>Note:</span> x and y
+          always saved
         </p>
       </div>
     </div>
@@ -195,7 +229,9 @@ export function EnabledFeaturesMenu({
 
 type HotkeysAndInstructionsProps = { enabledFeatures: EnabledFeatures };
 
-function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps) {
+function HotkeysAndInstructions({
+  enabledFeatures,
+}: HotkeysAndInstructionsProps) {
   const kbd = (label: string, color?: string) => (
     <span
       style={{
@@ -234,7 +270,14 @@ function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps
       >
         Hotkeys
       </h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "11px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+          fontSize: "11px",
+        }}
+      >
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("1", "rgb(52,211,153)")}
           <PlusCircle size={12} style={{ color: "#34d399", flexShrink: 0 }} />
@@ -245,12 +288,16 @@ function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("2", "rgb(248,113,113)")}
           <Eraser size={12} style={{ color: "#f87171", flexShrink: 0 }} />
-          <span style={{ color: "var(--text-muted)" }}>Click — delete hold</span>
+          <span style={{ color: "var(--text-muted)" }}>
+            Click — delete hold
+          </span>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("3", "rgb(96,165,250)")}
           <Hand size={12} style={{ color: "#60a5fa", flexShrink: 0 }} />
-          <span style={{ color: "var(--text-muted)" }}>Click — select / view hold</span>
+          <span style={{ color: "var(--text-muted)" }}>
+            Click — select / view hold
+          </span>
         </span>
         <div
           style={{
@@ -262,23 +309,59 @@ function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps
             gap: "3px",
           }}
         >
-          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              color: "var(--text-muted)",
+            }}
+          >
             · {kbd("Shift + Drag")} Pan
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              color: "var(--text-muted)",
+            }}
+          >
             · {kbd("Scroll")} Zoom
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              color: "var(--text-muted)",
+            }}
+          >
             · {kbd("Ctrl+Z")} Undo last hold
           </span>
           {enabledFeatures.footholds && (
-            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "var(--text-muted)",
+              }}
+            >
               · {kbd("x")} Toggle hand / foot
             </span>
           )}
           {enabledFeatures.tags && (
-            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
-              · {kbd("p")} {kbd("m")} {kbd("s")} Toggle pinch / macro / sloper
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "var(--text-muted)",
+              }}
+            >
+              · {kbd("p")} {kbd("m")} {kbd("s")} Toggle pinch / macro / sloper /
+              jug
             </span>
           )}
         </div>
@@ -315,7 +398,7 @@ function UseabilityBar({
       const percentage = Math.max(0, Math.min(1, x / rect.width));
       onUseabilityChange(percentage);
     },
-    [isLocked, onUseabilityChange]
+    [isLocked, onUseabilityChange],
   );
 
   const handleMouseDown = useCallback(
@@ -324,7 +407,7 @@ function UseabilityBar({
       setIsDragging(true);
       handleBarInteraction(e.clientX);
     },
-    [isLocked, handleBarInteraction]
+    [isLocked, handleBarInteraction],
   );
 
   const handleMouseMove = useCallback(
@@ -332,7 +415,7 @@ function UseabilityBar({
       if (!isDragging || !isLocked) return;
       handleBarInteraction(e.clientX);
     },
-    [isDragging, isLocked, handleBarInteraction]
+    [isDragging, isLocked, handleBarInteraction],
   );
 
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
@@ -351,8 +434,21 @@ function UseabilityBar({
       >
         Useability
       </label>
-      <div style={{ marginTop: "6px", background: "var(--bg)", padding: "10px 12px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+      <div
+        style={{
+          marginTop: "6px",
+          background: "var(--bg)",
+          padding: "10px 12px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "8px",
+          }}
+        >
           <span
             style={{
               fontSize: "1.4rem",
@@ -400,7 +496,15 @@ function UseabilityBar({
             }}
           />
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", cursor: "pointer" }}>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginTop: "8px",
+            cursor: "pointer",
+          }}
+        >
           <input
             type="checkbox"
             checked={isLocked}
@@ -467,6 +571,7 @@ const TAGS: { value: Tag; label: string }[] = [
   { value: "pinch", label: "PINCH" },
   { value: "macro", label: "MACRO" },
   { value: "sloper", label: "SLOPER" },
+  { value: "jug", label: "JUG" },
 ];
 
 export function HoldFeaturesSidebar({
@@ -516,7 +621,13 @@ export function HoldFeaturesSidebar({
 
   if (!displayHold && !showLockControls && !showTags) {
     return (
-      <aside style={{ ...sidebarStyle, alignItems: "center", justifyContent: "center" }}>
+      <aside
+        style={{
+          ...sidebarStyle,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <HotkeysAndInstructions enabledFeatures={enabledFeatures} />
       </aside>
     );
@@ -528,8 +639,20 @@ export function HoldFeaturesSidebar({
   return (
     <aside style={sidebarStyle}>
       {displayHold && (
-        <div style={{ padding: "18px 20px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <div
+          style={{
+            padding: "18px 20px",
+            borderBottom: "1px solid var(--border)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "12px",
+            }}
+          >
             <h2
               style={{
                 fontFamily: "'Space Mono', monospace",
@@ -540,7 +663,9 @@ export function HoldFeaturesSidebar({
                 margin: 0,
               }}
             >
-              {mode === "add" ? "New Hold" : `Hold #${selectedHold?.hold_index}`}
+              {mode === "add"
+                ? "New Hold"
+                : `Hold #${selectedHold?.hold_index}`}
             </h2>
             {mode === "select" && selectedHold && (
               <button
@@ -554,8 +679,12 @@ export function HoldFeaturesSidebar({
                   borderRadius: "var(--radius)",
                   transition: "background 0.15s",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(248,113,113,0.1)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = "rgba(248,113,113,0.1)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = "transparent")
+                }
                 title="Delete hold"
               >
                 <Trash2 size={15} />
@@ -563,7 +692,9 @@ export function HoldFeaturesSidebar({
             )}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+          >
             {/* Position */}
             <div>
               <label
@@ -577,16 +708,40 @@ export function HoldFeaturesSidebar({
               >
                 Position
               </label>
-              <div style={{ marginTop: "5px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" }}>
+              <div
+                style={{
+                  marginTop: "5px",
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "5px",
+                }}
+              >
                 {[
                   { axis: "X", val: displayHold.x },
                   { axis: "Y", val: displayHold.y },
                 ].map(({ axis, val }) => (
-                  <div key={axis} style={{ background: "var(--bg)", padding: "8px 10px" }}>
-                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "0.55rem", color: "var(--text-dim)", marginBottom: "3px" }}>
+                  <div
+                    key={axis}
+                    style={{ background: "var(--bg)", padding: "8px 10px" }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: "0.55rem",
+                        color: "var(--text-dim)",
+                        marginBottom: "3px",
+                      }}
+                    >
                       {axis}
                     </div>
-                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                    <div
+                      style={{
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: "1rem",
+                        fontWeight: 700,
+                        color: "var(--text-primary)",
+                      }}
+                    >
                       {val.toFixed(2)} ft
                     </div>
                   </div>
@@ -596,14 +751,27 @@ export function HoldFeaturesSidebar({
 
             {/* Direction */}
             {hasDirection && displayHold && (
-              <PullDirectionArrow pullX={displayHold.pull_x!} pullY={displayHold.pull_y!} color={color} size={90} />
+              <PullDirectionArrow
+                pullX={displayHold.pull_x!}
+                pullY={displayHold.pull_y!}
+                color={color}
+                size={90}
+              />
             )}
 
             {/* Useability — locked (add mode) */}
             {showLockControls && (
               <UseabilityBar
-                useability={isDragging && hasUseability ? displayHold!.useability! : lockedUseability}
-                color={getColor(isDragging && hasUseability && !useabilityLocked ? displayHold!.useability! : lockedUseability)}
+                useability={
+                  isDragging && hasUseability
+                    ? displayHold!.useability!
+                    : lockedUseability
+                }
+                color={getColor(
+                  isDragging && hasUseability && !useabilityLocked
+                    ? displayHold!.useability!
+                    : lockedUseability,
+                )}
                 isLocked={useabilityLocked}
                 onLockedChange={onUseabilityLockChange!}
                 onUseabilityChange={onLockedUseabilityChange!}
@@ -624,12 +792,39 @@ export function HoldFeaturesSidebar({
                 >
                   Useability
                 </label>
-                <div style={{ marginTop: "6px", background: "var(--bg)", padding: "10px 12px" }}>
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: "1.4rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                <div
+                  style={{
+                    marginTop: "6px",
+                    background: "var(--bg)",
+                    padding: "10px 12px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "'Space Mono', monospace",
+                      fontSize: "1.4rem",
+                      fontWeight: 700,
+                      color: "var(--text-primary)",
+                    }}
+                  >
                     {(useability * 100).toFixed(0)}%
                   </span>
-                  <div style={{ height: "5px", background: "var(--border)", overflow: "hidden", marginTop: "8px" }}>
-                    <div style={{ height: "100%", width: `${useability * 100}%`, backgroundColor: color, transition: "width 0.2s" }} />
+                  <div
+                    style={{
+                      height: "5px",
+                      background: "var(--border)",
+                      overflow: "hidden",
+                      marginTop: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${useability * 100}%`,
+                        backgroundColor: color,
+                        transition: "width 0.2s",
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -640,7 +835,12 @@ export function HoldFeaturesSidebar({
 
       {/* Tags */}
       {showTags && (
-        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)" }}>
+        <div
+          style={{
+            padding: "14px 20px",
+            borderBottom: "1px solid var(--border)",
+          }}
+        >
           <label
             style={{
               fontFamily: "'Space Mono', monospace",
@@ -682,8 +882,20 @@ export function HoldFeaturesSidebar({
             })}
           </div>
           <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
-            {[["p", "pinch"], ["m", "macro"], ["s", "sloper"]].map(([key, name]) => (
-              <span key={key} style={{ fontFamily: "'Space Mono', monospace", fontSize: "0.5rem", color: "var(--text-dim)" }}>
+            {[
+              ["p", "pinch"],
+              ["m", "macro"],
+              ["s", "sloper"],
+              ["j", "jug"],
+            ].map(([key, name]) => (
+              <span
+                key={key}
+                style={{
+                  fontFamily: "'Space Mono', monospace",
+                  fontSize: "0.5rem",
+                  color: "var(--text-dim)",
+                }}
+              >
                 <span style={{ color: "var(--text-muted)" }}>{key}</span>={name}
               </span>
             ))}
