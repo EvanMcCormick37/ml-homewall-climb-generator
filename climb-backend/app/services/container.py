@@ -25,6 +25,7 @@ class ServiceContainer:
     
     # Climb functions
     get_climbs: Callable
+    get_climb_setter_id: Callable
     create_climb: Callable
     create_climbs_batch: Callable
     delete_climb: Callable

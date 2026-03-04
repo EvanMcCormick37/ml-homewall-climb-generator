@@ -1,19 +1,39 @@
 import type React from "react";
 
 /** A section label consistent with homepage eyebrow style */
-export function SectionLabel({ children }: { children: React.ReactNode }) {
+export function SectionLabel({
+  desc,
+  children,
+}: {
+  desc?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <span
-      className="bz-mono"
-      style={{
-        fontSize: "0.6rem",
-        letterSpacing: "0.18em",
-        textTransform: "uppercase",
-        color: "var(--text-muted)",
-      }}
-    >
-      {children}
-    </span>
+    <div>
+      <span
+        className="bz-mono"
+        style={{
+          fontSize: "0.6rem",
+          letterSpacing: "0.18em",
+          textTransform: "uppercase",
+          color: "var(--text-muted)",
+        }}
+      >
+        {children}
+      </span>
+      <p
+        className="bz-mono"
+        style={{
+          fontSize: "0.6rem",
+          color: "var(--text-muted)",
+          lineHeight: 1.7,
+          paddingTop: "10px",
+          borderTop: "1px solid var(--border)",
+        }}
+      >
+        {desc}
+      </p>
+    </div>
   );
 }
 
@@ -62,6 +82,7 @@ export function TogglePair({
 /** Labeled range slider */
 export function BzRange({
   label,
+  desc,
   value,
   min,
   max,
@@ -72,6 +93,7 @@ export function BzRange({
   rightLabel,
 }: {
   label: string;
+  desc?: string;
   value: number;
   min: number;
   max: number;
@@ -90,7 +112,7 @@ export function BzRange({
           marginBottom: "8px",
         }}
       >
-        <SectionLabel>{label}</SectionLabel>
+        <SectionLabel desc={desc}>{label}</SectionLabel>
         <span
           className="bz-mono"
           style={{ fontSize: "0.65rem", color: "var(--cyan)" }}

@@ -96,9 +96,17 @@ def create_climbs_batch(
 def delete_climb(
     wall_id: str,
     climb_id: str,
-    _=Depends(require_wall_owner),
+    user: dict = Depends(require_auth),
 ):
-    """Delete a climb. Wall owner only."""
+    """Delete a climb. Allowed for the climb's setter or the wall owner."""
+    wall = services.get_wall_visibility(wall_id)
+    if not wall:
+        raise HTTPException(status_code=404, detail="Wall not found")
+    is_wall_owner = wall["owner_id"] == user["user_id"]
+    if not is_wall_owner:
+        setter_id = services.get_climb_setter_id(wall_id, climb_id)
+        if setter_id != user["user_id"]:
+            raise HTTPException(status_code=403, detail="You don't have permission to delete this climb")
     success = services.delete_climb(wall_id, climb_id)
     if not success:
         raise HTTPException(status_code=404, detail="Climb not found")

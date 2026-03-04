@@ -439,6 +439,9 @@ class ClimbDDPMGenerator():
             best_dy: (B,)  optimal y translation for each climb
         """
         B, S, H = gen_climbs.shape
+        
+        # Create a null mask so that the null-hold positions don't contribute to the distance metric.
+        null_mask = ((gen_climbs[:,:,0] < -1.2) | (gen_climbs[:,:,2] > 1.2 ) | (gen_climbs[:,:,0] > 1.2) | (gen_climbs[:,:,2] < -1.2)).float()
         Nx = x_offsets.shape[0]
         Ny = y_offsets.shape[0]
 
@@ -447,19 +450,22 @@ class ClimbDDPMGenerator():
         shifts = torch.zeros(Nx, Ny, H, device=gen_climbs.device)
         shifts[:, :, 0] = x_offsets.unsqueeze(1)   # broadcast over Ny
         shifts[:, :, 1] = y_offsets.unsqueeze(0)   # broadcast over Nx
-        shifts = shifts.reshape(Nx * Ny, H)         # (G, H)  G = grid size
+        G = Nx * Ny
+        shifts = shifts.reshape(G, H)         # (G, H)  G = grid size
 
         # Translate climbs: (B, S, H) + (G, H) -> (G, B, S, H)
         translated = gen_climbs.unsqueeze(0) + shifts.unsqueeze(1).unsqueeze(2)
 
         # Flatten holds dim for cdist: (G*B, S, H)
-        G = Nx * Ny
         flat = translated.reshape(G * B, S, H)
 
         # Nearest-neighbour distances to manifold: (G*B, S, M) -> (G*B, S)
         dists = torch.cdist(flat, offset_manifold)              # (G*B, S, M)
         nn_dists = dists.min(dim=2).values                      # (G*B, S)
-        total_dist = nn_dists.sum(dim=1).reshape(G, B)          # (G, B)
+        batch_dist = nn_dists.reshape(G, B, S)                  # (G, B, S)
+        batch_dist = null_mask.unsqueeze(0) * batch_dist
+
+        total_dist = batch_dist.sum(dim=2)                      # (G, B)
 
         # Best grid point per batch item
         best_g = total_dist.argmin(dim=0)                       # (B,)
@@ -479,13 +485,14 @@ class ClimbDDPMGenerator():
     ) -> list[list[list[int]]]:
 
         if x_offsets is None:
-            x_offsets = torch.linspace(-0.5, 0.5, 21, device=gen_climbs.device)
+            x_offsets = torch.linspace(-0.5, 0.5, 51, device=gen_climbs.device)
         if y_offsets is None:
-            y_offsets = torch.linspace(-0.2, 0.2, 9, device=gen_climbs.device)
+            y_offsets = torch.linspace(-0.5, 0.5, 51, device=gen_climbs.device)
 
         best_dx, best_dy = self._find_optimal_translation(
             gen_climbs, offset_manifold, x_offsets, y_offsets
         )
+        print(f"Best Dx:{best_dx}, Best Dy: {best_dy}")
 
         # Apply per-climb optimal translation  (B, S, H)
         B, S, H = gen_climbs.shape
@@ -504,8 +511,8 @@ class ClimbDDPMGenerator():
 
         roles = torch.argmax(self.hold_classifier(gen_climbs, cond_t), dim=2).detach().numpy()
 
-        flat_climbs = gen_climbs.reshape(-1,H)
-        dists = torch.cdist(flat_climbs, offset_manifold)
+        flat_climbs = gen_climbs.reshape(-1,H)                  # (B*S, H)
+        dists = torch.cdist(flat_climbs, offset_manifold)       # (B*S, H, M)
         idx = dists.argmin(dim=1)
         holds = self.holds_lookup[wall_id][idx]
         holds = holds.reshape(B, S)

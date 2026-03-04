@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { useWall, useClimbs } from "@/hooks";
+import { useBetaZeroAuth } from "@/hooks/useAuth";
 import { WakingScreen } from "@/components";
+import { GLOBAL_STYLES } from "@/styles";
 import {
   ArrowLeft,
   Loader2,
@@ -15,6 +17,7 @@ import {
   ChevronDown,
   X,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import {
   type Climb,
@@ -26,7 +29,6 @@ import {
 } from "@/types";
 import { gradeToString, gradeToColor } from "@/utils/climbs";
 import {
-  GLOBAL_STYLES,
   VGRADE_OPTIONS,
   FONT_OPTIONS,
   DEFAULT_DISPLAY_SETTINGS,
@@ -372,6 +374,109 @@ function FilterPanel({
   );
 }
 
+// ─── DeleteConfirmModal ───────────────────────────────────────────────────────
+
+function DeleteConfirmModal({
+  climb,
+  onConfirm,
+  onCancel,
+}: {
+  climb: Climb;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "rgba(0,0,0,0.7)",
+        }}
+        onClick={onCancel}
+      />
+      <div
+        style={{
+          position: "relative",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius)",
+          padding: "24px",
+          width: "320px",
+          maxWidth: "90vw",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
+          animation: "bzFadeUp 0.15s ease-out",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <Trash2 size={16} style={{ color: "#ef4444", flexShrink: 0 }} />
+          <span
+            className="bz-oswald"
+            style={{ fontSize: "0.9rem", color: "var(--text-primary)" }}
+          >
+            Delete Climb
+          </span>
+        </div>
+        <p
+          className="bz-mono"
+          style={{ fontSize: "0.65rem", color: "var(--text-muted)", margin: 0 }}
+        >
+          Delete{" "}
+          <span style={{ color: "var(--text-primary)" }}>
+            {climb.name || "Unnamed"}
+          </span>
+          ? This cannot be undone.
+        </p>
+        <div
+          style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}
+        >
+          <button
+            onClick={onCancel}
+            className="bz-mono"
+            style={{
+              padding: "6px 16px",
+              fontSize: "0.6rem",
+              background: "transparent",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius)",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="bz-mono"
+            style={{
+              padding: "6px 16px",
+              fontSize: "0.6rem",
+              background: "#ef4444",
+              border: "1px solid #ef4444",
+              borderRadius: "var(--radius)",
+              color: "#fff",
+              cursor: "pointer",
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ClimbList ───────────────────────────────────────────────────────────────
 
 interface ClimbListProps {
@@ -385,6 +490,9 @@ interface ClimbListProps {
   filters: ClimbFilters;
   onFiltersChange: (f: ClimbFilters) => void;
   onFiltersReset: () => void;
+  currentUserId: string | null;
+  onDeleteClimb: (climb: Climb) => void;
+  wallOwnerId: string;
 }
 
 function ClimbList({
@@ -398,6 +506,9 @@ function ClimbList({
   filters,
   onFiltersChange,
   onFiltersReset,
+  currentUserId,
+  onDeleteClimb,
+  wallOwnerId,
 }: ClimbListProps) {
   const [showFilters, setShowFilters] = useState(false);
 
@@ -608,84 +719,133 @@ function ClimbList({
           climbs.map((climb) => {
             const isSelected = selectedClimb?.id === climb.id;
             const color = gradeToColor(climb.grade);
+            const canDelete =
+              currentUserId !== null &&
+              (climb.setter_id === currentUserId ||
+                wall.metadata.owner === currentUserId);
             return (
-              <button
+              <div
                 key={climb.id}
-                onClick={() => onSelectClimb(climb)}
                 style={{
-                  width: "100%",
-                  textAlign: "left",
                   display: "flex",
                   alignItems: "center",
-                  gap: "10px",
-                  padding: "10px 12px",
-                  background: isSelected ? "var(--cyan-dim)" : "transparent",
                   borderBottom: "1px solid var(--border)",
                   borderLeft: `2px solid ${isSelected ? "var(--cyan)" : "transparent"}`,
-                  border: "none",
-                  borderRight: "none",
-                  borderTop: "none",
-                  cursor: "pointer",
+                  background: isSelected ? "var(--cyan-dim)" : "transparent",
                   transition: "all 0.15s",
                 }}
               >
-                {/* Grade badge */}
-                <div
+                <button
+                  onClick={() => onSelectClimb(climb)}
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    flexShrink: 0,
+                    flex: 1,
+                    minWidth: 0,
+                    textAlign: "left",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: "var(--radius)",
-                    background: `${color}15`,
-                    border: `1px solid ${color}30`,
+                    gap: "10px",
+                    padding: "10px 12px",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
                   }}
                 >
-                  <span
-                    className="bz-mono"
-                    style={{ fontSize: "0.6rem", fontWeight: 700, color }}
-                  >
-                    {gradeToString(climb.grade)}
-                  </span>
-                </div>
-
-                {/* Info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Grade badge */}
                   <div
-                    className="bz-oswald"
                     style={{
-                      fontSize: "0.75rem",
-                      color: "var(--text-primary)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {climb.name || "Unnamed"}
-                  </div>
-                  <div
-                    className="bz-mono"
-                    style={{
-                      fontSize: "0.55rem",
-                      color: "var(--text-muted)",
-                      marginTop: "2px",
+                      width: "36px",
+                      height: "36px",
+                      flexShrink: 0,
                       display: "flex",
                       alignItems: "center",
-                      gap: "6px",
+                      justifyContent: "center",
+                      borderRadius: "var(--radius)",
+                      background: `${color}15`,
+                      border: `1px solid ${color}30`,
                     }}
                   >
-                    <span>{climb.ascents} ascents</span>
-                    {climb.setter_name && (
-                      <>
-                        <span style={{ color: "var(--text-dim)" }}>·</span>
-                        <span>{climb.setter_name}</span>
-                      </>
-                    )}
+                    <span
+                      className="bz-mono"
+                      style={{ fontSize: "0.6rem", fontWeight: 700, color }}
+                    >
+                      {gradeToString(climb.grade)}
+                    </span>
                   </div>
-                </div>
-              </button>
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      className="bz-oswald"
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--text-primary)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {climb.name || "Unnamed"}
+                    </div>
+                    <div
+                      className="bz-mono"
+                      style={{
+                        fontSize: "0.55rem",
+                        color: "var(--text-muted)",
+                        marginTop: "2px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>{climb.ascents} ascents</span>
+                      {climb.setter_name && (
+                        <>
+                          <span style={{ color: "var(--text-dim)" }}>·</span>
+                          <span>{climb.setter_name}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Delete button — only for the climb's setter or the wall owner*/}
+                {canDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteClimb(climb);
+                    }}
+                    title="Delete climb"
+                    style={{
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "32px",
+                      height: "32px",
+                      marginRight: "8px",
+                      background: "transparent",
+                      border: "1px solid transparent",
+                      borderRadius: "var(--radius)",
+                      color: "var(--text-dim)",
+                      cursor: "pointer",
+                      transition: "all 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "#ef4444";
+                      e.currentTarget.style.borderColor = "rgba(239,68,68,0.3)";
+                      e.currentTarget.style.background = "rgba(239,68,68,0.08)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "var(--text-dim)";
+                      e.currentTarget.style.borderColor = "transparent";
+                      e.currentTarget.style.background = "transparent";
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
             );
           })
         )}
@@ -936,8 +1096,24 @@ function MainViewPage({
   );
   const closeMobilePanel = useCallback(() => setMobilePanel("none"), []);
 
-  const { climbs, loading, total, selectedClimb, setSelectedClimb } =
-    useClimbs(wallId);
+  const { userId } = useBetaZeroAuth();
+
+  const {
+    climbs,
+    loading,
+    total,
+    selectedClimb,
+    setSelectedClimb,
+    removeClimb,
+  } = useClimbs(wallId);
+
+  const [climbToDelete, setClimbToDelete] = useState<Climb | null>(null);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!climbToDelete) return;
+    await removeClimb(climbToDelete.id);
+    setClimbToDelete(null);
+  }, [climbToDelete, removeClimb]);
 
   const handleFiltersReset = useCallback(
     () => setActiveFilters(DEFAULT_CLIMB_FILTERS),
@@ -992,6 +1168,14 @@ function MainViewPage({
   return (
     <>
       <style>{GLOBAL_STYLES}</style>
+
+      {climbToDelete && (
+        <DeleteConfirmModal
+          climb={climbToDelete}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setClimbToDelete(null)}
+        />
+      )}
 
       <div
         style={{
@@ -1290,6 +1474,9 @@ function MainViewPage({
                 filters={activeFilters}
                 onFiltersChange={setActiveFilters}
                 onFiltersReset={handleFiltersReset}
+                currentUserId={userId}
+                onDeleteClimb={setClimbToDelete}
+                wallOwnerId={wall.metadata.owner}
               />
             </div>
           </div>
@@ -1384,6 +1571,9 @@ function MainViewPage({
                     filters={activeFilters}
                     onFiltersChange={setActiveFilters}
                     onFiltersReset={handleFiltersReset}
+                    currentUserId={userId}
+                    onDeleteClimb={setClimbToDelete}
+                    wallOwnerId={wall.metadata.owner}
                   />
                 </div>
               </div>
