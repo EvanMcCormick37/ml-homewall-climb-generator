@@ -606,22 +606,26 @@ class ClimbDDPMGenerator():
 # ---------------------------------------------------------------------------
 # Global ClimbGenerator Instance For Dependency Injection
 # ---------------------------------------------------------------------------
-scaler = ClimbsFeatureScaler(
-    weights_path=settings.SCALER_WEIGHTS_PATH
-)
-ddpm = ClimbDDPM(
-    model=Noiser(),
-    weights_path=settings.DDPM_WEIGHTS_PATH,
-)
-hold_classifier = UNetHoldClassifierLogits(
-    weights_path=settings.HC_WEIGHTS_PATH
-)
+def reset_generator():
+    scaler = ClimbsFeatureScaler(
+        weights_path=settings.SCALER_WEIGHTS_PATH
+    )
+    ddpm = ClimbDDPM(
+        model=Noiser(),
+        weights_path=settings.DDPM_WEIGHTS_PATH,
+    )
+    hold_classifier = UNetHoldClassifierLogits(
+        weights_path=settings.HC_WEIGHTS_PATH
+    )
 
-ddpm.eval()
-hold_classifier.eval()
+    ddpm.eval()
+    hold_classifier.eval()
 
-generator = ClimbDDPMGenerator(
-    scaler=scaler,
-    ddpm=ddpm,
-    hold_classifier=hold_classifier
-)
+    generator = ClimbDDPMGenerator(
+        scaler=scaler,
+        ddpm=ddpm,
+        hold_classifier=hold_classifier
+    )
+    return generator
+
+generator = reset_generator()

@@ -441,7 +441,7 @@ function HotkeysAndInstructions({
               }}
             >
               · {kbd("p")} {kbd("m")} {kbd("s")} {kbd("v")}
-              {kbd("j")} Tag hotkeys (Pinch, Macro, Sloper, Versatile, Jug)
+              {kbd("j")} Tag hotkeys
             </span>
           )}
         </div>
