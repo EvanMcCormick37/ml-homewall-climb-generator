@@ -459,6 +459,85 @@ function HomePage() {
             {/* Cards */}
             {!loading && !error && (
               <div className="bz-wall-grid">
+                {/* Add your wall card — signed-in users only */}
+                <SignedIn>
+                  <button
+                    onClick={() => navigate({ to: "/walls/new" })}
+                    className="bz-card"
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minHeight: "240px",
+                      border: "1px dashed rgba(6,182,212,0.3)",
+                      background: "transparent",
+                      gap: "12px",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "var(--cyan)";
+                      e.currentTarget.style.background = "var(--cyan-dim)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor =
+                        "rgba(6,182,212,0.3)";
+                      e.currentTarget.style.background = "transparent";
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "50%",
+                        border: "1px solid var(--cyan)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--cyan)",
+                      }}
+                    >
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "'Oswald', sans-serif",
+                        fontSize: "1rem",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        color: "var(--cyan)",
+                      }}
+                    >
+                      Add Your Wall
+                    </div>
+                    <div
+                      className="bz-mono"
+                      style={{
+                        fontSize: "0.6rem",
+                        color: "var(--text-muted)",
+                        letterSpacing: "0.06em",
+                        textAlign: "center",
+                        padding: "0 16px",
+                      }}
+                    >
+                      Upload a photo and mark your holds
+                    </div>
+                  </button>
+                </SignedIn>
+
                 {walls.map((wall) => (
                   <button
                     key={wall.id}
