@@ -4,7 +4,8 @@ import { useUser } from "@clerk/clerk-react";
 import { useImageCrop } from "@/hooks/useImageCrop";
 import { ImageCropper } from "@/components";
 import { createWall } from "@/api/walls";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Globe, Lock, Link } from "lucide-react";
+import type { WallVisibility } from "@/types";
 
 export const Route = createFileRoute("/walls/new")({
   component: NewWallPage,
@@ -31,19 +32,54 @@ const GLOBAL_STYLES = `
   .bz-mono { font-family: 'Space Mono', monospace; }
 `;
 
-type Step = "upload" | "crop" | "details";
+type Step = "visibility" | "upload" | "crop" | "details";
 
-const STEPS: Step[] = ["upload", "crop", "details"];
+const STEPS: Step[] = ["visibility", "upload", "crop", "details"];
 const STEP_LABELS: Record<Step, string> = {
+  visibility: "Access",
   upload: "Upload",
   crop: "Crop",
   details: "Details",
 };
 
+const VISIBILITY_OPTIONS: {
+  value: WallVisibility;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+  detail: string;
+}[] = [
+  {
+    value: "public",
+    label: "Public",
+    icon: <Globe size={22} />,
+    description: "Open to everyone",
+    detail:
+      "Anyone can view this wall and set climbs on it. Ideal for community boards.",
+  },
+  {
+    value: "unlisted",
+    label: "Unlisted",
+    icon: <Link size={22} />,
+    description: "Accessible via link",
+    detail:
+      "Not listed publicly, but any user with the link can view it and set climbs.",
+  },
+  {
+    value: "private",
+    label: "Private",
+    icon: <Lock size={22} />,
+    description: "Only you",
+    detail:
+      "Accessible only via a private share token. Only you can set climbs on it.",
+  },
+];
+
 function NewWallPage() {
   const navigate = useNavigate();
   const { isSignedIn, isLoaded } = useUser();
-  const [step, setStep] = useState<Step>("upload");
+  const [step, setStep] = useState<Step>("visibility");
+  const [visibility, setVisibility] = useState<WallVisibility>("public");
   const [croppedBlob, setCroppedBlob] = useState<Blob | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,6 +184,7 @@ function NewWallPage() {
           name: name.trim(),
           photo: file,
           dimensions,
+          visibility,
           ...(parseInt(angle, 10) && { angle: parseInt(angle, 10) }),
         });
 
@@ -379,6 +416,7 @@ function NewWallPage() {
                 marginBottom: "32px",
               }}
             >
+              {step === "visibility" && "Choose who can access this wall"}
               {step === "upload" && "Upload a photo of your climbing wall"}
               {step === "crop" && "Crop the image to align with the wall edges"}
               {step === "details" && "Add wall details and submit"}
@@ -473,6 +511,174 @@ function NewWallPage() {
                 }}
               >
                 {error}
+              </div>
+            )}
+
+            {/* ── Step 0: Visibility ── */}
+            {step === "visibility" && (
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                    marginBottom: "32px",
+                  }}
+                >
+                  {VISIBILITY_OPTIONS.map((opt) => {
+                    const isSelected = visibility === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setVisibility(opt.value)}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "18px",
+                          padding: "20px 24px",
+                          background: isSelected
+                            ? "var(--cyan-dim)"
+                            : "var(--surface)",
+                          border: `1px solid ${isSelected ? "var(--cyan)" : "var(--border)"}`,
+                          borderRadius: "var(--radius)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          transition: "all 0.15s",
+                          width: "100%",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.borderColor =
+                              "rgba(6,182,212,0.3)";
+                            e.currentTarget.style.background = "var(--surface2)";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.currentTarget.style.borderColor = "var(--border)";
+                            e.currentTarget.style.background = "var(--surface)";
+                          }
+                        }}
+                      >
+                        {/* Icon */}
+                        <div
+                          style={{
+                            flexShrink: 0,
+                            marginTop: "2px",
+                            color: isSelected
+                              ? "var(--cyan)"
+                              : "var(--text-dim)",
+                            transition: "color 0.15s",
+                          }}
+                        >
+                          {opt.icon}
+                        </div>
+
+                        {/* Text */}
+                        <div style={{ flex: 1 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              marginBottom: "4px",
+                            }}
+                          >
+                            <span
+                              className="bz-oswald"
+                              style={{
+                                fontSize: "1.05rem",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.06em",
+                                color: isSelected
+                                  ? "var(--cyan)"
+                                  : "var(--text-primary)",
+                              }}
+                            >
+                              {opt.label}
+                            </span>
+                            <span
+                              className="bz-mono"
+                              style={{
+                                fontSize: "0.6rem",
+                                letterSpacing: "0.08em",
+                                color: isSelected
+                                  ? "var(--cyan)"
+                                  : "var(--text-dim)",
+                              }}
+                            >
+                              — {opt.description}
+                            </span>
+                          </div>
+                          <p
+                            className="bz-mono"
+                            style={{
+                              fontSize: "0.65rem",
+                              lineHeight: 1.65,
+                              color: "var(--text-muted)",
+                              margin: 0,
+                            }}
+                          >
+                            {opt.detail}
+                          </p>
+                        </div>
+
+                        {/* Selection indicator */}
+                        <div
+                          style={{
+                            flexShrink: 0,
+                            width: "16px",
+                            height: "16px",
+                            borderRadius: "50%",
+                            border: `2px solid ${isSelected ? "var(--cyan)" : "var(--border)"}`,
+                            background: isSelected ? "var(--cyan)" : "transparent",
+                            marginTop: "3px",
+                            transition: "all 0.15s",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {isSelected && (
+                            <div
+                              style={{
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "50%",
+                                background: "#09090b",
+                              }}
+                            />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setStep("upload")}
+                  style={{
+                    width: "100%",
+                    padding: "11px 18px",
+                    background: "var(--cyan)",
+                    color: "#09090b",
+                    border: "none",
+                    borderRadius: "var(--radius)",
+                    fontFamily: "'Oswald', sans-serif",
+                    fontSize: "0.85rem",
+                    letterSpacing: "0.1em",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    transition: "opacity 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                >
+                  Continue
+                </button>
               </div>
             )}
 
@@ -848,16 +1054,6 @@ function NewWallPage() {
                       degrees
                     </span>
                   </div>
-                  <p
-                    className="bz-mono"
-                    style={{
-                      marginTop: "6px",
-                      fontSize: "0.6rem",
-                      color: "var(--text-dim)",
-                    }}
-                  >
-                    Positive = overhanging · Negative = slab
-                  </p>
                 </div>
 
                 {/* Actions */}

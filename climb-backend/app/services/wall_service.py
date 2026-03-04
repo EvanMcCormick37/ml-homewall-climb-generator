@@ -38,7 +38,8 @@ def _row_to_hold_detail(row) -> HoldDetail:
         pull_x=row["pull_x"],
         pull_y=row["pull_y"],
         useability=row["useability"],
-        is_foot=row["is_foot"]
+        is_foot=row["is_foot"],
+        tags=row.get("tags")
     )
 
 
@@ -55,7 +56,7 @@ def _hold_detail_to_row(wall_id: str, hold: HoldDetail) -> tuple:
         hold.pull_y,
         hold.useability,
         hold.is_foot,
-        None,  # tags - not in HoldDetail schema yet
+        hold.tags,
     )
 
 
@@ -195,8 +196,7 @@ def get_wall_visibility(wall_id: str) -> dict | None:
 def create_wall(
     wall_data: WallCreate,
     photo: UploadFile,
-    visibility: str,
-    user_id: str,
+    owner_id: str,
 ) -> str:
     """
     Create a new wall.
@@ -234,9 +234,9 @@ def create_wall(
         conn.execute(
             """
             INSERT INTO walls (id, name, photo_path, dimensions, angle, created_at, updated_at, owner_id, visibility, share_token)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (wall_id, wall_data.name, photo_path.name, dim_str, angle, created_at, created_at, user_id, visibility, share_token),
+            (wall_id, wall_data.name, photo_path.name, dim_str, angle, created_at, created_at, owner_id, wall_data.visibility, share_token),
         )
     
     return wall_id

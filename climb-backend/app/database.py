@@ -60,11 +60,13 @@ def init_db():
                 photo_path TEXT NOT NULL,
                 num_holds INTEGER DEFAULT 0,
                 num_climbs INTEGER DEFAULT 0,
-                num_models INTEGER DEFAULT 0,
                 dimensions TEXT,
                 angle INTEGER,
-                created_at TIMESTAMP,
-                updated_at TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                owner_id TEXT,
+                visibility TEXT DEFAULT 'public',
+                share_token TEXT
             )
         """)
         
@@ -100,40 +102,8 @@ def init_db():
                 pull_y REAL DEFAULT 0.0,
                 useability REAL DEFAULT 0.5,
                 is_foot INTEGER DEFAULT 0,
-                tags TEXT -- serialized list of hold tags (e.g. sloper, crimp, slot, etc.)
-            )
-        """)
-        
-        # Models table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS models (
-                id TEXT PRIMARY KEY,
-                wall_id TEXT NOT NULL,
-                model_type TEXT NOT NULL,
-                features TEXT NOT NULL,  -- JSON object of feature flags
-                status TEXT DEFAULT 'untrained',
-                val_loss REAL,
-                epochs_trained INTEGER DEFAULT 0,
-                climbs_trained INTEGER DEFAULT 0,
-                moves_trained INTEGER DEFAULT 0,
+                tags TEXT -- serialized list of hold tags (e.g. sloper, crimp, slot, etc.),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                trained_at TIMESTAMP,
-                FOREIGN KEY (wall_id) REFERENCES walls(id) ON DELETE CASCADE
-            )
-        """)
-        
-        # Jobs table - simple queue for background tasks
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS jobs (
-                id TEXT PRIMARY KEY,
-                job_type TEXT NOT NULL,
-                status TEXT DEFAULT 'PENDING',
-                progress REAL DEFAULT 0.0,
-                params TEXT,             -- JSON object of job parameters
-                result TEXT,             -- JSON object of job result
-                error TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                started_at TIMESTAMP,
-                completed_at TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)

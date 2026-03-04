@@ -11,7 +11,7 @@ import {
   Plus,
   Edit,
 } from "lucide-react";
-import type { HoldDetail, WallDetail, HoldMode } from "@/types";
+import type { HoldDetail, WallDetail, HoldMode, Tag } from "@/types";
 
 export const Route = createFileRoute("/$wallId/holds")({
   component: HoldsEditorPage,
@@ -67,9 +67,11 @@ function HoldsEditorPage() {
     direction: true,
     useability: true,
     footholds: true,
+    tags: true,
   });
   const [useabilityLocked, setUseabilityLocked] = useState(false);
   const [lockedUseability, setLockedUseability] = useState(0.5);
+  const [activeHoldIndex, setActiveHoldIndex] = useState<number | null>(null);
 
   const {
     holds,
@@ -84,6 +86,11 @@ function HoldsEditorPage() {
     toPixelCoords,
     toFeetCoords,
   } = useHolds(imageDimensions, wallDimensions);
+
+  const activeHold =
+    activeHoldIndex !== null
+      ? (holds.find((h) => h.hold_index === activeHoldIndex) ?? null)
+      : null;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -122,6 +129,16 @@ function HoldsEditorPage() {
       [feature]: !prev[feature],
     }));
   };
+
+  function handleTagToggle(tag: Tag) {
+    if (activeHoldIndex === null) return;
+    const hold = holds.find((h) => h.hold_index === activeHoldIndex);
+    if (!hold) return;
+    const newTags = hold.tags.includes(tag)
+      ? hold.tags.filter((t) => t !== tag)
+      : [...hold.tags, tag];
+    updateHold(activeHoldIndex, { tags: newTags });
+  }
 
   // Load image and setup camera
   useEffect(() => {
@@ -221,7 +238,7 @@ function HoldsEditorPage() {
     }
     if (mode === "add") {
       if (!enabledFeatures.direction && !enabledFeatures.useability) {
-        addHold(
+        const idx = addHold(
           x,
           y,
           undefined,
@@ -230,6 +247,7 @@ function HoldsEditorPage() {
           undefined,
           enabledFeatures.footholds && isAddFoot ? 1 : 0
         );
+        setActiveHoldIndex(idx);
       } else {
         setAddHoldState({
           isDragging: true,
@@ -255,6 +273,7 @@ function HoldsEditorPage() {
     } else if (mode === "select") {
       const hold = findHoldAt(x, y);
       setSelectedHold(hold);
+      if (hold) setActiveHoldIndex(hold.hold_index);
     }
   };
 
@@ -284,7 +303,7 @@ function HoldsEditorPage() {
       const { holdX, holdY, dragX, dragY } = addHoldState;
       const params = calculateHoldParams(holdX, holdY, dragX, dragY);
 
-      addHold(
+      const idx = addHold(
         holdX,
         holdY,
         undefined,
@@ -293,6 +312,7 @@ function HoldsEditorPage() {
         enabledFeatures.useability ? params.useability : undefined,
         enabledFeatures.footholds && isAddFoot ? 1 : 0
       );
+      setActiveHoldIndex(idx);
       setAddHoldState({
         isDragging: false,
         holdX: 0,
@@ -375,6 +395,28 @@ function HoldsEditorPage() {
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [removeLastHold]);
+
+  // Tag hotkeys: p=pinch, m=macro, s=sloper
+  useEffect(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (!enabledFeatures.tags || activeHoldIndex === null) return;
+      const tagMap: Record<string, Tag> = {
+        p: "pinch", P: "pinch",
+        m: "macro",  M: "macro",
+        s: "sloper", S: "sloper",
+      };
+      const tag = tagMap[e.key];
+      if (!tag) return;
+      const hold = holds.find((h) => h.hold_index === activeHoldIndex);
+      if (!hold) return;
+      const newTags = hold.tags.includes(tag)
+        ? hold.tags.filter((t) => t !== tag)
+        : [...hold.tags, tag];
+      updateHold(activeHoldIndex, { tags: newTags });
+    };
+    window.addEventListener("keydown", handleKeydown);
+    return () => window.removeEventListener("keydown", handleKeydown);
+  }, [enabledFeatures.tags, activeHoldIndex, holds, updateHold]);
 
   // Canvas rendering
   useEffect(() => {
@@ -877,6 +919,8 @@ function HoldsEditorPage() {
             lockedUseability={lockedUseability}
             onUseabilityLockChange={setUseabilityLocked}
             onLockedUseabilityChange={setLockedUseability}
+            activeHold={activeHold}
+            onTagToggle={handleTagToggle}
           />
         </div>
       </div>

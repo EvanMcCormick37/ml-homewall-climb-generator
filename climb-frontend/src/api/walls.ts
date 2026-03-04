@@ -41,6 +41,9 @@ export async function createWall(
   if (data.angle !== undefined) {
     formData.append("angle", String(data.angle));
   }
+  if (data.visibility !== undefined) {
+    formData.append("visibility", data.visibility);
+  }
 
   const response = await apiClient.post<WallCreateResponse>(
     "/walls",

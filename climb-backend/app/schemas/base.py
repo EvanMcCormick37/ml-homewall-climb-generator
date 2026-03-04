@@ -21,6 +21,7 @@ class HoldDetail(BaseModel):
     pull_y: float | None = Field(None, ge=-1, le=1)
     useability: float | None = Field(None, ge=0, le=1)
     is_foot: int = Field(0, ge=0, le=1)
+    tags: list[str] | None = Field(None)
 
 class Holdset(BaseModel):
     """Schema for hold sets for a climb"""

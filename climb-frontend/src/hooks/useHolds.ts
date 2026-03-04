@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import type { HoldDetail } from "@/types";
+import type { HoldDetail, Tag } from "@/types";
 
 interface Dimensions {
   width: number;
@@ -48,8 +48,9 @@ export function useHolds(
       pull_x?: number,
       pull_y?: number,
       useability?: number,
-      is_foot?: number
-    ) => {
+      is_foot?: number,
+      tags?: Tag[]
+    ): number => {
       const { x, y } = toFeetCoords(pixelX, pixelY);
       const newHold: HoldDetail = {
         x,
@@ -59,11 +60,13 @@ export function useHolds(
         pull_y: pull_y ?? null,
         useability: useability ?? null,
         is_foot: is_foot ?? 0,
+        tags: tags ?? [],
       };
 
       setHolds((prev) => [...prev, newHold]);
+      return newHold.hold_index;
     },
-    [holds.length, toFeetCoords]
+    [holds.length, toFeetCoords, maxHoldIndex]
   );
 
   const updateHold = useCallback(
