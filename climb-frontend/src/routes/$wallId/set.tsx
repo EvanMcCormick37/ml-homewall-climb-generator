@@ -39,9 +39,8 @@ import {
   FAST_GENERATE_SETTINGS,
   SLOW_GENERATE_SETTINGS,
 } from "@/types";
+import { GLOBAL_STYLES } from "@/styles";
 import {
-  // Styles
-  GLOBAL_STYLES,
   // Types & constants
   CATEGORY_ORDER,
   CATEGORY_LABELS,
@@ -104,6 +103,7 @@ function ModelSettingsPanel({
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <BzRange
         label="Generation Timesteps"
+        desc="Fewer timesteps = faster generation but reduced quality."
         value={settings.timesteps}
         min={5}
         max={100}
@@ -115,6 +115,7 @@ function ModelSettingsPanel({
       />
       <BzRange
         label="Projection Start"
+        desc="Projection start controls when the current wall's holds start to 'pull' on the diffusion model."
         value={settings.t_start_projection}
         min={0.0}
         max={1.0}
@@ -133,7 +134,12 @@ function ModelSettingsPanel({
             marginBottom: "8px",
           }}
         >
-          <SectionLabel>X-Offset</SectionLabel>
+          <SectionLabel
+            desc="X-Offset shifts the climb's center. Auto grid-search selects the offset which results in the minimal projection distance, and is recommended for
+        quality."
+          >
+            X-Offset
+          </SectionLabel>
           <span
             className="bz-mono"
             style={{ fontSize: "0.65rem", color: "var(--cyan)" }}
@@ -176,7 +182,9 @@ function ModelSettingsPanel({
 
       <div>
         <div style={{ marginBottom: "8px" }}>
-          <SectionLabel>Generation Style</SectionLabel>
+          <SectionLabel desc="Whether to use a consistent or random noise vector at each timestep of reverse diffusion. Deterministic produces the same climb for a given seed, wall, and model configuration.">
+            Generation Style
+          </SectionLabel>
         </div>
         <TogglePair
           options={[
@@ -247,21 +255,6 @@ function ModelSettingsPanel({
           <RotateCcw size={10} /> Reset Defaults
         </button>
       )}
-
-      <p
-        className="bz-mono"
-        style={{
-          fontSize: "0.6rem",
-          color: "var(--text-dim)",
-          lineHeight: 1.7,
-          paddingTop: "10px",
-          borderTop: "1px solid var(--border)",
-        }}
-      >
-        Fewer timesteps = faster generation but reduced quality. Projection
-        start controls when holds "pull" on the diffusion model. X-Offset shifts
-        the climb's center. Auto grid-search is recommended for quality.
-      </p>
     </div>
   );
 }

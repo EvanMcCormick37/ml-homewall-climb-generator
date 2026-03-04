@@ -1,6 +1,3 @@
-// Styles
-export { GLOBAL_STYLES } from "./styles";
-
 // Types & constants
 export {
   CATEGORY_ORDER,

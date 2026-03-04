@@ -242,6 +242,16 @@ def create_climbs_batch(wall_id: str, climbs_data: list[ClimbCreate]) -> list[di
     
     return results
 
+def get_climb_setter_id(wall_id: str, climb_id: str) -> str | None:
+    """Return the setter_id of a climb, or None if not found."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT setter_id FROM climbs WHERE id = ? AND wall_id = ?",
+            (climb_id, wall_id),
+        ).fetchone()
+    return row["setter_id"] if row else None
+
+
 def delete_climb(wall_id: str, climb_id: str) -> bool:
     """
     Delete a climb.

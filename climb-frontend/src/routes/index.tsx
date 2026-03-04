@@ -4,6 +4,7 @@ import { useWalls } from "@/hooks/useWalls";
 import { getWallPhotoUrl } from "@/api/walls";
 import { WakingScreen } from "@/components";
 import { useEffect, useRef } from "react";
+import { TITLE_STYLES } from "@/styles";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -97,120 +98,7 @@ function HomePage() {
   return (
     <>
       {/* ── Google Font: Space Mono (monospace, technical feel) + Oswald (condensed display) ── */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Space+Mono:wght@400;700&display=swap');
-
-        :root {
-          --cyan: #06b6d4;
-          --cyan-dim: rgba(6,182,212,0.15);
-          --bg: #09090b;
-          --surface: #111113;
-          --border: rgba(255,255,255,0.08);
-          --text-primary: #f4f4f5;
-          --text-muted: #71717a;
-        }
-
-        * { box-sizing: border-box; }
-
-        body { background: var(--bg); }
-
-        .bz-hero-title {
-          font-family: 'Oswald', sans-serif;
-          font-size: clamp(4.5rem, 14vw, 11rem);
-          font-weight: 700;
-          line-height: 0.9;
-          letter-spacing: -0.02em;
-          color: var(--text-primary);
-          text-transform: uppercase;
-        }
-
-        .bz-hero-title span {
-          color: var(--cyan);
-        }
-
-        .bz-mono {
-          font-family: 'Space Mono', monospace;
-        }
-
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-
-        .bz-anim { opacity: 0; animation: fadeUp 0.7s ease forwards; }
-        .bz-anim-1 { animation-delay: 0.05s; }
-        .bz-anim-2 { animation-delay: 0.2s; }
-        .bz-anim-3 { animation-delay: 0.35s; }
-        .bz-anim-4 { animation-delay: 0.5s; }
-        .bz-anim-5 { animation-delay: 0.65s; }
-
-        .bz-rule {
-          border: none;
-          border-top: 1px solid var(--border);
-        }
-
-        .bz-card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 4px;
-          overflow: hidden;
-          cursor: pointer;
-          transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
-          text-align: left;
-          width: 100%;
-        }
-        .bz-card:hover {
-          border-color: var(--cyan);
-          transform: translateY(-2px);
-          box-shadow: 0 8px 32px rgba(6,182,212,0.12);
-        }
-        .bz-card:hover .bz-card-img {
-          transform: scale(1.04);
-        }
-        .bz-card-img {
-          transition: transform 0.35s ease;
-        }
-
-        .bz-nav-link {
-          font-family: 'Space Mono', monospace;
-          font-size: 0.5rem;
-          color: var(--text-muted);
-          text-decoration: none;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          transition: color 0.15s;
-        }
-        .bz-nav-link:hover { color: var(--cyan); }
-
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(6px); }
-        }
-        .bz-scroll-cue {
-          animation: bounce 1.8s ease-in-out infinite;
-        }
-
-        .bz-section-label {
-          font-family: 'Space Mono', monospace;
-          font-size: 0.65rem;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: var(--text-muted);
-        }
-
-        .bz-accent-bar {
-          width: 40px;
-          height: 2px;
-          background: var(--cyan);
-          flex-shrink: 0;
-        }
-
-        .bz-wall-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-          gap: 16px;
-        }
-      `}</style>
+      <style>{TITLE_STYLES}</style>
 
       <div
         style={{
