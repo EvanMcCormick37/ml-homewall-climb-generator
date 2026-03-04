@@ -22,15 +22,14 @@ import {
   type GradeScale,
   type ClimbFilters,
   DEFAULT_CLIMB_FILTERS,
+  type ClimbSortBy,
 } from "@/types";
 import { gradeToString, gradeToColor } from "@/utils/climbs";
 import {
   GLOBAL_STYLES,
-  CATEGORY_LABELS,
   VGRADE_OPTIONS,
   FONT_OPTIONS,
   DEFAULT_DISPLAY_SETTINGS,
-  type HoldCategory,
   type DisplaySettings,
   TogglePair,
   SectionLabel,
@@ -136,7 +135,7 @@ function FilterPanel({
           <div style={{ position: "relative" }}>
             <select
               value={filters.sortBy}
-              onChange={(e) => set("sortBy", e.target.value)}
+              onChange={(e) => set("sortBy", e.target.value as ClimbSortBy)}
               style={selectStyle}
             >
               {SORT_OPTIONS.map((o) => (
@@ -699,7 +698,6 @@ function ClimbList({
 
 function ClimbDetails({
   climb,
-  displaySettings,
 }: {
   climb: Climb;
   displaySettings: DisplaySettings;

@@ -1,5 +1,5 @@
 import { getWallPhotoUrl } from "@/api/walls";
-import type { Climb, HoldDetail, Holdset } from "@/types";
+import type { HoldDetail } from "@/types";
 import {
   HOLD_STROKE_COLOR,
   type DisplaySettings,

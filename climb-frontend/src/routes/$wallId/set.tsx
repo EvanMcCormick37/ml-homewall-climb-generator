@@ -1218,7 +1218,21 @@ function SetPage() {
   const { wallId: wallIdParam } = Route.useParams();
   const { climb: climbParam } = Route.useSearch();
   const { wall, loading, waking, error } = useWall(wallIdParam);
-  if (waking) return <WakingScreen />;
+  if (waking) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          background: "#000000",
+        }}
+      >
+        <WakingScreen />
+      </div>
+    );
+  }
   if (loading) {
     return (
       <div
@@ -1519,8 +1533,8 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
           wall.metadata.name,
           wall.holds ?? [],
           wallDimensions,
-          selectedClimb.holdset,
-          selectedClimb.name,
+          selectedClimb,
+          user?.fullName ?? null,
           displaySettings,
         );
         file = new File(
