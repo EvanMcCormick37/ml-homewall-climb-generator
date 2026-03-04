@@ -5,6 +5,7 @@
 *-data.json
 assets/
 boardlib/
+.env.*
 
 # Caches
 cache

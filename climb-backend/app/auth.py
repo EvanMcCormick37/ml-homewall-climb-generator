@@ -23,13 +23,13 @@ def _get_clerk_jwks_url() -> str:
     return f"{settings.CLERK_ISSUER}/.well-known/jwks.json"
 
 
-def _fetch_jwks() -> list[dict]:
-    """Fetch and cache JWKS from Clerk."""
+async def _fetch_jwks() -> list[dict]:
     now = time.time()
     if _jwks_cache["keys"] and (now - _jwks_cache["fetched_at"]) < JWKS_CACHE_TTL:
         return _jwks_cache["keys"]
 
-    resp = httpx.get(_get_clerk_jwks_url(), timeout=10)
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(_get_clerk_jwks_url(), timeout=10)
     resp.raise_for_status()
     keys = resp.json()["keys"]
     _jwks_cache["keys"] = keys
@@ -37,13 +37,13 @@ def _fetch_jwks() -> list[dict]:
     return keys
 
 
-def _verify_clerk_token(token: str) -> dict:
+async def _verify_clerk_token(token: str) -> dict:
     """
     Verify a Clerk-issued JWT and return the payload.
     
     Clerk JWTs use RS256 and include 'sub' (user ID), 'email', etc.
     """
-    jwks = _fetch_jwks()
+    jwks = await _fetch_jwks()
 
     # Decode the JWT header to find the key ID
     unverified_header = pyjwt.get_unverified_header(token)
@@ -83,7 +83,7 @@ async def get_current_user(request: Request) -> dict | None:
 
     token = auth_header.split(" ", 1)[1]
     try:
-        payload = _verify_clerk_token(token)
+        payload = await _verify_clerk_token(token)
         return {
             "user_id": payload["sub"],
             "email": payload.get("email"),
