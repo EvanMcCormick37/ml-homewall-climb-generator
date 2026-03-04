@@ -373,9 +373,13 @@ function HoldsEditorPage() {
           break;
         case "2":
           e.preventDefault();
-          setHoldMode("remove");
+          setHoldMode("edit");
           break;
         case "3":
+          e.preventDefault();
+          setHoldMode("remove");
+          break;
+        case "4":
           e.preventDefault();
           setHoldMode("select");
           break;
@@ -400,6 +404,8 @@ function HoldsEditorPage() {
         M: "macro",
         s: "sloper",
         S: "sloper",
+        v: "versatile",
+        V: "versatile",
         j: "jug",
         J: "jug",
       };
@@ -675,6 +681,16 @@ function HoldsEditorPage() {
             }}
           >
             <Settings size={14} />
+            <span
+              className="bz-mono"
+              style={{
+                fontSize: "0.55rem",
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+              }}
+            >
+              Hold Features Settings
+            </span>
           </button>
 
           {/* Center: wall name + mode switcher */}
@@ -726,7 +742,7 @@ function HoldsEditorPage() {
                   mode === "add",
                   enabledFeatures.footholds && isAddFoot
                     ? "#9333ea"
-                    : "#06b6d4",
+                    : "#34d399",
                 )}
               >
                 {mode === "add" ? (
@@ -741,7 +757,7 @@ function HoldsEditorPage() {
                     {enabledFeatures.footholds && isAddFoot ? "FOOT" : "HAND"}
                   </span>
                 ) : (
-                  <PlusCircle size={13} />
+                  <Plus size={13} />
                 )}
               </button>
               <button

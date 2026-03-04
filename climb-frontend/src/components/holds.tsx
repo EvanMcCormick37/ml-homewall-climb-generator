@@ -1,5 +1,14 @@
 import { useState, useCallback, useRef } from "react";
-import { PlusCircle, Eraser, Hand, Trash2, Lock, Unlock } from "lucide-react";
+import {
+  PlusCircle,
+  Eraser,
+  Hand,
+  Edit,
+  Trash2,
+  Lock,
+  Unlock,
+  Plus,
+} from "lucide-react";
 import type {
   HoldMode,
   HoldDetail,
@@ -84,19 +93,47 @@ export function EnabledFeaturesMenu({
   const FEATURES: { key: FeatureLabel; label: string; desc: string }[] = [
     {
       key: "direction",
-      label: "Direction",
-      desc: "Pull direction (pull_x, pull_y)",
+      label: "Pull Direction",
+      desc: "The optimal pull vector for the hold",
     },
     {
       key: "useability",
       label: "Useability",
-      desc: "Hold quality / difficulty",
+      desc: "How easy a hold is to use.",
     },
-    { key: "footholds", label: "Foot Holds", desc: "Enable foot-only holds" },
+    { key: "footholds", label: "Foot Holds", desc: "" },
     {
       key: "tags",
       label: "Tags",
-      desc: "Hold type labels (pinch / macro / sloper / jug)",
+      desc: "Specific tags for hold types with deviant features",
+    },
+  ];
+
+  const TAG_EXPLANATIONS: { key: Tag; label: string; desc: string }[] = [
+    {
+      key: "pinch",
+      label: "PINCH",
+      desc: "A bilateral pinch (Can be held two ways). Align the pull vector to be parallel with the hold's edges if possible.",
+    },
+    {
+      key: "macro",
+      label: "MACRO",
+      desc: "A very large hold. This is important as BetaZero treats holds as points, so very large holds can confuse it if not labelled as macros.",
+    },
+    {
+      key: "sloper",
+      label: "SLOPER",
+      desc: "A hold that is rather, well, slopey. Wall angle affects slopers more severely than other hold types.",
+    },
+    {
+      key: "versatile",
+      label: "VERSATILE",
+      desc: "A hold which can be taken in multiple directions, but isn't quite as regular as a bilateral pinch. Think of those moonboard holds which can be taken in many different ways.",
+    },
+    {
+      key: "jug",
+      label: "JUG",
+      desc: "A true jug. Not any good hold. A hold which has a severe incut and can thus be used in a multitude of pull directions (and for dynos).",
     },
   ];
 
@@ -133,7 +170,7 @@ export function EnabledFeaturesMenu({
             margin: 0,
           }}
         >
-          HOLD FEATURES
+          HOLD FEATURES TO ENABLE
         </h3>
         <button
           onClick={onClose}
@@ -202,25 +239,61 @@ export function EnabledFeaturesMenu({
           </label>
         ))}
       </div>
-      <div
-        style={{
-          padding: "8px 14px",
-          background: "var(--bg)",
-          borderTop: "1px solid var(--border)",
-        }}
-      >
-        <p
+      {enabledFeatures["tags"] && (
+        <div
           style={{
-            fontFamily: "'Space Mono', monospace",
-            fontSize: "0.55rem",
-            color: "var(--text-dim)",
-            margin: 0,
+            padding: "8px 14px",
+            background: "var(--bg)",
+            borderTop: "1px solid var(--border)",
           }}
+          className="bz-mono"
         >
-          <span style={{ color: "var(--text-muted)" }}>Note:</span> x and y
-          always saved
-        </p>
-      </div>
+          Tag Descriptions{" "}
+          <div
+            style={{
+              fontFamily: "'Space Mono', monospace",
+              fontSize: "0.6rem",
+              color: "var(--text-muted)",
+            }}
+          >
+            These are optional tags designed to handle holds which normally
+            confuse the ClimbDDPM model.
+          </div>
+          {TAG_EXPLANATIONS.map(({ key, label, desc }) => (
+            <label
+              key={key}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                cursor: "pointer",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  {label}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "0.55rem",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  {desc}
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -279,21 +352,28 @@ function HotkeysAndInstructions({
         }}
       >
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {kbd("1", "rgb(52,211,153)")}
-          <PlusCircle size={12} style={{ color: "#34d399", flexShrink: 0 }} />
+          {kbd("1", "#34d399")}
+          <Plus size={12} style={{ color: "#34d399", flexShrink: 0 }} />
           <span style={{ color: "var(--text-muted)" }}>
             {`Click${enabledFeatures.direction || enabledFeatures.useability ? " & drag" : ""} — new hold`}
           </span>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {kbd("2", "rgb(248,113,113)")}
+          {kbd("2", "#f59e0b")}
+          <Edit size={12} style={{ color: "#f59e0b", flexShrink: 0 }} />
+          <span style={{ color: "var(--text-muted)" }}>
+            {`Click${enabledFeatures.direction || enabledFeatures.useability ? " & drag" : ""} — edit hold`}
+          </span>
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {kbd("3", "rgb(248,113,113)")}
           <Eraser size={12} style={{ color: "#f87171", flexShrink: 0 }} />
           <span style={{ color: "var(--text-muted)" }}>
             Click — delete hold
           </span>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {kbd("3", "rgb(96,165,250)")}
+          {kbd("4", "rgb(96,165,250)")}
           <Hand size={12} style={{ color: "#60a5fa", flexShrink: 0 }} />
           <span style={{ color: "var(--text-muted)" }}>
             Click — select / view hold
@@ -337,7 +417,7 @@ function HotkeysAndInstructions({
               color: "var(--text-muted)",
             }}
           >
-            · {kbd("Ctrl+Z")} Undo last hold
+            · {kbd("Ctrl+Z")} Delete last added hold
           </span>
           {enabledFeatures.footholds && (
             <span
@@ -360,8 +440,8 @@ function HotkeysAndInstructions({
                 color: "var(--text-muted)",
               }}
             >
-              · {kbd("p")} {kbd("m")} {kbd("s")} Toggle pinch / macro / sloper /
-              jug
+              · {kbd("p")} {kbd("m")} {kbd("s")} {kbd("v")}
+              {kbd("j")} Tag hotkeys (Pinch, Macro, Sloper, Versatile, Jug)
             </span>
           )}
         </div>
@@ -571,6 +651,7 @@ const TAGS: { value: Tag; label: string }[] = [
   { value: "pinch", label: "PINCH" },
   { value: "macro", label: "MACRO" },
   { value: "sloper", label: "SLOPER" },
+  { value: "versatile", label: "VERSATILE" },
   { value: "jug", label: "JUG" },
 ];
 
@@ -638,7 +719,7 @@ export function HoldFeaturesSidebar({
 
   return (
     <aside style={sidebarStyle}>
-      {displayHold && (
+      {displayHold ? (
         <div
           style={{
             padding: "18px 20px",
@@ -831,6 +912,74 @@ export function HoldFeaturesSidebar({
             )}
           </div>
         </div>
+      ) : (
+        <div>
+          {" "}
+          <div>
+            {" "}
+            {/* Useability — locked (add mode) */}
+            {showLockControls && (
+              <UseabilityBar
+                useability={lockedUseability}
+                color={getColor(lockedUseability)}
+                isLocked={useabilityLocked}
+                onLockedChange={onUseabilityLockChange!}
+                onUseabilityChange={onLockedUseabilityChange!}
+              />
+            )}
+            {/* Useability — read-only (select/edit mode) */}
+            {!showLockControls && hasUseability && (
+              <div>
+                <label
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "0.55rem",
+                    letterSpacing: "0.12em",
+                    textTransform: "uppercase",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Useability
+                </label>
+                <div
+                  style={{
+                    marginTop: "6px",
+                    background: "var(--bg)",
+                    padding: "10px 12px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "'Space Mono', monospace",
+                      fontSize: "1.4rem",
+                      fontWeight: 700,
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    {(useability * 100).toFixed(0)}%
+                  </span>
+                  <div
+                    style={{
+                      height: "5px",
+                      background: "var(--border)",
+                      overflow: "hidden",
+                      marginTop: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${useability * 100}%`,
+                        backgroundColor: color,
+                        transition: "width 0.2s",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Tags */}
@@ -886,6 +1035,7 @@ export function HoldFeaturesSidebar({
               ["p", "pinch"],
               ["m", "macro"],
               ["s", "sloper"],
+              ["v", "versatile"],
               ["j", "jug"],
             ].map(([key, name]) => (
               <span
