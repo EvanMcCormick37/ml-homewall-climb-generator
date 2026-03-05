@@ -722,7 +722,7 @@ function ClimbList({
             const canDelete =
               currentUserId !== null &&
               (climb.setter_id === currentUserId ||
-                wall.metadata.owner === currentUserId);
+                wallOwnerId === currentUserId);
             return (
               <div
                 key={climb.id}
@@ -1476,7 +1476,7 @@ function MainViewPage({
                 onFiltersReset={handleFiltersReset}
                 currentUserId={userId}
                 onDeleteClimb={setClimbToDelete}
-                wallOwnerId={wall.metadata.owner}
+                wallOwnerId={wall.metadata.owner_id}
               />
             </div>
           </div>
@@ -1573,7 +1573,7 @@ function MainViewPage({
                     onFiltersReset={handleFiltersReset}
                     currentUserId={userId}
                     onDeleteClimb={setClimbToDelete}
-                    wallOwnerId={wall.metadata.owner}
+                    wallOwnerId={wall.metadata.owner_id}
                   />
                 </div>
               </div>

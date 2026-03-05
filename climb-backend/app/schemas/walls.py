@@ -19,6 +19,9 @@ class WallMetadata(BaseModel):
     angle: int | None = None
     created_at: datetime
     updated_at: datetime
+    owner_id: str
+    visibility: str
+    share_token: str | None
 
 
 class WallCreate(BaseModel):

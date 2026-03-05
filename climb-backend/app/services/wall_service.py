@@ -112,6 +112,9 @@ def get_all_walls(owner_id: str | None = None) -> list[WallMetadata]:
                 w.num_holds,
                 w.created_at,
                 w.updated_at,
+                w.owner_id,
+                w.visibility,
+                w.share_token,
                 COUNT(DISTINCT c.id) AS num_climbs
             FROM (SELECT * FROM walls {where_clause}) AS w
             LEFT JOIN climbs c ON c.wall_id = w.id
@@ -133,6 +136,9 @@ def get_all_walls(owner_id: str | None = None) -> list[WallMetadata]:
                 if isinstance(row["created_at"], str) else row["created_at"],
             updated_at=datetime.fromisoformat(row["updated_at"]) 
                 if isinstance(row["updated_at"], str) else row["updated_at"],
+            owner_id=row["owner_id"],
+            visibility=row["visibility"],
+            share_token=row["share_token"]
         ))
     
     return walls
@@ -152,6 +158,9 @@ def get_wall(wall_id: str) -> WallDetail | None:
                 w.angle,
                 w.created_at,
                 w.updated_at,
+                w.owner_id,
+                w.visibility,
+                w.share_token,
                 COUNT(DISTINCT c.id) AS num_climbs
             FROM walls w
             LEFT JOIN climbs c ON c.wall_id = w.id
@@ -176,6 +185,9 @@ def get_wall(wall_id: str) -> WallDetail | None:
             if isinstance(row["created_at"], str) else row["created_at"],
         updated_at=datetime.fromisoformat(row["updated_at"]) 
             if isinstance(row["updated_at"], str) else row["updated_at"],
+        owner_id=row["owner_id"],
+        visibility=row["visibility"],
+        share_token=row["share_token"]
     )
     return WallDetail(
         metadata=metadata,

@@ -17,6 +17,8 @@ export interface HoldDetail {
 
 export type HoldMode = "add" | "remove" | "select" | "edit";
 
+export type Visibility = "public" | "private" | "unlisted";
+
 export interface WallMetadata {
   id: string;
   name: string;
@@ -28,6 +30,9 @@ export interface WallMetadata {
   angle: number | null;
   created_at: string;
   updated_at: string;
+  owner_id: string;
+  visibility: string;
+  share_token: string;
 }
 
 export interface WallDetail {
