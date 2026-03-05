@@ -407,6 +407,20 @@ class ClimbDDPMGenerator():
         tiled = np.tile(base, (n,1))
         return torch.tensor(tiled, device=self.device, dtype=torch.float32)
     
+    def _get_offset_manifold(self, wall_id: str, x_offset: float | None)-> Tensor:
+        """Method for offsetting the current holds-manifold such that mean-x and mean-y is 0"""
+        offset_manifold = self.holds_manifolds[wall_id].clone()
+        means = torch.mean(offset_manifold, dim=0).round(decimals=3)
+        if x_offset is None:
+            x_offset = -(means[0].item())
+        y_offset = -(means[1].item())
+        
+        offset_manifold[:,0] += x_offset
+        offset_manifold[:,1] += y_offset
+        means = torch.mean(offset_manifold, dim=0)
+
+        return offset_manifold
+    
     def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
         """
             Project each generated hold to its nearest neighbor on the hold manifold.
@@ -576,19 +590,13 @@ class ClimbDDPMGenerator():
         :return: A set of generated climbs according to the specified 
         :rtype: list[list[list[int]]]
         """
-        auto=False
         # Seed Noise Generator
         if deterministic:
             self.deterministic_noise_generator.manual_seed(seed)
         
         # Added x-offset logic for more variety
-        if x_offset is None:
-            val = torch.randn(1, generator=self.deterministic_noise_generator).item() if deterministic else np.random.randn()
-            x_offset = max(min(val, 1.0), -1.0)
-            auto=True
-        
-        offset_manifold = self.holds_manifolds[wall_id].clone()
-        offset_manifold[:,0] += x_offset*0.1
+        auto = True if x_offset is None else False
+        offset_manifold = self._get_offset_manifold(wall_id, x_offset)
 
         # CORE LOGIC
         cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
