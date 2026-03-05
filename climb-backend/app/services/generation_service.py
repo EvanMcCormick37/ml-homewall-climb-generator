@@ -32,10 +32,9 @@ def generate_climbs(
         List of GeneratedClimb results
     """
 
-    # Resolve angle: use request override, else wall's stored angle
-    angle = request.angle if request.angle else _get_wall_angle(wall_id)
-
     try:
+        # Resolve angle: use request override, else wall's stored angle
+        angle = request.angle if request.angle else _get_wall_angle(wall_id)
         raw_climbs = generator.generate(
             wall_id=wall_id,
             n=request.num_climbs,

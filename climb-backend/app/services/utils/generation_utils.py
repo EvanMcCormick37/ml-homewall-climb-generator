@@ -252,7 +252,7 @@ class ClimbsFeatureScaler:
 # Utility
 # ---------------------------------------------------------------------------
 
-def clear_compile_keys(filepath: Path, map_loc: str = "cpu") -> dict:
+def clear_compile_keys(filepath: Path | str, map_loc: str = "cpu") -> dict:
     """Strip torch.compile prefixes from state dict keys."""
     state_dict = torch.load(filepath, map_location=map_loc)
     new_state_dict = {}
@@ -393,6 +393,13 @@ class ClimbDDPMGenerator():
                 self.holds_manifolds[wall_id] = torch.cat([torch.tensor(df[['x','y','pull_x','pull_y']].values, dtype=torch.float32), NULL_HOLD_SENTINELS], dim=0)
                 self.holds_lookup[wall_id] = df['hold_index'].values
                 self.holds_lookup[wall_id] = np.concatenate([self.holds_lookup[wall_id], np.array([-1, -1, -1, -1])])
+    
+    def log_hold_means(self, wall_id: str | None = None):
+        """Log the hold means for each wall."""
+        for k, manifold in self.holds_manifolds.items():
+            if wall_id == None or wall_id == k:
+                means = torch.mean(manifold, dim=0)
+                print(f"Wall-id--{k}; Means-- x:{means[0].item()}, y:{means[1].item()}, Px:{means[2].item()}, Py:{means[3].item()} ")
 
     def _build_cond_tensor(self, n, grade, diff_scale, angle):
         cache_key = (grade, diff_scale, angle)
@@ -423,6 +430,20 @@ class ClimbDDPMGenerator():
         idx = dists.argmin(dim=1)
         return offset_manifold[idx].reshape(B, S, -1)
     
+    def _get_offset_manifold(self, wall_id: str, x_offset: float | None)-> Tensor:
+        """Method for offsetting the current holds-manifold such that mean-x and mean-y is 0"""
+        offset_manifold = self.holds_manifolds[wall_id].clone()
+        means = torch.mean(offset_manifold, dim=0).round(decimals=3)
+        if x_offset is None:
+            x_offset = -(means[0].item())
+        y_offset = -(means[1].item())
+        
+        offset_manifold[:,0] += x_offset
+        offset_manifold[:,1] += y_offset
+        means = torch.mean(offset_manifold, dim=0)
+
+        return offset_manifold
+
     def _find_optimal_translation(
         self,
         gen_climbs: Tensor,           # (B, S, H)
@@ -441,7 +462,7 @@ class ClimbDDPMGenerator():
         B, S, H = gen_climbs.shape
         
         # Create a null mask so that the null-hold positions don't contribute to the distance metric.
-        null_mask = ((gen_climbs[:,:,0] < -1.2) | (gen_climbs[:,:,2] > 1.2 ) | (gen_climbs[:,:,0] > 1.2) | (gen_climbs[:,:,2] < -1.2)).float()
+        null_mask = ((gen_climbs[:,:,0] > -1.2) & (gen_climbs[:,:,2] < 1.2 ) & (gen_climbs[:,:,0] < 1.2) & (gen_climbs[:,:,2] > -1.2)).float()
         Nx = x_offsets.shape[0]
         Ny = y_offsets.shape[0]
 
@@ -512,6 +533,7 @@ class ClimbDDPMGenerator():
         roles = torch.argmax(self.hold_classifier(gen_climbs, cond_t), dim=2).detach().numpy()
 
         flat_climbs = gen_climbs.reshape(-1,H)                  # (B*S, H)
+
         dists = torch.cdist(flat_climbs, offset_manifold)       # (B*S, H, M)
         idx = dists.argmin(dim=1)
         holds = self.holds_lookup[wall_id][idx]
@@ -576,19 +598,13 @@ class ClimbDDPMGenerator():
         :return: A set of generated climbs according to the specified 
         :rtype: list[list[list[int]]]
         """
-        auto=False
         # Seed Noise Generator
         if deterministic:
             self.deterministic_noise_generator.manual_seed(seed)
         
-        # Added x-offset logic for more variety
-        if x_offset is None:
-            val = torch.randn(1, generator=self.deterministic_noise_generator).item() if deterministic else np.random.randn()
-            x_offset = max(min(val, 1.0), -1.0)
-            auto=True
-        
-        offset_manifold = self.holds_manifolds[wall_id].clone()
-        offset_manifold[:,0] += x_offset*0.1
+        # Handle manifold offset
+        auto = True if x_offset is None else False
+        offset_manifold = self._get_offset_manifold(wall_id, x_offset)
 
         # CORE LOGIC
         cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
@@ -599,9 +615,10 @@ class ClimbDDPMGenerator():
         for _ in range(0, timesteps):
             gen_climbs = self.ddpm(noisy, cond_t, t_tensor)
 
-            alpha_p = self._projection_strength(t_tensor, t_start_projection)
-            projected_climbs = self._project_onto_manifold(gen_climbs, offset_manifold)
-            gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
+            if t_tensor[0].item() < t_start_projection: # This block might be problematic. If not projecting, don't enter it at all.
+                alpha_p = self._projection_strength(t_tensor, t_start_projection)
+                projected_climbs = self._project_onto_manifold(gen_climbs, offset_manifold)
+                gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
             
             t_tensor -= 1.0/timesteps
             noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
@@ -633,6 +650,8 @@ def reset_generator():
         ddpm=ddpm,
         hold_classifier=hold_classifier
     )
+
+    generator.log_hold_means()
     return generator
 
 generator = reset_generator()

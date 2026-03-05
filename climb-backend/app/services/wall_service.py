@@ -39,7 +39,7 @@ def _row_to_hold_detail(row) -> HoldDetail:
         pull_y=row["pull_y"],
         useability=row["useability"],
         is_foot=row["is_foot"],
-        tags=row.get("tags")
+        tags=row["tags"] or None
     )
 
 
@@ -83,7 +83,7 @@ def get_holds(wall_id: str) -> list[HoldDetail]:
     with get_db() as conn:
         rows = conn.execute(
             """
-            SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot
+            SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags
             FROM holds
             WHERE wall_id = ?
             ORDER BY hold_index ASC
