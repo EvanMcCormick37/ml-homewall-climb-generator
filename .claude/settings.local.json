@@ -1,5 +1,8 @@
 {
   "permissions": {
-    "allow": ["Bash(npx tsc:*)", "Bash(python:*)"]
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(python:*)"
+    ]
   }
 }
