@@ -441,7 +441,7 @@ class ClimbDDPMGenerator():
         B, S, H = gen_climbs.shape
         
         # Create a null mask so that the null-hold positions don't contribute to the distance metric.
-        null_mask = ((gen_climbs[:,:,0] < -1.2) | (gen_climbs[:,:,2] > 1.2 ) | (gen_climbs[:,:,0] > 1.2) | (gen_climbs[:,:,2] < -1.2)).float()
+        null_mask = ((gen_climbs[:,:,0] > -1.2) & (gen_climbs[:,:,2] < 1.2 ) & (gen_climbs[:,:,0] < 1.2) & (gen_climbs[:,:,2] > -1.2)).float()
         Nx = x_offsets.shape[0]
         Ny = y_offsets.shape[0]
 
