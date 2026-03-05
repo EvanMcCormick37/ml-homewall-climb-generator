@@ -29,6 +29,9 @@ export interface WallMetadata {
   angle: number | null;
   created_at: string;
   updated_at: string;
+  owner_id: string;
+  visibility: string;
+  share_token?: string;
 }
 
 export interface WallDetail {

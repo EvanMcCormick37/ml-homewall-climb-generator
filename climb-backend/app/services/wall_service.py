@@ -153,6 +153,9 @@ def get_wall(wall_id: str) -> WallDetail | None:
                 w.angle,
                 w.created_at,
                 w.updated_at,
+                w.owner_id,
+                w.visibility,
+                w.share_token,
                 COUNT(DISTINCT c.id) AS num_climbs
             FROM walls w
             LEFT JOIN climbs c ON c.wall_id = w.id
