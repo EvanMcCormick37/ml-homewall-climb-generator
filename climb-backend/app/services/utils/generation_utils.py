@@ -252,7 +252,7 @@ class ClimbsFeatureScaler:
 # Utility
 # ---------------------------------------------------------------------------
 
-def clear_compile_keys(filepath: Path, map_loc: str = "cpu") -> dict:
+def clear_compile_keys(filepath: Path | str, map_loc: str = "cpu") -> dict:
     """Strip torch.compile prefixes from state dict keys."""
     state_dict = torch.load(filepath, map_location=map_loc)
     new_state_dict = {}
