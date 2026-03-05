@@ -24,7 +24,7 @@ def df_sql(db_name, query,index_col='uuid'):
 
 def convert_dataframe_to_holds(
         df: pd.DataFrame,
-        index_col: str = 'id',
+        index_col: str | None = None,
         x_col: str = 'x_ft',
         y_col: str = 'y_ft',
         default_pull_x: float = 0.0,
@@ -47,7 +47,7 @@ def convert_dataframe_to_holds(
     
     for idx, row in df.iterrows():
         hold = {
-            "hold_index": int(row[index_col]),
+            "hold_index": int(row[index_col]) if index_col else idx,
             "x": float(row[x_col]),
             "y": float(row[y_col]),
             "pull_x": default_pull_x,
@@ -104,7 +104,15 @@ def upload_holds(wall_id: str, holds: list[dict], api_base_url: str = API_BASE_U
         print(f"Error: {response.text}")
         response.raise_for_status()
 
-def parse_frames_to_holdset(frames: str) -> dict:
+def delete_wall(wall_id: str, api_base_url: str = API_BASE_URL):
+    """Remotely delete a wall so I can resize the image."""
+    endpoint = f"{api_base_url}/api/v1/walls/{wall_id}"
+    print(f"Deleting wall {wall_id}")
+    response = requests.delete(endpoint)
+    if response.status_code == 200:
+        print("Deletion Successful!")
+
+def parse_frames_to_holdset(frames: str, role_map: dict | None) -> dict:
     """
     Parse frames string to holdset dict.
     
@@ -118,6 +126,9 @@ def parse_frames_to_holdset(frames: str) -> dict:
         'hand': [],
         'foot': []
     }
+
+    if role_map is None:
+        role_map = ROLE_MAP
     
     # Find all p{int}r{int} patterns
     pattern = r'p(\d+)r(\d+)'
@@ -126,8 +137,8 @@ def parse_frames_to_holdset(frames: str) -> dict:
     for p_str, role_str in matches:
         p = int(p_str)
         role = int(role_str)
-        if role in ROLE_MAP:
-            holdset[ROLE_MAP[role]].append(p)
+        if role in role_map:
+            holdset[role_map[role]].append(p)
     
     return holdset
 
@@ -154,7 +165,8 @@ def flush_backup_holds(
             "pull_x": float(row['pull_x']),
             "pull_y": float(row['pull_y']),
             "useability": float(row['useability']),
-            "is_foot": int(row['is_foot'])
+            "is_foot": int(row['is_foot']),
+            "tags": json.loads(row['tags']) if row['tags'] else None
         }
         holds.append(hold)
     upload_holds(wall_id,holds)
@@ -163,12 +175,13 @@ def flush_backup_holds(
 #   Climb Upload Utilities
 # ---------------------------------------------------------------
 def upload_climbs_batch(
-    df: pd.DataFrame,
     wall_id: str,
+    df: pd.DataFrame,
+    role_map: str | None = None,
     base_url: str = API_BASE_URL,
     batch_size: int = 500,
     verbose: bool = True,
-    try_one: bool = False
+    try_one: bool = False,
 ) -> list[dict]:
     """
     Upload climbs from DataFrame to backend using batch endpoint.
@@ -205,7 +218,7 @@ def upload_climbs_batch(
         for idx, row in batch_df.iterrows():
             try:
                 # Parse frames to holdset
-                holdset = parse_frames_to_holdset(row['frames'])
+                holdset = parse_frames_to_holdset(row['frames'], role_map)
                 
                 # Build payload (same logic as original)
                 payload = {

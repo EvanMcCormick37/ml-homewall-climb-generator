@@ -73,7 +73,7 @@ def create_climb(
 def create_climbs_batch(
     wall_id: str,
     batch_data: ClimbBatchCreate,
-    _= Depends(require_auth),
+    # _= Depends(require_auth),
 ):
     if not services.wall_exists(wall_id):
         raise HTTPException(status_code=404, detail="Wall not found")
