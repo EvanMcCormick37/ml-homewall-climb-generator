@@ -426,7 +426,7 @@ function HoldsEditorPage() {
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
       const isFoot = !!hold.is_foot;
-      const scale = height / 3000;
+      const scale = height / 1500;
       const sizeMultiplier = isFoot ? 0.5 * scale : scale;
       const useability = hold.useability ?? 0.5;
       const color = getHoldColor(useability, isFoot);
