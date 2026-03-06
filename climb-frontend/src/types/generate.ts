@@ -23,15 +23,15 @@ export interface GenerateSettings {
 }
 
 export const DEFAULT_GENERATE_SETTINGS: GenerateSettings = {
-  timesteps: 25,
-  t_start_projection: 0.0,
+  timesteps: 50,
+  t_start_projection: 0.5,
   x_offset: null,
   deterministic: false,
   seed: 37,
 };
 
 export const FAST_GENERATE_SETTINGS: GenerateSettings = {
-  timesteps: 10,
+  timesteps: 20,
   t_start_projection: 0.0,
   x_offset: null,
   deterministic: false,

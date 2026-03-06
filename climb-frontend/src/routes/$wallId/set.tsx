@@ -1366,6 +1366,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
   const handleGenerate = useCallback(async () => {
     try {
       setIsGenerating(true);
+      setError(null);
       const generate_grade = grade ?? gradeOptions[0];
       const request: GenerateRequest = {
         num_climbs: numClimbs ?? 3,

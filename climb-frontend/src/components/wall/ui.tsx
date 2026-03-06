@@ -16,7 +16,7 @@ export function SectionLabel({
           fontSize: "0.6rem",
           letterSpacing: "0.18em",
           textTransform: "uppercase",
-          color: "var(--text-muted)",
+          color: "var(--text-primary)",
         }}
       >
         {children}
@@ -25,10 +25,8 @@ export function SectionLabel({
         className="bz-mono"
         style={{
           fontSize: "0.6rem",
-          color: "var(--text-muted)",
+          color: "var(--text-dim)",
           lineHeight: 1.7,
-          paddingTop: "10px",
-          borderTop: "1px solid var(--border)",
         }}
       >
         {desc}

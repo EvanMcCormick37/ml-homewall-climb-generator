@@ -10,21 +10,22 @@ COPY requirements-lock.txt .
 RUN pip install --no-cache-dir -r requirements-lock.txt
 
 # Copy app directory
-COPY app/ ./app/
+COPY app/ /app/app/
 
 # Copy your data files into the STAGING directory
-COPY data/ ./data-staging/
+# COPY data/ /app/data-staging/
 
 # Copy the startup script and make it executable
-COPY start.sh .
-RUN chmod +x start.sh
+# COPY start.sh /app/start.sh
+# Strip Windows line endings, then make it executable
+# RUN sed -i 's/\r$//' /app/start.sh && chmod +x /app/start.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 # Use ENTRYPOINT to run the initialization script first
-ENTRYPOINT ["./start.sh"]
+# ENTRYPOINT ["./start.sh"]
 
 # CMD provides the default arguments to the ENTRYPOINT script ("$@")
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--timeout-keep-alive", "65"]

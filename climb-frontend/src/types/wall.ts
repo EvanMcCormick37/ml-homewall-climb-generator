@@ -19,6 +19,8 @@ export interface HoldDetail {
 
 export type HoldMode = "add" | "remove" | "select" | "edit";
 
+export type Visibility = "public" | "private" | "unlisted";
+
 export interface WallMetadata {
   id: string;
   name: string;

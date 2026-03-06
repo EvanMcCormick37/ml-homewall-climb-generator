@@ -21,6 +21,38 @@ export const GLOBAL_STYLES = `
     --text-dim: #a7a7a7;
     --radius: 4px;
   }
+  
+  /* Scroll-bars */
+  /* 1. Firefox Styling */
+  :root {
+    /* 'thin' or 'auto' */
+    scrollbar-width: thin; 
+    /* First color is the "thumb" (the part you drag), second is the "track" (the background) */
+    scrollbar-color: var(--cyan-dim) var(--bg); 
+  }
+
+  /* 2. WebKit Styling (Chrome, Safari, Edge) */
+  /* Targets the overall scrollbar */
+  :root::-webkit-scrollbar {
+    width: 8px; /* Makes the scrollbar slimmer than the default */
+  }
+
+  /* Targets the background track */
+  :root::-webkit-scrollbar-track {
+    background: var(--bg); /* A dark color to blend with your panel */
+    border-radius: 4px;
+  }
+
+  /* Targets the draggable handle */
+  :root::-webkit-scrollbar-thumb {
+    background: var(--cyan-dim); /* A lighter gray so it's visible */
+    border-radius: 4px;
+  }
+
+  /* Optional: Add a hover effect to the handle */
+  :root::-webkit-scrollbar-thumb:hover {
+    background: var(--cyan); /* Matches the cyan/teal accent from your UI! */
+  }
 
   /* Typography helpers */
   .bz-oswald {
