@@ -54,7 +54,10 @@ def _build_hold_difficulty_df(climbs: pd.DataFrame) -> pd.DataFrame:
     for _, row in climbs.iterrows():
         try:
             holdset = json.loads(row['holds'])
-            for hold_index, _role in holdset:
+            for hold_index, role in holdset:
+                # We do not need to consider holds which are used as feet
+                if role == 3:
+                    continue
                 if hold_index not in grades_dict:
                     grades_dict[hold_index] = []
                 grades_dict[hold_index].append(float(row['grade']))

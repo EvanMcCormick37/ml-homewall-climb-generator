@@ -8,6 +8,7 @@ Handles:
 """
 import uuid
 import shutil
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -39,7 +40,7 @@ def _row_to_hold_detail(row) -> HoldDetail:
         pull_y=row["pull_y"],
         useability=row["useability"],
         is_foot=row["is_foot"],
-        tags=row["tags"] or None
+        tags=json.loads(row["tags"]) if row["tags"] else []
     )
 
 
@@ -56,7 +57,7 @@ def _hold_detail_to_row(wall_id: str, hold: HoldDetail) -> tuple:
         hold.pull_y,
         hold.useability,
         hold.is_foot,
-        hold.tags,
+        json.dumps(hold.tags or []),
     )
 
 
