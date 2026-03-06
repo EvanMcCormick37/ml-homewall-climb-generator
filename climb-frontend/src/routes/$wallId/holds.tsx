@@ -305,9 +305,13 @@ function HoldsEditorPage() {
         (h) => h.hold_index === originalHold.hold_index,
       );
       const existingTags = existingHold?.tags ?? originalHold.tags ?? [];
-      const updatedParams = {
-        ...calculateHoldParams(pixelCoords.x, pixelCoords.y, dragX, dragY),
-        is_foot: Number(isAddFoot),
+      const params = calculateHoldParams(pixelCoords.x, pixelCoords.y, dragX, dragY);
+      const updatedParams: Partial<HoldDetail> = {
+        ...(enabledFeatures.direction
+          ? { pull_x: params.pull_x, pull_y: params.pull_y }
+          : {}),
+        ...(enabledFeatures.useability ? { useability: params.useability } : {}),
+        ...(enabledFeatures.footholds ? { is_foot: Number(isAddFoot) } : {}),
         ...(enabledFeatures.tags && stickyTags.length > 0
           ? { tags: [...new Set([...existingTags, ...stickyTags])] }
           : {}),
