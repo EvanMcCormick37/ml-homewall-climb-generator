@@ -1951,6 +1951,52 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
                     settings={displaySettings}
                     onChange={setDisplaySettings}
                   />
+                  {isSignedIn && user?.id === wall.metadata.owner_id && (
+                    <>
+                      <div
+                        style={{
+                          borderTop: "1px solid var(--border)",
+                          margin: "14px 0 10px",
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          setShowDisplaySettings(false);
+                          navigate({ to: "/$wallId/holds", params: { wallId } });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          width: "100%",
+                          padding: "7px 10px",
+                          background: "transparent",
+                          border: "1px solid var(--border)",
+                          borderRadius: "var(--radius)",
+                          cursor: "pointer",
+                          color: "var(--text-muted)",
+                          fontFamily: "'Space Mono', monospace",
+                          fontSize: "0.6rem",
+                          letterSpacing: "0.1em",
+                          textTransform: "uppercase",
+                          transition: "all 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "var(--cyan-dim)";
+                          e.currentTarget.style.borderColor = "var(--border-active)";
+                          e.currentTarget.style.color = "var(--cyan)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.borderColor = "var(--border)";
+                          e.currentTarget.style.color = "var(--text-muted)";
+                        }}
+                      >
+                        <Pencil size={12} />
+                        Edit Holds
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             )}

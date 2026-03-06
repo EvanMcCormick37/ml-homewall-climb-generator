@@ -3,7 +3,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { getWall, getWallPhotoUrl, setHolds } from "@/api/walls";
 import { useHolds } from "@/hooks/useHolds";
 import { HoldFeaturesSidebar, EnabledFeaturesMenu } from "@/components";
-import { Eraser, PlusCircle, Hand, Settings, Plus, Edit } from "lucide-react";
+import { Eraser, Hand, Settings, Plus, Edit } from "lucide-react";
+import { GLOBAL_STYLES } from "@/styles";
 import type { HoldDetail, WallDetail, HoldMode, Tag } from "@/types";
 
 export const Route = createFileRoute("/$wallId/holds")({
@@ -13,27 +14,6 @@ export const Route = createFileRoute("/$wallId/holds")({
     return { wall };
   },
 });
-
-const GLOBAL_STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Space+Mono:wght@400;700&display=swap');
-
-  :root {
-    --cyan: #06b6d4;
-    --cyan-dim: rgba(6,182,212,0.15);
-    --bg: #09090b;
-    --surface: #111113;
-    --surface2: #1c1c1e;
-    --border: rgba(255,255,255,0.08);
-    --border-active: rgba(6,182,212,0.4);
-    --text-primary: #f4f4f5;
-    --text-muted: #71717a;
-    --text-dim: #52525b;
-    --radius: 4px;
-  }
-
-  .bz-oswald { font-family: 'Oswald', sans-serif; }
-  .bz-mono { font-family: 'Space Mono', monospace; }
-`;
 
 function HoldsEditorPage() {
   const navigate = useNavigate();
@@ -65,6 +45,7 @@ function HoldsEditorPage() {
   const [useabilityLocked, setUseabilityLocked] = useState(false);
   const [lockedUseability, setLockedUseability] = useState(0.5);
   const [activeHoldIndex, setActiveHoldIndex] = useState<number | null>(null);
+  const [stickyTags, setStickyTags] = useState<Tag[]>([]);
 
   const {
     holds,
@@ -239,6 +220,7 @@ function HoldsEditorPage() {
           undefined,
           undefined,
           enabledFeatures.footholds && isAddFoot ? 1 : 0,
+          enabledFeatures.tags && stickyTags.length > 0 ? [...stickyTags] : [],
         );
         setActiveHoldIndex(idx);
       } else {
@@ -304,6 +286,7 @@ function HoldsEditorPage() {
         enabledFeatures.direction ? params.pull_y : undefined,
         enabledFeatures.useability ? params.useability : undefined,
         enabledFeatures.footholds && isAddFoot ? 1 : 0,
+        enabledFeatures.tags && stickyTags.length > 0 ? [...stickyTags] : [],
       );
       setActiveHoldIndex(idx);
       setAddHoldState({
@@ -318,9 +301,16 @@ function HoldsEditorPage() {
       const pixelCoords = toPixelCoords(originalHold);
       const { dragX, dragY } = editHoldState;
 
+      const existingHold = holds.find(
+        (h) => h.hold_index === originalHold.hold_index,
+      );
+      const existingTags = existingHold?.tags ?? originalHold.tags ?? [];
       const updatedParams = {
         ...calculateHoldParams(pixelCoords.x, pixelCoords.y, dragX, dragY),
         is_foot: Number(isAddFoot),
+        ...(enabledFeatures.tags && stickyTags.length > 0
+          ? { tags: [...new Set([...existingTags, ...stickyTags])] }
+          : {}),
       };
 
       updateHold(originalHold.hold_index, updatedParams);
@@ -393,10 +383,10 @@ function HoldsEditorPage() {
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [removeLastHold]);
 
-  // Tag hotkeys: p=pinch, m=macro, s=sloper
+  // Tag hotkeys: p=pinch, m=macro, s=sloper, v=versatile, j=jug — sticky toggle
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
-      if (!enabledFeatures.tags || activeHoldIndex === null) return;
+      if (!enabledFeatures.tags) return;
       const tagMap: Record<string, Tag> = {
         p: "pinch",
         P: "pinch",
@@ -411,16 +401,13 @@ function HoldsEditorPage() {
       };
       const tag = tagMap[e.key];
       if (!tag) return;
-      const hold = holds.find((h) => h.hold_index === activeHoldIndex);
-      if (!hold) return;
-      const newTags = hold.tags.includes(tag)
-        ? hold.tags.filter((t) => t !== tag)
-        : [...hold.tags, tag];
-      updateHold(activeHoldIndex, { tags: newTags });
+      setStickyTags((prev) =>
+        prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+      );
     };
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [enabledFeatures.tags, activeHoldIndex, holds, updateHold]);
+  }, [enabledFeatures.tags]);
 
   // Canvas rendering
   useEffect(() => {
@@ -943,6 +930,14 @@ function HoldsEditorPage() {
             onLockedUseabilityChange={setLockedUseability}
             activeHold={activeHold}
             onTagToggle={handleTagToggle}
+            stickyTags={stickyTags}
+            onStickyTagToggle={(tag) =>
+              setStickyTags((prev) =>
+                prev.includes(tag)
+                  ? prev.filter((t) => t !== tag)
+                  : [...prev, tag],
+              )
+            }
           />
         </div>
       </div>

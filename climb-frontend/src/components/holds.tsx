@@ -1,14 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import {
-  PlusCircle,
-  Eraser,
-  Hand,
-  Edit,
-  Trash2,
-  Lock,
-  Unlock,
-  Plus,
-} from "lucide-react";
+import { Eraser, Hand, Edit, Trash2, Lock, Unlock, Plus } from "lucide-react";
 import type {
   HoldMode,
   HoldDetail,
@@ -17,7 +8,7 @@ import type {
   Tag,
 } from "@/types";
 
-// --- Pull Direction Arrow Component ---
+// ─── Pull Direction Arrow ──────────────────────────────────────────────────────
 
 function PullDirectionArrow({
   pullX,
@@ -77,7 +68,42 @@ function PullDirectionArrow({
   );
 }
 
-// --- Enabled Features Menu ---
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TAG_META: { key: Tag; label: string; hotkey: string; desc: string }[] = [
+  {
+    key: "pinch",
+    label: "PINCH",
+    hotkey: "p",
+    desc: "A bilateral pinch (can be held two ways). Align the pull vector parallel with the hold's edges if possible.",
+  },
+  {
+    key: "macro",
+    label: "MACRO",
+    hotkey: "m",
+    desc: "A very large hold. BetaZero treats holds as points, so very large holds can confuse it if not labelled as macros.",
+  },
+  {
+    key: "sloper",
+    label: "SLOPER",
+    hotkey: "s",
+    desc: "A slopey hold. Wall angle affects slopers more severely than other hold types.",
+  },
+  {
+    key: "versatile",
+    label: "VERSATILE",
+    hotkey: "v",
+    desc: "A hold that can be taken in multiple directions, but isn't as regular as a bilateral pinch.",
+  },
+  {
+    key: "jug",
+    label: "JUG",
+    hotkey: "j",
+    desc: "A true jug with severe incut that can be used in a multitude of pull directions (and for dynos).",
+  },
+];
+
+// ─── Enabled Features Menu ────────────────────────────────────────────────────
 
 interface EnabledFeaturesMenuProps {
   enabledFeatures: EnabledFeatures;
@@ -106,34 +132,6 @@ export function EnabledFeaturesMenu({
       key: "tags",
       label: "Tags",
       desc: "Specific tags for hold types with deviant features",
-    },
-  ];
-
-  const TAG_EXPLANATIONS: { key: Tag; label: string; desc: string }[] = [
-    {
-      key: "pinch",
-      label: "PINCH",
-      desc: "A bilateral pinch (Can be held two ways). Align the pull vector to be parallel with the hold's edges if possible.",
-    },
-    {
-      key: "macro",
-      label: "MACRO",
-      desc: "A very large hold. This is important as BetaZero treats holds as points, so very large holds can confuse it if not labelled as macros.",
-    },
-    {
-      key: "sloper",
-      label: "SLOPER",
-      desc: "A hold that is rather, well, slopey. Wall angle affects slopers more severely than other hold types.",
-    },
-    {
-      key: "versatile",
-      label: "VERSATILE",
-      desc: "A hold which can be taken in multiple directions, but isn't quite as regular as a bilateral pinch. Think of those moonboard holds which can be taken in many different ways.",
-    },
-    {
-      key: "jug",
-      label: "JUG",
-      desc: "A true jug. Not any good hold. A hold which has a severe incut and can thus be used in a multitude of pull directions (and for dynos).",
     },
   ];
 
@@ -197,23 +195,13 @@ export function EnabledFeaturesMenu({
         {FEATURES.map(({ key, label, desc }) => (
           <label
             key={key}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              cursor: "pointer",
-            }}
+            style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}
           >
             <input
               type="checkbox"
               checked={enabledFeatures[key]}
               onChange={() => onToggle(key)}
-              style={{
-                width: "14px",
-                height: "14px",
-                accentColor: "var(--cyan)",
-                flexShrink: 0,
-              }}
+              style={{ width: "14px", height: "14px", accentColor: "var(--cyan)", flexShrink: 0 }}
             />
             <div>
               <div
@@ -239,72 +227,15 @@ export function EnabledFeaturesMenu({
           </label>
         ))}
       </div>
-      {enabledFeatures["tags"] && (
-        <div
-          style={{
-            padding: "8px 14px",
-            background: "var(--bg)",
-            borderTop: "1px solid var(--border)",
-          }}
-          className="bz-mono"
-        >
-          Tag Descriptions{" "}
-          <div
-            style={{
-              fontFamily: "'Space Mono', monospace",
-              fontSize: "0.6rem",
-              color: "var(--text-muted)",
-            }}
-          >
-            These are optional tags designed to handle holds which normally
-            confuse the ClimbDDPM model.
-          </div>
-          {TAG_EXPLANATIONS.map(({ key, label, desc }) => (
-            <label
-              key={key}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                cursor: "pointer",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontFamily: "'Space Mono', monospace",
-                    fontSize: "0.65rem",
-                    fontWeight: 700,
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {label}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "'Space Mono', monospace",
-                    fontSize: "0.55rem",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  {desc}
-                </div>
-              </div>
-            </label>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 
-// --- Hotkeys Panel ---
+// ─── Hotkeys Panel ────────────────────────────────────────────────────────────
 
 type HotkeysAndInstructionsProps = { enabledFeatures: EnabledFeatures };
 
-function HotkeysAndInstructions({
-  enabledFeatures,
-}: HotkeysAndInstructionsProps) {
+function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps) {
   const kbd = (label: string, color?: string) => (
     <span
       style={{
@@ -343,14 +274,7 @@ function HotkeysAndInstructions({
       >
         Hotkeys
       </h3>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "4px",
-          fontSize: "11px",
-        }}
-      >
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "11px" }}>
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("1", "#34d399")}
           <Plus size={12} style={{ color: "#34d399", flexShrink: 0 }} />
@@ -368,16 +292,12 @@ function HotkeysAndInstructions({
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("3", "rgb(248,113,113)")}
           <Eraser size={12} style={{ color: "#f87171", flexShrink: 0 }} />
-          <span style={{ color: "var(--text-muted)" }}>
-            Click — delete hold
-          </span>
+          <span style={{ color: "var(--text-muted)" }}>Click — delete hold</span>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("4", "rgb(96,165,250)")}
           <Hand size={12} style={{ color: "#60a5fa", flexShrink: 0 }} />
-          <span style={{ color: "var(--text-muted)" }}>
-            Click — select / view hold
-          </span>
+          <span style={{ color: "var(--text-muted)" }}>Click — select / view hold</span>
         </span>
         <div
           style={{
@@ -389,59 +309,23 @@ function HotkeysAndInstructions({
             gap: "3px",
           }}
         >
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              color: "var(--text-muted)",
-            }}
-          >
+          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
             · {kbd("Shift + Drag")} Pan
           </span>
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              color: "var(--text-muted)",
-            }}
-          >
+          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
             · {kbd("Scroll")} Zoom
           </span>
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              color: "var(--text-muted)",
-            }}
-          >
+          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
             · {kbd("Ctrl+Z")} Delete last added hold
           </span>
           {enabledFeatures.footholds && (
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                color: "var(--text-muted)",
-              }}
-            >
+            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
               · {kbd("x")} Toggle hand / foot
             </span>
           )}
           {enabledFeatures.tags && (
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                color: "var(--text-muted)",
-              }}
-            >
-              · {kbd("p")} {kbd("m")} {kbd("s")} {kbd("v")}
-              {kbd("j")} Tag hotkeys
+            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+              · {kbd("p")} {kbd("m")} {kbd("s")} {kbd("v")} {kbd("j")} Sticky tag toggle
             </span>
           )}
         </div>
@@ -450,7 +334,7 @@ function HotkeysAndInstructions({
   );
 }
 
-// --- Draggable Useability Bar ---
+// ─── Draggable Useability Bar ─────────────────────────────────────────────────
 
 interface UseabilityBarProps {
   useability: number;
@@ -474,8 +358,7 @@ function UseabilityBar({
     (clientX: number) => {
       if (!barRef.current || !isLocked) return;
       const rect = barRef.current.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const percentage = Math.max(0, Math.min(1, x / rect.width));
+      const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       onUseabilityChange(percentage);
     },
     [isLocked, onUseabilityChange],
@@ -499,42 +382,30 @@ function UseabilityBar({
   );
 
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
-  const handleMouseLeave = useCallback(() => setIsDragging(false), []);
 
   return (
-    <div>
-      <label
-        style={{
-          fontFamily: "'Space Mono', monospace",
-          fontSize: "0.6rem",
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          color: "var(--text-muted)",
-        }}
-      >
-        Useability
-      </label>
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
       <div
         style={{
-          marginTop: "6px",
           background: "var(--bg)",
           padding: "10px 12px",
+          borderRadius: "var(--radius)",
         }}
       >
         <div
           style={{
             display: "flex",
-            alignItems: "center",
+            alignItems: "baseline",
             justifyContent: "space-between",
             marginBottom: "8px",
           }}
         >
           <span
             style={{
+              fontFamily: "'Space Mono', monospace",
               fontSize: "1.4rem",
               fontWeight: 700,
               color: "var(--text-primary)",
-              fontFamily: "'Space Mono', monospace",
             }}
           >
             {(useability * 100).toFixed(0)}%
@@ -546,26 +417,27 @@ function UseabilityBar({
                 alignItems: "center",
                 gap: "4px",
                 fontFamily: "'Space Mono', monospace",
-                fontSize: "0.55rem",
+                fontSize: "0.5rem",
                 color: "#f59e0b",
               }}
             >
-              <Lock size={11} /> Manual
+              <Lock size={10} /> MANUAL
             </span>
           )}
         </div>
         <div
           ref={barRef}
           style={{
-            height: "5px",
-            background: "var(--border)",
+            height: "4px",
+            background: "rgba(255,255,255,0.08)",
             cursor: isLocked ? "ew-resize" : "default",
+            borderRadius: "2px",
             overflow: "hidden",
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          onMouseLeave={handleMouseUp}
         >
           <div
             style={{
@@ -576,54 +448,33 @@ function UseabilityBar({
             }}
           />
         </div>
-        <label
+      </div>
+      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={isLocked}
+          onChange={(e) => onLockedChange(e.target.checked)}
+          style={{ width: "13px", height: "13px", accentColor: "#f59e0b" }}
+        />
+        <span
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "8px",
-            marginTop: "8px",
-            cursor: "pointer",
+            gap: "4px",
+            fontFamily: "'Space Mono', monospace",
+            fontSize: "0.55rem",
+            color: isLocked ? "#f59e0b" : "var(--text-muted)",
           }}
         >
-          <input
-            type="checkbox"
-            checked={isLocked}
-            onChange={(e) => onLockedChange(e.target.checked)}
-            style={{ width: "13px", height: "13px", accentColor: "#f59e0b" }}
-          />
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              fontFamily: "'Space Mono', monospace",
-              fontSize: "0.55rem",
-              color: "var(--text-muted)",
-            }}
-          >
-            {isLocked ? <Lock size={11} /> : <Unlock size={11} />}
-            Set Useability
-          </span>
-        </label>
-        {isLocked && (
-          <p
-            style={{
-              marginTop: "3px",
-              marginLeft: "21px",
-              fontFamily: "'Space Mono', monospace",
-              fontSize: "0.55rem",
-              color: "var(--text-dim)",
-            }}
-          >
-            Drag bar to adjust preset
-          </p>
-        )}
-      </div>
+          {isLocked ? <Lock size={10} /> : <Unlock size={10} />}
+          {isLocked ? "Drag bar to adjust" : "Set fixed useability"}
+        </span>
+      </label>
     </div>
   );
 }
 
-// --- Hold Features Sidebar ---
+// ─── Hold Features Sidebar ────────────────────────────────────────────────────
 
 interface HoldFeaturesSidebarProps {
   mode: HoldMode;
@@ -645,15 +496,9 @@ interface HoldFeaturesSidebarProps {
   onLockedUseabilityChange?: (value: number) => void;
   activeHold?: HoldDetail | null;
   onTagToggle?: (tag: Tag) => void;
+  stickyTags: Tag[];
+  onStickyTagToggle: (tag: Tag) => void;
 }
-
-const TAGS: { value: Tag; label: string }[] = [
-  { value: "pinch", label: "PINCH" },
-  { value: "macro", label: "MACRO" },
-  { value: "sloper", label: "SLOPER" },
-  { value: "versatile", label: "VERSATILE" },
-  { value: "jug", label: "JUG" },
-];
 
 export function HoldFeaturesSidebar({
   mode,
@@ -669,6 +514,8 @@ export function HoldFeaturesSidebar({
   onLockedUseabilityChange,
   activeHold,
   onTagToggle,
+  stickyTags,
+  onStickyTagToggle,
 }: HoldFeaturesSidebarProps) {
   const displayHold = mode === "add" && isDragging ? dragParams : selectedHold;
   const hasDirection =
@@ -678,9 +525,7 @@ export function HoldFeaturesSidebar({
     "pull_y" in displayHold &&
     displayHold.pull_y != null;
   const hasUseability =
-    displayHold &&
-    "useability" in displayHold &&
-    displayHold.useability != null;
+    displayHold && "useability" in displayHold && displayHold.useability != null;
 
   const showLockControls =
     mode === "add" &&
@@ -689,6 +534,8 @@ export function HoldFeaturesSidebar({
     onLockedUseabilityChange;
 
   const showTags = enabledFeatures.tags && activeHold != null;
+  const showUseability = showLockControls || (!showLockControls && hasUseability);
+  const hasContent = displayHold || showUseability || showTags || enabledFeatures.tags;
 
   const sidebarStyle: React.CSSProperties = {
     width: "272px",
@@ -700,59 +547,52 @@ export function HoldFeaturesSidebar({
     borderLeft: "1px solid var(--border)",
   };
 
-  if (!displayHold && !showLockControls && !showTags) {
+  const sectionStyle: React.CSSProperties = {
+    padding: "14px 16px",
+    borderBottom: "1px solid var(--border)",
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    fontFamily: "'Space Mono', monospace",
+    fontSize: "0.5rem",
+    letterSpacing: "0.18em",
+    textTransform: "uppercase",
+    color: "var(--text-dim)",
+    margin: "0 0 10px 0",
+  };
+
+  const useability = hasUseability ? displayHold!.useability! : 0.5;
+  const displayColor = getColor(useabilityLocked ? lockedUseability : useability);
+
+  if (!hasContent) {
     return (
-      <aside
-        style={{
-          ...sidebarStyle,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
+      <aside style={{ ...sidebarStyle, alignItems: "center", justifyContent: "center" }}>
         <HotkeysAndInstructions enabledFeatures={enabledFeatures} />
       </aside>
     );
   }
 
-  const useability = hasUseability ? displayHold!.useability! : 0.5;
-  const color = getColor(useabilityLocked ? lockedUseability : useability);
-
   return (
     <aside style={sidebarStyle}>
-      {displayHold ? (
-        <div
-          style={{
-            padding: "18px 20px",
-            borderBottom: "1px solid var(--border)",
-          }}
-        >
+      {/* ── Hold Info: position + direction ── */}
+      {displayHold && (
+        <div style={sectionStyle}>
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: "12px",
+              marginBottom: "10px",
             }}
           >
-            <h2
-              style={{
-                fontFamily: "'Space Mono', monospace",
-                fontSize: "0.55rem",
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-                margin: 0,
-              }}
-            >
-              {mode === "add"
-                ? "New Hold"
-                : `Hold #${selectedHold?.hold_index}`}
+            <h2 style={sectionHeaderStyle}>
+              {mode === "add" ? "New Hold" : `Hold #${selectedHold?.hold_index}`}
             </h2>
             {mode === "select" && selectedHold && (
               <button
                 onClick={onDeleteHold}
                 style={{
-                  padding: "5px",
+                  padding: "4px",
                   color: "#f87171",
                   background: "transparent",
                   border: "none",
@@ -768,259 +608,159 @@ export function HoldFeaturesSidebar({
                 }
                 title="Delete hold"
               >
-                <Trash2 size={15} />
+                <Trash2 size={14} />
               </button>
             )}
           </div>
 
+          {/* Position grid */}
           <div
-            style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "5px",
+              marginBottom: hasDirection ? "10px" : 0,
+            }}
           >
-            {/* Position */}
-            <div>
-              <label
-                style={{
-                  fontFamily: "'Space Mono', monospace",
-                  fontSize: "0.55rem",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: "var(--text-muted)",
-                }}
-              >
-                Position
-              </label>
+            {[
+              { axis: "X", val: displayHold.x },
+              { axis: "Y", val: displayHold.y },
+            ].map(({ axis, val }) => (
               <div
+                key={axis}
                 style={{
-                  marginTop: "5px",
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "5px",
+                  background: "var(--bg)",
+                  padding: "8px 10px",
+                  borderRadius: "var(--radius)",
                 }}
               >
-                {[
-                  { axis: "X", val: displayHold.x },
-                  { axis: "Y", val: displayHold.y },
-                ].map(({ axis, val }) => (
-                  <div
-                    key={axis}
-                    style={{ background: "var(--bg)", padding: "8px 10px" }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: "'Space Mono', monospace",
-                        fontSize: "0.55rem",
-                        color: "var(--text-dim)",
-                        marginBottom: "3px",
-                      }}
-                    >
-                      {axis}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "'Space Mono', monospace",
-                        fontSize: "1rem",
-                        fontWeight: 700,
-                        color: "var(--text-primary)",
-                      }}
-                    >
-                      {val.toFixed(2)} ft
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Direction */}
-            {hasDirection && displayHold && (
-              <PullDirectionArrow
-                pullX={displayHold.pull_x!}
-                pullY={displayHold.pull_y!}
-                color={color}
-                size={90}
-              />
-            )}
-
-            {/* Useability — locked (add mode) */}
-            {showLockControls && (
-              <UseabilityBar
-                useability={
-                  isDragging && hasUseability
-                    ? displayHold!.useability!
-                    : lockedUseability
-                }
-                color={getColor(
-                  isDragging && hasUseability && !useabilityLocked
-                    ? displayHold!.useability!
-                    : lockedUseability,
-                )}
-                isLocked={useabilityLocked}
-                onLockedChange={onUseabilityLockChange!}
-                onUseabilityChange={onLockedUseabilityChange!}
-              />
-            )}
-
-            {/* Useability — read-only (select/edit mode) */}
-            {!showLockControls && hasUseability && (
-              <div>
-                <label
-                  style={{
-                    fontFamily: "'Space Mono', monospace",
-                    fontSize: "0.55rem",
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                    color: "var(--text-muted)",
-                  }}
-                >
-                  Useability
-                </label>
                 <div
                   style={{
-                    marginTop: "6px",
-                    background: "var(--bg)",
-                    padding: "10px 12px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "'Space Mono', monospace",
-                      fontSize: "1.4rem",
-                      fontWeight: 700,
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {(useability * 100).toFixed(0)}%
-                  </span>
-                  <div
-                    style={{
-                      height: "5px",
-                      background: "var(--border)",
-                      overflow: "hidden",
-                      marginTop: "8px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${useability * 100}%`,
-                        backgroundColor: color,
-                        transition: "width 0.2s",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div>
-          {" "}
-          <div>
-            {" "}
-            {/* Useability — locked (add mode) */}
-            {showLockControls && (
-              <UseabilityBar
-                useability={lockedUseability}
-                color={getColor(lockedUseability)}
-                isLocked={useabilityLocked}
-                onLockedChange={onUseabilityLockChange!}
-                onUseabilityChange={onLockedUseabilityChange!}
-              />
-            )}
-            {/* Useability — read-only (select/edit mode) */}
-            {!showLockControls && hasUseability && (
-              <div>
-                <label
-                  style={{
                     fontFamily: "'Space Mono', monospace",
-                    fontSize: "0.55rem",
-                    letterSpacing: "0.12em",
-                    textTransform: "uppercase",
-                    color: "var(--text-muted)",
+                    fontSize: "0.5rem",
+                    color: "var(--text-dim)",
+                    marginBottom: "3px",
                   }}
                 >
-                  Useability
-                </label>
+                  {axis}
+                </div>
                 <div
                   style={{
-                    marginTop: "6px",
-                    background: "var(--bg)",
-                    padding: "10px 12px",
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "1rem",
+                    fontWeight: 700,
+                    color: "var(--text-primary)",
                   }}
                 >
-                  <span
-                    style={{
-                      fontFamily: "'Space Mono', monospace",
-                      fontSize: "1.4rem",
-                      fontWeight: 700,
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {(useability * 100).toFixed(0)}%
-                  </span>
-                  <div
-                    style={{
-                      height: "5px",
-                      background: "var(--border)",
-                      overflow: "hidden",
-                      marginTop: "8px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${useability * 100}%`,
-                        backgroundColor: color,
-                        transition: "width 0.2s",
-                      }}
-                    />
-                  </div>
+                  {val.toFixed(2)} ft
                 </div>
               </div>
-            )}
+            ))}
           </div>
+
+          {/* Pull direction arrow */}
+          {hasDirection && displayHold && (
+            <PullDirectionArrow
+              pullX={displayHold.pull_x!}
+              pullY={displayHold.pull_y!}
+              color={displayColor}
+              size={90}
+            />
+          )}
         </div>
       )}
 
-      {/* Tags */}
+      {/* ── Useability ── */}
+      {showUseability && (
+        <div style={sectionStyle}>
+          <h2 style={sectionHeaderStyle}>Useability</h2>
+          {showLockControls ? (
+            <UseabilityBar
+              useability={
+                isDragging && hasUseability
+                  ? displayHold!.useability!
+                  : lockedUseability
+              }
+              color={getColor(
+                isDragging && hasUseability && !useabilityLocked
+                  ? displayHold!.useability!
+                  : lockedUseability,
+              )}
+              isLocked={useabilityLocked}
+              onLockedChange={onUseabilityLockChange!}
+              onUseabilityChange={onLockedUseabilityChange!}
+            />
+          ) : (
+            <div
+              style={{
+                background: "var(--bg)",
+                padding: "10px 12px",
+                borderRadius: "var(--radius)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'Space Mono', monospace",
+                  fontSize: "1.4rem",
+                  fontWeight: 700,
+                  color: "var(--text-primary)",
+                }}
+              >
+                {(useability * 100).toFixed(0)}%
+              </span>
+              <div
+                style={{
+                  height: "4px",
+                  background: "rgba(255,255,255,0.08)",
+                  overflow: "hidden",
+                  marginTop: "8px",
+                  borderRadius: "2px",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${useability * 100}%`,
+                    backgroundColor: displayColor,
+                    transition: "width 0.2s",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tags (active hold) ── */}
       {showTags && (
-        <div
-          style={{
-            padding: "14px 20px",
-            borderBottom: "1px solid var(--border)",
-          }}
-        >
-          <label
-            style={{
-              fontFamily: "'Space Mono', monospace",
-              fontSize: "0.55rem",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              color: "var(--text-muted)",
-              display: "block",
-              marginBottom: "8px",
-            }}
-          >
-            Tags — Hold #{activeHold!.hold_index}
-          </label>
-          <div style={{ display: "flex", gap: "5px" }}>
-            {TAGS.map(({ value, label }) => {
-              const isActive = activeHold!.tags.includes(value);
+        <div style={sectionStyle}>
+          <h2 style={sectionHeaderStyle}>Tags — Hold #{activeHold!.hold_index}</h2>
+
+          {/* Tag buttons */}
+          <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
+            {TAG_META.map(({ key, label }) => {
+              const isActive = activeHold!.tags.includes(key);
+              const isSticky = stickyTags.includes(key);
               return (
                 <button
-                  key={value}
-                  onClick={() => onTagToggle?.(value)}
+                  key={key}
+                  onClick={() => onTagToggle?.(key)}
+                  title={isSticky ? `Sticky — auto-applies to new/edited holds` : ""}
                   style={{
                     flex: 1,
-                    padding: "6px 0",
-                    background: isActive ? "var(--cyan)" : "transparent",
-                    color: isActive ? "#09090b" : "var(--text-muted)",
-                    border: `1px solid ${isActive ? "var(--cyan)" : "var(--border)"}`,
+                    padding: "5px 0",
+                    background: isActive
+                      ? "var(--cyan)"
+                      : isSticky
+                        ? "rgba(6,182,212,0.12)"
+                        : "transparent",
+                    color: isActive ? "#09090b" : isSticky ? "var(--cyan)" : "var(--text-muted)",
+                    border: `1px solid ${isActive ? "var(--cyan)" : isSticky ? "rgba(6,182,212,0.35)" : "var(--border)"}`,
                     borderRadius: "var(--radius)",
                     fontFamily: "'Space Mono', monospace",
-                    fontSize: "0.55rem",
+                    fontSize: "0.5rem",
                     fontWeight: 700,
-                    letterSpacing: "0.08em",
+                    letterSpacing: "0.05em",
                     cursor: "pointer",
                     transition: "all 0.1s",
                   }}
@@ -1030,25 +770,147 @@ export function HoldFeaturesSidebar({
               );
             })}
           </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
-            {[
-              ["p", "pinch"],
-              ["m", "macro"],
-              ["s", "sloper"],
-              ["v", "versatile"],
-              ["j", "jug"],
-            ].map(([key, name]) => (
+
+          {/* Sticky indicator */}
+          {stickyTags.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "5px 8px",
+                background: "rgba(6,182,212,0.07)",
+                border: "1px solid rgba(6,182,212,0.15)",
+                borderRadius: "var(--radius)",
+                marginBottom: "6px",
+              }}
+            >
               <span
-                key={key}
                 style={{
                   fontFamily: "'Space Mono', monospace",
                   fontSize: "0.5rem",
                   color: "var(--text-dim)",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
                 }}
               >
-                <span style={{ color: "var(--text-muted)" }}>{key}</span>={name}
+                Sticky:
               </span>
-            ))}
+              {stickyTags.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => onStickyTagToggle(t)}
+                  title="Click to deactivate"
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "0.5rem",
+                    fontWeight: 700,
+                    color: "var(--cyan)",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    textDecoration: "underline",
+                    letterSpacing: "0.05em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Hotkey legend */}
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {TAG_META.map(({ key, hotkey }) => {
+              const isSticky = stickyTags.includes(key);
+              return (
+                <span
+                  key={key}
+                  style={{
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "0.5rem",
+                    color: isSticky ? "var(--cyan)" : "var(--text-dim)",
+                  }}
+                >
+                  <span
+                    style={{
+                      color: isSticky ? "var(--cyan)" : "var(--text-muted)",
+                      fontWeight: isSticky ? 700 : 400,
+                    }}
+                  >
+                    {hotkey}
+                  </span>
+                  ={key}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tag Guide ── */}
+      {enabledFeatures.tags && (
+        <div style={sectionStyle}>
+          <h2 style={sectionHeaderStyle}>Tag Guide</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {TAG_META.map(({ key, label, hotkey, desc }) => {
+              const isSticky = stickyTags.includes(key);
+              return (
+                <div
+                  key={key}
+                  style={{
+                    padding: "8px 10px",
+                    background: isSticky ? "rgba(6,182,212,0.07)" : "var(--bg)",
+                    borderRadius: "var(--radius)",
+                    border: `1px solid ${isSticky ? "rgba(6,182,212,0.2)" : "transparent"}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginBottom: "3px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: "0.55rem",
+                        fontWeight: 700,
+                        color: isSticky ? "var(--cyan)" : "var(--text-primary)",
+                      }}
+                    >
+                      {label}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: "0.5rem",
+                        color: "var(--text-dim)",
+                        border: "1px solid var(--border)",
+                        padding: "0 3px",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {hotkey}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "'Space Mono', monospace",
+                      fontSize: "0.5rem",
+                      color: "var(--text-muted)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {desc}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
