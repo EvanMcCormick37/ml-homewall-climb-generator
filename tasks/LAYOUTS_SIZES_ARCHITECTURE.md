@@ -31,8 +31,8 @@ Every page, every API route, and every ML generation call pivots on `wall_id`. T
 
 This works for one-size-fits-all home walls, but it breaks down when you have commercial boards like the Tension Board 2, where:
 
-- **TB2 Mirror** and **TB2 Spray** are two distinct *hold arrangements* (layouts) for the same product family.
-- Each layout comes in multiple *physical sizes* (8×10, 8×12, 12×10, 12×12, etc.).
+- **TB2 Mirror** and **TB2 Spray** are two distinct _hold arrangements_ (layouts) for the same product family.
+- Each layout comes in multiple _physical sizes_ (8×10, 8×12, 12×10, 12×12, etc.).
 - A 12×10 TB2 Spray uses the same hold set as a 12×12 TB2 Spray — just a different image and a smaller active area.
 - Climbs set on a 12×12 are valid references on a 12×10 if all holds are within bounds.
 
@@ -57,7 +57,7 @@ climbs (boardlib)    → layout_id  (NOT size_id)
   + edge_left/right/bottom/top fields recording the size context
 ```
 
-**Critical insight:** In boardlib, climbs belong to a *layout*, not a size. The size context is recorded on each climb, but climbs are discoverable across all sizes of a layout. Holds (placements) also belong to a layout and are the full master set — size only determines which holds are physically reachable on a given board.
+**Critical insight:** In boardlib, climbs belong to a _layout_, not a size. The size context is recorded on each climb, but climbs are discoverable across all sizes of a layout. Holds (placements) also belong to a layout and are the full master set — size only determines which holds are physically reachable on a given board.
 
 ---
 
@@ -218,6 +218,7 @@ data/layouts/layout-{id}/sizes/size-{id}/photo.jpg
 ```
 GET /layouts/{layout_id}?size_id={size_id}
 ```
+
 returns only holds within that size's edge bounds.
 
 **GET /layouts/{layout_id}/generate** accepts an optional `?size_id=` query param. When provided, the generation service filters the hold set to only those within the size's edge bounds before running the DDPM.
@@ -315,7 +316,7 @@ export interface LayoutMetadata {
   name: string;
   description: string | null;
   num_holds: number;
-  sizes: SizeMetadata[];   // always included in list response
+  sizes: SizeMetadata[]; // always included in list response
   owner_id: string;
   visibility: string;
   share_token?: string;
@@ -325,7 +326,7 @@ export interface LayoutMetadata {
 
 export interface LayoutDetail {
   metadata: LayoutMetadata;
-  holds: HoldDetail[];     // full master set (or size-filtered if ?size_id provided)
+  holds: HoldDetail[]; // full master set (or size-filtered if ?size_id provided)
 }
 ```
 
@@ -347,6 +348,7 @@ export function getSizePhotoUrl(layoutId: string, sizeId: string): string {
 ### Route changes (`src/routes/`)
 
 Current routes:
+
 ```
 /$wallId/set.tsx
 /$wallId/view.tsx
@@ -355,6 +357,7 @@ Current routes:
 ```
 
 Proposed routes:
+
 ```
 /$layoutId/
   sizes.tsx        ← NEW: size picker (shown when layout has >1 size)
@@ -374,7 +377,7 @@ The `/$layoutId/$sizeId/set` nesting cleanly expresses that generation and brows
 Currently renders a flat grid of wall cards. After the change:
 
 - Cards represent **layouts** (not sizes).
-- Each card shows the photo of the layout's *first/default size* (or a composite if desired).
+- Each card shows the photo of the layout's _first/default size_ (or a composite if desired).
 - Sub-text shows size options: "3 sizes · 48 holds".
 - Clicking navigates to `/$layoutId` (which redirects if single-size, shows picker if multi-size).
 
@@ -445,7 +448,7 @@ This is the lowest-friction path. Recommended unless you want the cleaner concep
 Boardlib ties climbs to `layout_id`, which allows cross-size discovery. This is the right call for BetaZero too — a V6 set on a 12×12 is still a V6, even if you're on an 8×12 (with the caveat that some holds may be out of bounds). Recommended: `layout_id` with optional `size_id` as context.
 
 **Q3: For the generation model, should size filtering happen at the API or in the model?**
-At the API. The DDPM model itself is agnostic — it just gets a list of holds and generates. The API pre-filters the hold list based on size edges before calling generate. This is architecturally clean and requires zero model changes.
+This will need to occur at the model level. The model caches "hold manifolds" based on wall-id during its start-up. This is fine, but we will need to pass into it an additional argument (The edges of the current wall size), so it can filter its current hold manifold to account for the smaller board size during generation. I recommend adding a parameter for the board edges to the generate() function, and creating helper functions for filtering the hold manifold and hold indices based on wall size. (~User)
 
 **Q4: Who can add sizes to a layout?**
 The layout owner only (consistent with current wall ownership). A separate concept of "organization" ownership could come later if needed.
@@ -538,17 +541,17 @@ BetaZero currently allows any user to create a wall. Under the new model, a user
 
 ## 10. Summary
 
-| Concern | Current | After |
-|---|---|---|
-| Primary entity | `wall` (conflates layout + size) | `layout` (hold arrangement) |
-| Size info | `dimensions` on wall | `sizes` table, child of layout |
-| Photo | one per wall | one per size |
-| Holds | per wall_id | per layout_id (shared across sizes) |
-| Climbs | per wall_id | per layout_id, optional size_id |
-| Generation | uses all holds of wall | uses holds filtered by size edges |
-| Homepage | flat wall grid | layout grid (size count shown per card) |
-| URL: generator | `/$wallId/set` | `/$layoutId/$sizeId/set` |
-| URL: holds editor | `/$wallId/holds` | `/$layoutId/holds` |
-| Migration cost | — | additive; no data loss; old IDs reused as layout IDs |
+| Concern           | Current                          | After                                                |
+| ----------------- | -------------------------------- | ---------------------------------------------------- |
+| Primary entity    | `wall` (conflates layout + size) | `layout` (hold arrangement)                          |
+| Size info         | `dimensions` on wall             | `sizes` table, child of layout                       |
+| Photo             | one per wall                     | one per size                                         |
+| Holds             | per wall_id                      | per layout_id (shared across sizes)                  |
+| Climbs            | per wall_id                      | per layout_id, optional size_id                      |
+| Generation        | uses all holds of wall           | uses holds filtered by size edges                    |
+| Homepage          | flat wall grid                   | layout grid (size count shown per card)              |
+| URL: generator    | `/$wallId/set`                   | `/$layoutId/$sizeId/set`                             |
+| URL: holds editor | `/$wallId/holds`                 | `/$layoutId/holds`                                   |
+| Migration cost    | —                                | additive; no data loss; old IDs reused as layout IDs |
 
 The migration is low-risk. All existing wall IDs become layout IDs. Every existing "wall" becomes a layout with exactly one size. The front-end and back-end can be migrated independently behind the alias layer. No user-visible breakage is expected.

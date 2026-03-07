@@ -22,6 +22,26 @@ def client():
     return TestClient(app)
 
 
+MOCK_USER = {"user_id": "test-user-001", "email": "test@example.com", "name": "Test User"}
+
+
+@pytest.fixture
+def authed_client():
+    """Test client with auth dependency overridden to return a mock user."""
+    from app.auth import require_auth, sync_auth
+
+    async def mock_require_auth():
+        return MOCK_USER
+
+    async def mock_sync_auth():
+        return MOCK_USER
+
+    app.dependency_overrides[require_auth] = mock_require_auth
+    app.dependency_overrides[sync_auth] = mock_sync_auth
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
 @pytest.fixture
 def sample_holds():
     """Sample hold data for creating a wall."""
@@ -293,3 +313,127 @@ class TestGenerateEndpoints:
         # Verify Echoed Parameters
         assert data["parameters"]["grade"] == "V4"
         assert data["parameters"]["angle"] == 40
+
+
+# =============================================================================
+# LAYOUT ENDPOINTS (NEW)
+# =============================================================================
+
+def create_layout(client, name: str = "Test Layout", visibility: str = "public") -> dict:
+    """Helper to create a layout via multipart form."""
+    response = client.post(
+        "/api/v1/layouts",
+        data={"name": name, "visibility": visibility},
+    )
+    return response
+
+
+def create_size(client, layout_id: str, name: str = "12x12") -> dict:
+    """Helper to create a size for a layout."""
+    response = client.post(
+        f"/api/v1/layouts/{layout_id}/sizes",
+        data={"name": name, "width_ft": 12.0, "height_ft": 12.0},
+    )
+    return response
+
+
+@pytest.fixture
+def sample_layout(authed_client, sample_holds):
+    """Create a layout with holds and return its ID."""
+    resp = create_layout(authed_client, "Fixture Layout")
+    assert resp.status_code == 201, f"Failed to create layout: {resp.text}"
+    layout_id = resp.json()["id"]
+
+    holds_resp = authed_client.put(
+        f"/api/v1/layouts/{layout_id}/holds",
+        data={"holds": json.dumps(sample_holds)},
+    )
+    assert holds_resp.status_code == 201, f"Failed to set holds: {holds_resp.text}"
+
+    yield layout_id
+    authed_client.delete(f"/api/v1/layouts/{layout_id}")
+
+
+class TestLayoutEndpoints:
+    """Tests for /api/v1/layouts endpoints."""
+
+    def test_list_layouts(self, client):
+        response = client.get("/api/v1/layouts")
+        assert response.status_code == 200
+        data = response.json()
+        assert "layouts" in data
+        assert "total" in data
+        assert isinstance(data["layouts"], list)
+
+    def test_create_layout(self, authed_client):
+        resp = create_layout(authed_client, "My Layout")
+        assert resp.status_code == 201
+        data = resp.json()
+        assert "id" in data
+        assert data["name"] == "My Layout"
+        authed_client.delete(f"/api/v1/layouts/{data['id']}")
+
+    def test_get_layout(self, client, sample_layout):
+        resp = client.get(f"/api/v1/layouts/{sample_layout}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["metadata"]["id"] == sample_layout
+        assert len(data["holds"]) == 10
+
+    def test_get_layout_not_found(self, client):
+        resp = client.get("/api/v1/layouts/nonexistent-id")
+        assert resp.status_code == 404
+
+    def test_set_holds(self, authed_client, sample_holds):
+        resp = create_layout(authed_client, "Holds Layout")
+        layout_id = resp.json()["id"]
+
+        holds_resp = authed_client.put(
+            f"/api/v1/layouts/{layout_id}/holds",
+            data={"holds": json.dumps(sample_holds)},
+        )
+        assert holds_resp.status_code == 201
+        assert holds_resp.json()["id"] == layout_id
+
+        # Verify holds are accessible
+        detail = authed_client.get(f"/api/v1/layouts/{layout_id}").json()
+        assert len(detail["holds"]) == len(sample_holds)
+        authed_client.delete(f"/api/v1/layouts/{layout_id}")
+
+    def test_delete_layout(self, authed_client):
+        resp = create_layout(authed_client, "To Delete")
+        layout_id = resp.json()["id"]
+
+        del_resp = authed_client.delete(f"/api/v1/layouts/{layout_id}")
+        assert del_resp.status_code == 200
+        assert authed_client.get(f"/api/v1/layouts/{layout_id}").status_code == 404
+
+    def test_create_size(self, authed_client, sample_layout):
+        resp = create_size(authed_client, sample_layout, "10x10")
+        assert resp.status_code == 201
+        data = resp.json()
+        assert "id" in data
+        assert data["layout_id"] == sample_layout
+        assert data["name"] == "10x10"
+
+    def test_list_sizes(self, authed_client, sample_layout):
+        create_size(authed_client, sample_layout, "Small")
+        resp = authed_client.get(f"/api/v1/layouts/{sample_layout}/sizes")
+        assert resp.status_code == 200
+        sizes = resp.json()
+        assert isinstance(sizes, list)
+        assert any(s["name"] == "Small" for s in sizes)
+
+    def test_climbs_via_layout_route(self, client, sample_layout):
+        """Climbs endpoint works under /layouts/{layout_id}/climbs."""
+        resp = client.get(f"/api/v1/layouts/{sample_layout}/climbs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 0
+        assert data["climbs"] == []
+
+    def test_climbs_legacy_route_still_works(self, client, sample_layout):
+        """Legacy /walls/{layout_id}/climbs still responds."""
+        resp = client.get(f"/api/v1/walls/{sample_layout}/climbs")
+        assert resp.status_code == 200
+        assert "climbs" in resp.json()

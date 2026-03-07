@@ -74,7 +74,7 @@ interface ClimbSearchParams {
   climb?: string;
 }
 
-export const Route = createFileRoute("/$wallId/set")({
+export const Route = createFileRoute("/$layoutId/set")({
   component: SetPage,
   validateSearch: (search: Record<string, unknown>): ClimbSearchParams => ({
     climb: typeof search.climb === "string" ? search.climb : undefined,
@@ -1208,9 +1208,9 @@ function EditPanel({
 
 function SetPage() {
   const navigate = useNavigate();
-  const { wallId: wallIdParam } = Route.useParams();
+  const { layoutId: layoutIdParam } = Route.useParams();
   const { climb: climbParam } = Route.useSearch();
-  const { wall, loading, waking, error } = useWall(wallIdParam);
+  const { wall, loading, waking, error } = useWall(layoutIdParam);
   if (waking) {
     return (
       <div
@@ -1393,8 +1393,8 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
       ];
       if (response.climbs.length > 0) setSelectedIndex(0);
       navigate({
-        to: "/$wallId/set",
-        params: { wallId },
+        to: "/$layoutId/set",
+        params: { layoutId: wallId },
         search: {},
         replace: true,
       });
@@ -1845,8 +1845,8 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
             }}
             onClick={() =>
               navigate({
-                to: "/$wallId/view",
-                params: { wallId },
+                to: "/$layoutId/view",
+                params: { layoutId: wallId },
               })
             }
           >
@@ -1963,7 +1963,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
                       <button
                         onClick={() => {
                           setShowDisplaySettings(false);
-                          navigate({ to: "/$wallId/holds", params: { wallId } });
+                          navigate({ to: "/$layoutId/holds", params: { layoutId: wallId } });
                         }}
                         style={{
                           display: "flex",

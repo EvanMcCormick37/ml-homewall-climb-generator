@@ -17,7 +17,8 @@ class ClimbSortBy(str, Enum):
 class Climb(BaseModel):
     """Schema for climb response."""
     id: str
-    wall_id: str
+    layout_id: str          # new canonical field
+    wall_id: str            # backward-compat alias (same value as layout_id)
     angle: int
     name: str
     holdset: Holdset

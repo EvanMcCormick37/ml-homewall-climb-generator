@@ -42,7 +42,7 @@ import {
 
 // ─── Route ───────────────────────────────────────────────────────────────────
 
-export const Route = createFileRoute("/$wallId/view")({
+export const Route = createFileRoute("/$layoutId/view")({
   component: ViewPage,
   staleTime: 3_600_000,
 });
@@ -1003,13 +1003,13 @@ function ClimbDetails({
 
 function ViewPage() {
   const navigate = useNavigate();
-  const { wallId: wallIdParam } = Route.useParams();
+  const { layoutId: layoutIdParam } = Route.useParams();
   const {
     wall,
     loading: wallLoading,
     waking,
     error: wallError,
-  } = useWall(wallIdParam);
+  } = useWall(layoutIdParam);
   if (waking) return <WakingScreen />;
   if (wallLoading) {
     return (
@@ -1263,8 +1263,8 @@ function MainViewPage({
             }}
             onClick={() =>
               navigate({
-                to: "/$wallId/set",
-                params: { wallId },
+                to: "/$layoutId/set",
+                params: { layoutId: wallId },
               })
             }
           >

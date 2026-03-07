@@ -1,7 +1,7 @@
 import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useWalls } from "@/hooks/useWalls";
-import { getWallPhotoUrl } from "@/api/walls";
+import { useLayouts } from "@/hooks/useLayouts";
+import { getSizePhotoUrl } from "@/api/layouts";
 import { WakingScreen } from "@/components";
 import { useEffect, useRef } from "react";
 import { TITLE_STYLES } from "@/styles";
@@ -92,7 +92,7 @@ function HoldGridCanvas() {
 }
 
 function HomePage() {
-  const { walls, loading, waking, error } = useWalls();
+  const { layouts, loading, waking, error } = useLayouts();
   const navigate = useNavigate();
 
   return (
@@ -322,7 +322,7 @@ function HomePage() {
                   textAlign: "center",
                 }}
               >
-                — loading walls —
+                — loading layouts —
               </div>
             )}
             {waking && <WakingScreen />}
@@ -349,7 +349,7 @@ function HomePage() {
                 {/* Add your wall card — signed-in users only */}
                 <SignedIn>
                   <button
-                    onClick={() => navigate({ to: "/walls/new" })}
+                    onClick={() => navigate({ to: "/layouts/new" })}
                     className="bz-card"
                     style={{
                       position: "relative",
@@ -425,13 +425,21 @@ function HomePage() {
                   </button>
                 </SignedIn>
 
-                {walls.map((wall) => (
+                {layouts.map((layout) => {
+                  const firstSize = layout.sizes[0];
+                  const photoUrl = firstSize
+                    ? getSizePhotoUrl(layout.id, firstSize.id)
+                    : null;
+                  const dims = firstSize?.width_ft && firstSize?.height_ft
+                    ? `${firstSize.width_ft}×${firstSize.height_ft} ft`
+                    : null;
+                  return (
                   <button
-                    key={wall.id}
+                    key={layout.id}
                     onClick={() =>
                       navigate({
-                        to: "/$wallId/set",
-                        params: { wallId: wall.id },
+                        to: "/$layoutId/set",
+                        params: { layoutId: layout.id },
                       })
                     }
                     className="bz-card"
@@ -446,17 +454,19 @@ function HomePage() {
                         background: "#1c1c1e",
                       }}
                     >
-                      <img
-                        src={getWallPhotoUrl(wall.id)}
-                        alt={wall.name}
-                        className="bz-card-img"
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
+                      {photoUrl && (
+                        <img
+                          src={photoUrl}
+                          alt={layout.name}
+                          className="bz-card-img"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      )}
                     </div>
 
                     {/* Info */}
@@ -472,7 +482,7 @@ function HomePage() {
                           marginBottom: "6px",
                         }}
                       >
-                        {wall.name}
+                        {layout.name}
                       </div>
                       <div
                         className="bz-mono"
@@ -482,10 +492,9 @@ function HomePage() {
                           letterSpacing: "0.06em",
                         }}
                       >
-                        {wall.num_holds} holds
-                        {wall.dimensions &&
-                          ` · ${wall.dimensions[0]}×${wall.dimensions[1]} ft`}
-                        {wall.angle != null && ` · ${wall.angle}°`}
+                        {layout.num_holds} holds
+                        {dims && ` · ${dims}`}
+                        {layout.sizes.length > 1 && ` · ${layout.sizes.length} sizes`}
                       </div>
                     </div>
 
@@ -498,7 +507,8 @@ function HomePage() {
                       }}
                     />
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

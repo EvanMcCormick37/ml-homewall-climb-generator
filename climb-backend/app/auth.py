@@ -135,6 +135,49 @@ async def get_accessible_wall(
     raise HTTPException(status_code=403, detail="Access denied")
 
 
+async def get_accessible_layout(
+    layout_id: str,
+    user: dict | None = Depends(get_current_user),
+    share_token: str | None = Query(None),
+) -> dict:
+    """
+    Dependency that returns a layout dict if the requesting user has access.
+
+    Access rules mirror get_accessible_wall:
+    - Public layouts: anyone
+    - Owner: always
+    - Private/unlisted with valid share_token: anyone with the token
+    - Otherwise: 403
+    """
+    layout = services.get_layout_visibility(layout_id)
+    if not layout:
+        raise HTTPException(status_code=404, detail="Layout not found")
+
+    if layout["visibility"] == "public":
+        return layout
+    if user and layout["owner_id"] == user["user_id"]:
+        return layout
+    if layout["share_token"] and share_token == layout["share_token"]:
+        return layout
+
+    raise HTTPException(status_code=403, detail="Access denied")
+
+
+async def require_layout_owner(
+    layout_id: str,
+    user: dict = Depends(require_auth),
+) -> dict:
+    """
+    Dependency that requires the requesting user to be the layout owner.
+    """
+    layout = services.get_layout_visibility(layout_id)
+    if not layout:
+        raise HTTPException(status_code=404, detail="Layout not found")
+    if layout["owner_id"] != user["user_id"]:
+        raise HTTPException(status_code=403, detail="You don't own this layout")
+    return layout
+
+
 async def require_wall_owner(
     wall_id: str,
     user: dict = Depends(require_auth),  # 401 if not logged in

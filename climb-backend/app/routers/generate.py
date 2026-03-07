@@ -19,7 +19,7 @@ router = APIRouter()
     description="Generate climbs for a wall using the pre-trained DDPM model.",
 )
 def generate_climbs(
-    wall_id: str,
+    layout_id: str,
     num_climbs: int = Query(..., ge=1, le=10),
     grade: str = Query("V4"),
     grade_scale: GradeScale = Query(GradeScale.V_GRADE),
@@ -56,27 +56,27 @@ def generate_climbs(
         x_offset=x_offset,
         seed=seed,
     )
-    # Validate wall exists
-    if not services.wall_exists(wall_id):
-        raise HTTPException(status_code=404, detail="Wall not found")
+    # Validate layout exists
+    if not services.layout_exists(layout_id):
+        raise HTTPException(status_code=404, detail="Layout not found")
 
-    # Validate wall has holds
-    num_holds = services.get_num_holds(wall_id)
+    # Validate layout has holds
+    num_holds = services.get_num_holds(layout_id)
     if not num_holds or num_holds == 0:
         raise HTTPException(
             status_code=400,
-            detail="Wall has no holds. Upload holds before generating.",
+            detail="Layout has no holds. Upload holds before generating.",
         )
 
     try:
-        generated = services.generate_climbs(wall_id, request, settings)
+        generated = services.generate_climbs(layout_id, request, settings)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
 
     return GenerateResponse(
-        wall_id=wall_id,
+        wall_id=layout_id,
         climbs=generated,
         num_generated=len(generated),
         parameters=request,

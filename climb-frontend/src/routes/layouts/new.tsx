@@ -3,12 +3,13 @@ import { useState, useCallback, useRef } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { useImageCrop } from "@/hooks/useImageCrop";
 import { ImageCropper } from "@/components";
-import { createWall } from "@/api/walls";
+import { createLayout } from "@/api/layouts";
+import { createSize } from "@/api/sizes";
 import { ArrowLeft, Globe, Lock, Link } from "lucide-react";
-import type { WallVisibility } from "@/types";
+import type { Visibility } from "@/types";
 
-export const Route = createFileRoute("/walls/new")({
-  component: NewWallPage,
+export const Route = createFileRoute("/layouts/new")({
+  component: NewLayoutPage,
 });
 
 const GLOBAL_STYLES = `
@@ -43,7 +44,7 @@ const STEP_LABELS: Record<Step, string> = {
 };
 
 const VISIBILITY_OPTIONS: {
-  value: WallVisibility;
+  value: Visibility;
   label: string;
   icon: React.ReactNode;
   description: string;
@@ -55,7 +56,7 @@ const VISIBILITY_OPTIONS: {
     icon: <Globe size={22} />,
     description: "Open to everyone",
     detail:
-      "Anyone can view this wall and set climbs on it. Ideal for community boards.",
+      "Anyone can view this layout and set climbs on it. Ideal for community boards.",
   },
   {
     value: "unlisted",
@@ -75,11 +76,11 @@ const VISIBILITY_OPTIONS: {
   },
 ];
 
-function NewWallPage() {
+function NewLayoutPage() {
   const navigate = useNavigate();
   const { isSignedIn, isLoaded } = useUser();
   const [step, setStep] = useState<Step>("visibility");
-  const [visibility, setVisibility] = useState<WallVisibility>("public");
+  const [visibility, setVisibility] = useState<Visibility>("public");
   const [croppedBlob, setCroppedBlob] = useState<Blob | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +164,7 @@ function NewWallPage() {
       e.preventDefault();
 
       if (!croppedBlob || !name.trim()) {
-        setError("Please provide a wall name");
+        setError("Please provide a layout name");
         return;
       }
 
@@ -171,35 +172,55 @@ function NewWallPage() {
       setError(null);
 
       try {
-        const file = new File([croppedBlob], "wall-photo.jpg", {
+        // Step 1: create the layout (no photo yet)
+        const layoutResponse = await createLayout({
+          name: name.trim(),
+          visibility,
+        });
+
+        // Step 2: create first size with the photo and dimensions
+        const photoFile = new File([croppedBlob], "wall-photo.jpg", {
           type: "image/jpeg",
         });
+        const widthFt = parseFloat(width);
+        const heightFt = parseFloat(height);
+        const angleDeg = parseInt(angle, 10);
 
-        const dimensions: [number, number] = [
-          parseInt(width, 10),
-          parseInt(height, 10),
-        ];
-
-        const response = await createWall({
-          name: name.trim(),
-          photo: file,
-          dimensions,
-          visibility,
-          ...(parseInt(angle, 10) && { angle: parseInt(angle, 10) }),
+        await createSize(layoutResponse.id, {
+          name: `${widthFt}×${heightFt} ft`,
+          width_ft: widthFt || undefined,
+          height_ft: heightFt || undefined,
+          ...(angleDeg > 0 && { edge_top: angleDeg }), // store angle hint in edge_top for now
+          photo: photoFile,
         });
 
-        navigate({ to: "/$wallId/holds", params: { wallId: response.id } });
+        navigate({
+          to: "/$layoutId/holds",
+          params: { layoutId: layoutResponse.id },
+        });
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "Failed to create wall";
+          err instanceof Error ? err.message : "Failed to create layout";
         setError(message);
         setIsSubmitting(false);
       }
     },
-    [croppedBlob, name, width, height, angle, navigate],
+    [croppedBlob, name, width, height, angle, visibility, navigate],
   );
 
-  // Auth check — wait for Clerk to load
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    background: "var(--surface2)",
+    color: "var(--text-primary)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius)",
+    padding: "10px 14px",
+    fontFamily: "'Space Mono', monospace",
+    fontSize: "0.75rem",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
   if (!isLoaded) {
     return (
       <>
@@ -238,14 +259,6 @@ function NewWallPage() {
             color: "var(--text-primary)",
           }}
         >
-          <div
-            style={{
-              width: "2px",
-              height: "40px",
-              background:
-                "linear-gradient(to bottom, transparent, var(--cyan))",
-            }}
-          />
           <h2
             className="bz-oswald"
             style={{
@@ -254,20 +267,8 @@ function NewWallPage() {
               letterSpacing: "0.08em",
             }}
           >
-            Sign in to add a wall
+            Sign in to add a layout
           </h2>
-          <p
-            className="bz-mono"
-            style={{
-              fontSize: "0.75rem",
-              color: "var(--text-muted)",
-              textAlign: "center",
-              maxWidth: "320px",
-              lineHeight: 1.75,
-            }}
-          >
-            You need to be signed in to create a new wall.
-          </p>
           <div style={{ display: "flex", gap: "12px" }}>
             <button
               onClick={() => navigate({ to: "/signIn" })}
@@ -311,18 +312,6 @@ function NewWallPage() {
   }
 
   const stepIndex = STEPS.indexOf(step);
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    background: "var(--surface2)",
-    color: "var(--text-primary)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius)",
-    padding: "10px 14px",
-    fontFamily: "'Space Mono', monospace",
-    fontSize: "0.75rem",
-    outline: "none",
-    boxSizing: "border-box",
-  };
 
   return (
     <>
@@ -379,11 +368,7 @@ function NewWallPage() {
           />
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div
-              style={{
-                width: "2px",
-                height: "14px",
-                background: "var(--cyan)",
-              }}
+              style={{ width: "2px", height: "14px", background: "var(--cyan)" }}
             />
             <span
               className="bz-oswald"
@@ -416,7 +401,7 @@ function NewWallPage() {
                 marginBottom: "32px",
               }}
             >
-              {step === "visibility" && "Choose who can access this wall"}
+              {step === "visibility" && "Choose who can access this layout"}
               {step === "upload" && "Upload a photo of your climbing wall"}
               {step === "crop" && "Crop the image to align with the wall edges"}
               {step === "details" && "Add wall details and submit"}
@@ -561,21 +546,16 @@ function NewWallPage() {
                           }
                         }}
                       >
-                        {/* Icon */}
                         <div
                           style={{
                             flexShrink: 0,
                             marginTop: "2px",
-                            color: isSelected
-                              ? "var(--cyan)"
-                              : "var(--text-dim)",
+                            color: isSelected ? "var(--cyan)" : "var(--text-dim)",
                             transition: "color 0.15s",
                           }}
                         >
                           {opt.icon}
                         </div>
-
-                        {/* Text */}
                         <div style={{ flex: 1 }}>
                           <div
                             style={{
@@ -624,8 +604,6 @@ function NewWallPage() {
                             {opt.detail}
                           </p>
                         </div>
-
-                        {/* Selection indicator */}
                         <div
                           style={{
                             flexShrink: 0,
@@ -656,7 +634,6 @@ function NewWallPage() {
                     );
                   })}
                 </div>
-
                 <button
                   onClick={() => setStep("upload")}
                   style={{
@@ -741,10 +718,7 @@ function NewWallPage() {
                 </p>
                 <p
                   className="bz-mono"
-                  style={{
-                    fontSize: "0.65rem",
-                    color: "var(--text-dim)",
-                  }}
+                  style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}
                 >
                   or click to browse · JPEG or PNG
                 </p>
@@ -778,11 +752,9 @@ function NewWallPage() {
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       cursor: "pointer",
-                      transition: "all 0.15s",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor =
-                        "var(--border-active)";
+                      e.currentTarget.style.borderColor = "var(--border-active)";
                       e.currentTarget.style.color = "var(--text-primary)";
                     }}
                     onMouseLeave={(e) => {
@@ -807,7 +779,6 @@ function NewWallPage() {
                       fontWeight: 700,
                       textTransform: "uppercase",
                       cursor: "pointer",
-                      transition: "opacity 0.15s",
                     }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.opacity = "0.85")
@@ -874,7 +845,6 @@ function NewWallPage() {
                         textTransform: "uppercase",
                         color: "var(--text-muted)",
                         cursor: "pointer",
-                        transition: "color 0.15s",
                       }}
                       onMouseEnter={(e) =>
                         (e.currentTarget.style.color = "var(--cyan)")
@@ -888,11 +858,11 @@ function NewWallPage() {
                   </div>
                 </div>
 
-                {/* Wall Name */}
+                {/* Layout Name */}
                 <div style={{ marginBottom: "16px" }}>
                   <label
                     className="bz-mono"
-                    htmlFor="wall-name"
+                    htmlFor="layout-name"
                     style={{
                       display: "block",
                       fontSize: "0.6rem",
@@ -905,7 +875,7 @@ function NewWallPage() {
                     Wall Name <span style={{ color: "#f87171" }}>*</span>
                   </label>
                   <input
-                    id="wall-name"
+                    id="layout-name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -916,8 +886,7 @@ function NewWallPage() {
                       transition: "border-color 0.15s",
                     }}
                     onFocus={(e) =>
-                      (e.currentTarget.style.borderColor =
-                        "var(--border-active)")
+                      (e.currentTarget.style.borderColor = "var(--border-active)")
                     }
                     onBlur={(e) =>
                       (e.currentTarget.style.borderColor = "var(--border)")
@@ -942,11 +911,7 @@ function NewWallPage() {
                     in feet.)
                   </label>
                   <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "10px" }}
                   >
                     <input
                       type="number"
@@ -1017,11 +982,7 @@ function NewWallPage() {
                     <span style={{ color: "var(--text-dim)" }}>(optional)</span>
                   </label>
                   <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "10px" }}
                   >
                     <input
                       id="wall-angle"
@@ -1046,10 +1007,7 @@ function NewWallPage() {
                     />
                     <span
                       className="bz-mono"
-                      style={{
-                        fontSize: "0.65rem",
-                        color: "var(--text-muted)",
-                      }}
+                      style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}
                     >
                       degrees
                     </span>
@@ -1072,11 +1030,9 @@ function NewWallPage() {
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
                       cursor: "pointer",
-                      transition: "all 0.15s",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor =
-                        "var(--border-active)";
+                      e.currentTarget.style.borderColor = "var(--border-active)";
                       e.currentTarget.style.color = "var(--text-primary)";
                     }}
                     onMouseLeave={(e) => {
@@ -1093,28 +1049,18 @@ function NewWallPage() {
                       !name.trim() ||
                       !width ||
                       !height ||
-                      parseInt(width, 10) <= 0 ||
-                      parseInt(height, 10) <= 0
+                      parseFloat(width) <= 0 ||
+                      parseFloat(height) <= 0
                     }
                     style={{
                       flex: 1,
                       padding: "10px 18px",
                       background:
-                        isSubmitting ||
-                        !name.trim() ||
-                        !width ||
-                        !height ||
-                        parseInt(width, 10) <= 0 ||
-                        parseInt(height, 10) <= 0
+                        isSubmitting || !name.trim() || !width || !height
                           ? "var(--surface2)"
                           : "var(--cyan)",
                       color:
-                        isSubmitting ||
-                        !name.trim() ||
-                        !width ||
-                        !height ||
-                        parseInt(width, 10) <= 0 ||
-                        parseInt(height, 10) <= 0
+                        isSubmitting || !name.trim() || !width || !height
                           ? "var(--text-muted)"
                           : "#09090b",
                       border: "none",
@@ -1131,9 +1077,7 @@ function NewWallPage() {
                       transition: "all 0.15s",
                     }}
                   >
-                    {isSubmitting
-                      ? "Creating Wall…"
-                      : "Create Wall & Add Holds"}
+                    {isSubmitting ? "Creating…" : "Create Wall & Add Holds"}
                   </button>
                 </div>
               </form>

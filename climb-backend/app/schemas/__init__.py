@@ -13,6 +13,19 @@ from app.schemas.walls import (
     WallMetadata,
     WallListResponse,
     WallCreateResponse,
+    SetHoldsResponse as WallSetHoldsResponse,
+)
+from app.schemas.sizes import (
+    SizeMetadata,
+    SizeCreate,
+    SizeCreateResponse,
+)
+from app.schemas.layouts import (
+    LayoutCreate,
+    LayoutDetail,
+    LayoutMetadata,
+    LayoutListResponse,
+    LayoutCreateResponse,
     SetHoldsResponse,
 )
 from app.schemas.climbs import (
@@ -39,13 +52,24 @@ __all__ = [
     "HoldPosition",
     "HoldDetail",
     "Holdset",
-    # Walls
+    # Layouts (new)
+    "LayoutCreate",
+    "LayoutDetail",
+    "LayoutMetadata",
+    "LayoutListResponse",
+    "LayoutCreateResponse",
+    "SetHoldsResponse",
+    # Sizes (new)
+    "SizeMetadata",
+    "SizeCreate",
+    "SizeCreateResponse",
+    # Walls (legacy — kept for backward compat)
     "WallCreate",
     "WallDetail",
     "WallMetadata",
     "WallListResponse",
     "WallCreateResponse",
-    "SetHoldsResponse",
+    "WallSetHoldsResponse",
     # Climbs
     "Climb",
     "ClimbCreate",

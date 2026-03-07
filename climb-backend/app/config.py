@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     
     # Paths
     DATA_DIR: Path = Path("data")
-    WALLS_DIR: Path = DATA_DIR / "walls"
+    WALLS_DIR: Path = DATA_DIR / "walls"      # legacy: migrated wall photos live here
+    LAYOUTS_DIR: Path = DATA_DIR / "layouts"  # new: layout/size photos live here
     DB_PATH: Path = DATA_DIR / "storage.db"
     
     # DDPM model paths & hyperparams

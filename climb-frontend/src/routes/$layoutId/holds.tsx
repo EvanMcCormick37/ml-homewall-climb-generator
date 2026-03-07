@@ -1,27 +1,29 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { getWall, getWallPhotoUrl, setHolds } from "@/api/walls";
+import { getLayout, setLayoutHolds, getSizePhotoUrl } from "@/api/layouts";
 import { useHolds } from "@/hooks/useHolds";
 import { HoldFeaturesSidebar, EnabledFeaturesMenu } from "@/components";
 import { Eraser, Hand, Settings, Plus, Edit } from "lucide-react";
 import { GLOBAL_STYLES } from "@/styles";
-import type { HoldDetail, WallDetail, HoldMode, Tag } from "@/types";
+import type { HoldDetail, LayoutDetail, HoldMode, Tag } from "@/types";
 
-export const Route = createFileRoute("/$wallId/holds")({
+export const Route = createFileRoute("/$layoutId/holds")({
   component: HoldsEditorPage,
   loader: async ({ params }) => {
-    const wall = await getWall(params.wallId);
-    return { wall };
+    const layout = await getLayout(params.layoutId);
+    return { layout };
   },
 });
 
 function HoldsEditorPage() {
   const navigate = useNavigate();
-  const { wall } = Route.useLoaderData() as { wall: WallDetail };
-  const wallId = wall.metadata.id;
+  const { layout } = Route.useLoaderData() as { layout: LayoutDetail };
+  const layoutId = layout.metadata.id;
+  const firstSize = layout.metadata.sizes[0];
+  const sizeId = firstSize?.id;
   const wallDimensions = {
-    width: wall.metadata.dimensions[0],
-    height: wall.metadata.dimensions[1],
+    width: firstSize?.width_ft ?? 12,
+    height: firstSize?.height_ft ?? 12,
   };
 
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -132,14 +134,16 @@ function HoldsEditorPage() {
         });
       }
     };
-    img.src = getWallPhotoUrl(wallId);
-  }, [wallId]);
+    if (sizeId) {
+      img.src = getSizePhotoUrl(layoutId, sizeId);
+    }
+  }, [layoutId, sizeId]);
 
   useEffect(() => {
-    if (wall.holds && imageDimensions.width > 0) {
-      loadHolds(wall.holds);
+    if (layout.holds && imageDimensions.width > 0) {
+      loadHolds(layout.holds);
     }
-  }, [wall.holds, loadHolds, imageDimensions.width]);
+  }, [layout.holds, loadHolds, imageDimensions.width]);
 
   const getImageCoords = useCallback(
     (e: React.MouseEvent | MouseEvent) => {
@@ -387,21 +391,16 @@ function HoldsEditorPage() {
     return () => window.removeEventListener("keydown", handleKeydown);
   }, [removeLastHold]);
 
-  // Tag hotkeys: p=pinch, m=macro, s=sloper, v=versatile, j=jug — sticky toggle
+  // Tag hotkeys
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
       if (!enabledFeatures.tags) return;
       const tagMap: Record<string, Tag> = {
-        p: "pinch",
-        P: "pinch",
-        m: "macro",
-        M: "macro",
-        s: "sloper",
-        S: "sloper",
-        v: "versatile",
-        V: "versatile",
-        j: "jug",
-        J: "jug",
+        p: "pinch", P: "pinch",
+        m: "macro", M: "macro",
+        s: "sloper", S: "sloper",
+        v: "versatile", V: "versatile",
+        j: "jug", J: "jug",
       };
       const tag = tagMap[e.key];
       if (!tag) return;
@@ -684,7 +683,7 @@ function HoldsEditorPage() {
             </span>
           </button>
 
-          {/* Center: wall name + mode switcher */}
+          {/* Center: layout name + mode switcher */}
           <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <div
@@ -702,7 +701,7 @@ function HoldsEditorPage() {
                   letterSpacing: "0.04em",
                 }}
               >
-                {wall.metadata.name}
+                {layout.metadata.name}
               </span>
               <span
                 className="bz-mono"
@@ -806,7 +805,7 @@ function HoldsEditorPage() {
             </button>
             <button
               onClick={() =>
-                navigate({ to: "/$wallId/set", params: { wallId } })
+                navigate({ to: "/$layoutId/set", params: { layoutId } })
               }
               className="bz-mono"
               style={{
@@ -835,8 +834,8 @@ function HoldsEditorPage() {
                 setIsSubmitting(true);
                 setError(null);
                 try {
-                  await setHolds(wallId, holds);
-                  navigate({ to: "/$wallId/set", params: { wallId } });
+                  await setLayoutHolds(layoutId, holds);
+                  navigate({ to: "/$layoutId/set", params: { layoutId } });
                 } catch (err) {
                   setError(
                     err instanceof Error ? err.message : "Failed to save holds",
