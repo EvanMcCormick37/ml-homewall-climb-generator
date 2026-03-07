@@ -12,10 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignUpRouteImport } from './routes/signUp'
 import { Route as SignInRouteImport } from './routes/signIn'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as WallsNewRouteImport } from './routes/walls/new'
-import { Route as WallIdViewRouteImport } from './routes/$wallId/view'
-import { Route as WallIdSetRouteImport } from './routes/$wallId/set'
-import { Route as WallIdHoldsRouteImport } from './routes/$wallId/holds'
+import { Route as LayoutsNewRouteImport } from './routes/layouts/new'
+import { Route as LayoutIdViewRouteImport } from './routes/$layoutId/view'
+import { Route as LayoutIdSetRouteImport } from './routes/$layoutId/set'
+import { Route as LayoutIdHoldsRouteImport } from './routes/$layoutId/holds'
 
 const SignUpRoute = SignUpRouteImport.update({
   id: '/signUp',
@@ -32,24 +32,24 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallsNewRoute = WallsNewRouteImport.update({
-  id: '/walls/new',
-  path: '/walls/new',
+const LayoutsNewRoute = LayoutsNewRouteImport.update({
+  id: '/layouts/new',
+  path: '/layouts/new',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallIdViewRoute = WallIdViewRouteImport.update({
-  id: '/$wallId/view',
-  path: '/$wallId/view',
+const LayoutIdViewRoute = LayoutIdViewRouteImport.update({
+  id: '/$layoutId/view',
+  path: '/$layoutId/view',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallIdSetRoute = WallIdSetRouteImport.update({
-  id: '/$wallId/set',
-  path: '/$wallId/set',
+const LayoutIdSetRoute = LayoutIdSetRouteImport.update({
+  id: '/$layoutId/set',
+  path: '/$layoutId/set',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallIdHoldsRoute = WallIdHoldsRouteImport.update({
-  id: '/$wallId/holds',
-  path: '/$wallId/holds',
+const LayoutIdHoldsRoute = LayoutIdHoldsRouteImport.update({
+  id: '/$layoutId/holds',
+  path: '/$layoutId/holds',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -57,29 +57,29 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/signIn': typeof SignInRoute
   '/signUp': typeof SignUpRoute
-  '/$wallId/holds': typeof WallIdHoldsRoute
-  '/$wallId/set': typeof WallIdSetRoute
-  '/$wallId/view': typeof WallIdViewRoute
-  '/walls/new': typeof WallsNewRoute
+  '/$layoutId/holds': typeof LayoutIdHoldsRoute
+  '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/view': typeof LayoutIdViewRoute
+  '/layouts/new': typeof LayoutsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/signIn': typeof SignInRoute
   '/signUp': typeof SignUpRoute
-  '/$wallId/holds': typeof WallIdHoldsRoute
-  '/$wallId/set': typeof WallIdSetRoute
-  '/$wallId/view': typeof WallIdViewRoute
-  '/walls/new': typeof WallsNewRoute
+  '/$layoutId/holds': typeof LayoutIdHoldsRoute
+  '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/view': typeof LayoutIdViewRoute
+  '/layouts/new': typeof LayoutsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/signIn': typeof SignInRoute
   '/signUp': typeof SignUpRoute
-  '/$wallId/holds': typeof WallIdHoldsRoute
-  '/$wallId/set': typeof WallIdSetRoute
-  '/$wallId/view': typeof WallIdViewRoute
-  '/walls/new': typeof WallsNewRoute
+  '/$layoutId/holds': typeof LayoutIdHoldsRoute
+  '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/view': typeof LayoutIdViewRoute
+  '/layouts/new': typeof LayoutsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -87,38 +87,38 @@ export interface FileRouteTypes {
     | '/'
     | '/signIn'
     | '/signUp'
-    | '/$wallId/holds'
-    | '/$wallId/set'
-    | '/$wallId/view'
-    | '/walls/new'
+    | '/$layoutId/holds'
+    | '/$layoutId/set'
+    | '/$layoutId/view'
+    | '/layouts/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/signIn'
     | '/signUp'
-    | '/$wallId/holds'
-    | '/$wallId/set'
-    | '/$wallId/view'
-    | '/walls/new'
+    | '/$layoutId/holds'
+    | '/$layoutId/set'
+    | '/$layoutId/view'
+    | '/layouts/new'
   id:
     | '__root__'
     | '/'
     | '/signIn'
     | '/signUp'
-    | '/$wallId/holds'
-    | '/$wallId/set'
-    | '/$wallId/view'
-    | '/walls/new'
+    | '/$layoutId/holds'
+    | '/$layoutId/set'
+    | '/$layoutId/view'
+    | '/layouts/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
-  WallIdHoldsRoute: typeof WallIdHoldsRoute
-  WallIdSetRoute: typeof WallIdSetRoute
-  WallIdViewRoute: typeof WallIdViewRoute
-  WallsNewRoute: typeof WallsNewRoute
+  LayoutIdHoldsRoute: typeof LayoutIdHoldsRoute
+  LayoutIdSetRoute: typeof LayoutIdSetRoute
+  LayoutIdViewRoute: typeof LayoutIdViewRoute
+  LayoutsNewRoute: typeof LayoutsNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -144,32 +144,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/walls/new': {
-      id: '/walls/new'
-      path: '/walls/new'
-      fullPath: '/walls/new'
-      preLoaderRoute: typeof WallsNewRouteImport
+    '/layouts/new': {
+      id: '/layouts/new'
+      path: '/layouts/new'
+      fullPath: '/layouts/new'
+      preLoaderRoute: typeof LayoutsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$wallId/view': {
-      id: '/$wallId/view'
-      path: '/$wallId/view'
-      fullPath: '/$wallId/view'
-      preLoaderRoute: typeof WallIdViewRouteImport
+    '/$layoutId/view': {
+      id: '/$layoutId/view'
+      path: '/$layoutId/view'
+      fullPath: '/$layoutId/view'
+      preLoaderRoute: typeof LayoutIdViewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$wallId/set': {
-      id: '/$wallId/set'
-      path: '/$wallId/set'
-      fullPath: '/$wallId/set'
-      preLoaderRoute: typeof WallIdSetRouteImport
+    '/$layoutId/set': {
+      id: '/$layoutId/set'
+      path: '/$layoutId/set'
+      fullPath: '/$layoutId/set'
+      preLoaderRoute: typeof LayoutIdSetRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/$wallId/holds': {
-      id: '/$wallId/holds'
-      path: '/$wallId/holds'
-      fullPath: '/$wallId/holds'
-      preLoaderRoute: typeof WallIdHoldsRouteImport
+    '/$layoutId/holds': {
+      id: '/$layoutId/holds'
+      path: '/$layoutId/holds'
+      fullPath: '/$layoutId/holds'
+      preLoaderRoute: typeof LayoutIdHoldsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -179,10 +179,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
-  WallIdHoldsRoute: WallIdHoldsRoute,
-  WallIdSetRoute: WallIdSetRoute,
-  WallIdViewRoute: WallIdViewRoute,
-  WallsNewRoute: WallsNewRoute,
+  LayoutIdHoldsRoute: LayoutIdHoldsRoute,
+  LayoutIdSetRoute: LayoutIdSetRoute,
+  LayoutIdViewRoute: LayoutIdViewRoute,
+  LayoutsNewRoute: LayoutsNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
