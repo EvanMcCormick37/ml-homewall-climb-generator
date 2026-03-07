@@ -65,7 +65,6 @@ def init_db():
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # ── Users ─────────────────────────────────────────────────────────────
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
@@ -77,14 +76,13 @@ def init_db():
             )
         """)
 
-        # ── Layouts ───────────────────────────────────────────────────────────
-        # A layout is a unique hold arrangement (was previously "wall").
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS layouts (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 description TEXT,
                 dimensions INTEGER,
+                default_angle INTEGER,
                 owner_id TEXT,
                 visibility TEXT DEFAULT 'public',
                 share_token TEXT,
@@ -93,15 +91,12 @@ def init_db():
             )
         """)
 
-        # ── Sizes ─────────────────────────────────────────────────────────────
-        # A size is a physical variant of a layout (different dimensions/photo).
-        # edge_* define which holds from the layout's master set are in-bounds.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS sizes (
                 id TEXT PRIMARY KEY,
                 layout_id TEXT NOT NULL,
                 name TEXT NOT NULL,
-                edges TEXT NOT NULL,--serialized list of numbers,
+                edges TEXT NOT NULL,--4 edges of the layout size. List of 4 floats, [left, right, bottom, top]
                 kickboard BOOLEAN,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -109,28 +104,6 @@ def init_db():
             )
         """)
 
-        # ── Walls (legacy) ───────────────────────────────────────────────────
-        # Kept for backward compat until Phase 6 cleanup.
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS walls (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                photo_path TEXT NOT NULL,
-                num_holds INTEGER DEFAULT 0,
-                num_climbs INTEGER DEFAULT 0,
-                dimensions TEXT,
-                angle INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                owner_id TEXT,
-                visibility TEXT DEFAULT 'public',
-                share_token TEXT
-            )
-        """)
-
-        # ── Holds ─────────────────────────────────────────────────────────────
-        # Holds belong to a layout (shared across all sizes of that layout).
-        # layout_id is the new FK; wall_id is kept for backward compat.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS holds (
                 id TEXT PRIMARY KEY,
@@ -147,9 +120,6 @@ def init_db():
             )
         """)
 
-        # ── Climbs ────────────────────────────────────────────────────────────
-        # Climbs belong to a layout; size_id optionally records what size they
-        # were set on. wall_id is kept for backward compat.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS climbs (
                 id TEXT PRIMARY KEY,
@@ -164,6 +134,6 @@ def init_db():
                 setter_name TEXT,
                 setter_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE,
+                FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE
             )
         """)

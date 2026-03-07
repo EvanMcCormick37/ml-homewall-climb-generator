@@ -14,6 +14,7 @@ import { Route as SignInRouteImport } from './routes/signIn'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LayoutsNewRouteImport } from './routes/layouts/new'
 import { Route as LayoutIdViewRouteImport } from './routes/$layoutId/view'
+import { Route as LayoutIdSizesRouteImport } from './routes/$layoutId/sizes'
 import { Route as LayoutIdSetRouteImport } from './routes/$layoutId/set'
 import { Route as LayoutIdHoldsRouteImport } from './routes/$layoutId/holds'
 
@@ -42,6 +43,11 @@ const LayoutIdViewRoute = LayoutIdViewRouteImport.update({
   path: '/$layoutId/view',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LayoutIdSizesRoute = LayoutIdSizesRouteImport.update({
+  id: '/$layoutId/sizes',
+  path: '/$layoutId/sizes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LayoutIdSetRoute = LayoutIdSetRouteImport.update({
   id: '/$layoutId/set',
   path: '/$layoutId/set',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/signUp': typeof SignUpRoute
   '/$layoutId/holds': typeof LayoutIdHoldsRoute
   '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/sizes': typeof LayoutIdSizesRoute
   '/$layoutId/view': typeof LayoutIdViewRoute
   '/layouts/new': typeof LayoutsNewRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/signUp': typeof SignUpRoute
   '/$layoutId/holds': typeof LayoutIdHoldsRoute
   '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/sizes': typeof LayoutIdSizesRoute
   '/$layoutId/view': typeof LayoutIdViewRoute
   '/layouts/new': typeof LayoutsNewRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/signUp': typeof SignUpRoute
   '/$layoutId/holds': typeof LayoutIdHoldsRoute
   '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/sizes': typeof LayoutIdSizesRoute
   '/$layoutId/view': typeof LayoutIdViewRoute
   '/layouts/new': typeof LayoutsNewRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/signUp'
     | '/$layoutId/holds'
     | '/$layoutId/set'
+    | '/$layoutId/sizes'
     | '/$layoutId/view'
     | '/layouts/new'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/signUp'
     | '/$layoutId/holds'
     | '/$layoutId/set'
+    | '/$layoutId/sizes'
     | '/$layoutId/view'
     | '/layouts/new'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/signUp'
     | '/$layoutId/holds'
     | '/$layoutId/set'
+    | '/$layoutId/sizes'
     | '/$layoutId/view'
     | '/layouts/new'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   SignUpRoute: typeof SignUpRoute
   LayoutIdHoldsRoute: typeof LayoutIdHoldsRoute
   LayoutIdSetRoute: typeof LayoutIdSetRoute
+  LayoutIdSizesRoute: typeof LayoutIdSizesRoute
   LayoutIdViewRoute: typeof LayoutIdViewRoute
   LayoutsNewRoute: typeof LayoutsNewRoute
 }
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutIdViewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$layoutId/sizes': {
+      id: '/$layoutId/sizes'
+      path: '/$layoutId/sizes'
+      fullPath: '/$layoutId/sizes'
+      preLoaderRoute: typeof LayoutIdSizesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$layoutId/set': {
       id: '/$layoutId/set'
       path: '/$layoutId/set'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignUpRoute: SignUpRoute,
   LayoutIdHoldsRoute: LayoutIdHoldsRoute,
   LayoutIdSetRoute: LayoutIdSetRoute,
+  LayoutIdSizesRoute: LayoutIdSizesRoute,
   LayoutIdViewRoute: LayoutIdViewRoute,
   LayoutsNewRoute: LayoutsNewRoute,
 }

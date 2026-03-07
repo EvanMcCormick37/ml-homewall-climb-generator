@@ -2,8 +2,9 @@
  * Types for layout/size data structures.
  *
  * A layout is a unique hold arrangement (replaces the old Wall concept).
- * A size is a physical dimension variant of a layout (different photo/dimensions).
+ * A size is a physical dimension variant of a layout (different edges/kickboard).
  * Climbs and holds are tied to a layout, not a size.
+ * Photos are owned by the layout, not the size.
  */
 import type { HoldDetail } from "./wall";
 
@@ -11,14 +12,8 @@ export interface SizeMetadata {
   id: string;
   layout_id: string;
   name: string;
-  width_ft: number | null;
-  height_ft: number | null;
-  edge_left: number;
-  edge_right: number | null;
-  edge_bottom: number;
-  edge_top: number | null;
-  photo_url: string | null;
-  num_climbs: number;
+  edges: number[]; // [left, right, bottom, top] in feet
+  kickboard: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -27,7 +22,8 @@ export interface LayoutMetadata {
   id: string;
   name: string;
   description: string | null;
-  num_holds: number;
+  dimensions: number[]; // [width_ft, height_ft]
+  default_angle: number | null;
   sizes: SizeMetadata[];
   owner_id: string;
   visibility: "public" | "private" | "unlisted";
@@ -48,6 +44,8 @@ export interface LayoutListResponse {
 
 export interface LayoutCreate {
   name: string;
+  dimensions: number[]; // [width_ft, height_ft]
+  default_angle?: number | null;
   description?: string;
   visibility?: "public" | "private" | "unlisted";
 }
@@ -59,13 +57,8 @@ export interface LayoutCreateResponse {
 
 export interface SizeCreate {
   name: string;
-  width_ft?: number;
-  height_ft?: number;
-  edge_left?: number;
-  edge_right?: number;
-  edge_bottom?: number;
-  edge_top?: number;
-  photo?: File;
+  edges: number[]; // [left, right, bottom, top] in feet
+  kickboard: boolean;
 }
 
 export interface SizeCreateResponse {

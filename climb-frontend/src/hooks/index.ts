@@ -1,4 +1,3 @@
-export * from "./useWalls";
 export * from "./useLayouts";
 export * from "./useAuth";
 export * from "./useClimbs";

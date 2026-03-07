@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { getWallPhotoUrl } from "@/api/walls";
-import type { HoldDetail, Holdset } from "@/types";
+import { getLayoutPhotoUrl } from "@/api/layouts";
+import type { HoldDetail, Holdset, SizeMetadata } from "@/types";
 import {
   HOLD_STROKE_COLOR,
   DEFAULT_DISPLAY_SETTINGS,
@@ -23,6 +23,8 @@ export interface WallCanvasProps {
   /** Swipe callbacks for mobile climb navigation. */
   onSwipeNext?: () => void;
   onSwipePrev?: () => void;
+  /** Active size for spatial filtering overlay. Hidden when null or name === "default". */
+  activeSize?: SizeMetadata | null;
 }
 
 export function WallCanvas({
@@ -36,6 +38,7 @@ export function WallCanvas({
   onHoldClick,
   onSwipeNext,
   onSwipePrev,
+  activeSize,
 }: WallCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -80,7 +83,7 @@ export function WallCanvas({
         });
       }
     };
-    img.src = getWallPhotoUrl(wallId);
+    img.src = getLayoutPhotoUrl(wallId);
   }, [wallId, onImageLoad]);
 
   const toPixelCoords = useCallback(
@@ -155,7 +158,14 @@ export function WallCanvas({
       ctx.stroke();
       ctx.globalAlpha = 1;
     });
-  }, [image, imageDimensions, holds, selectedHoldset, toPixelCoords, displaySettings]);
+  }, [
+    image,
+    imageDimensions,
+    holds,
+    selectedHoldset,
+    toPixelCoords,
+    displaySettings,
+  ]);
 
   // ─── Coordinate helpers ──────────────────────────────────────────────────────
 
@@ -384,14 +394,92 @@ export function WallCanvas({
         panDragRef.current.isDragging = false;
       }}
     >
-      <div style={{ transform: `translate(${x}px, ${y}px)` }}>
+      <div
+        style={{ transform: `translate(${x}px, ${y}px)`, position: "relative" }}
+      >
         <canvas
           ref={canvasRef}
           style={{
             width: (width || 800) * zoom,
             height: (height || 600) * zoom,
+            display: "block",
           }}
         />
+        {activeSize &&
+          activeSize.name !== "default" &&
+          (() => {
+            const [lFt, rFt, bFt, tFt] = activeSize.edges;
+            const { width: wFt, height: hFt } = wallDimensions;
+            const nL = lFt / wFt;
+            const nR = rFt / wFt;
+            const nT = 1 - tFt / hFt;
+            const nB = 1 - bFt / hFt;
+            const bg = "rgba(9,9,11,0.65)";
+            const s: React.CSSProperties = {
+              position: "absolute",
+              background: bg,
+              pointerEvents: "none",
+            };
+            return (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: (width || 800) * zoom,
+                  height: (height || 600) * zoom,
+                  pointerEvents: "none",
+                }}
+              >
+                <div
+                  style={{
+                    ...s,
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: `${nT * 100}%`,
+                  }}
+                />
+                <div
+                  style={{
+                    ...s,
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: `${(1 - nB) * 100}%`,
+                  }}
+                />
+                <div
+                  style={{
+                    ...s,
+                    top: `${nT * 100}%`,
+                    left: 0,
+                    width: `${nL * 100}%`,
+                    height: `${(nB - nT) * 100}%`,
+                  }}
+                />
+                <div
+                  style={{
+                    ...s,
+                    top: `${nT * 100}%`,
+                    right: 0,
+                    width: `${(1 - nR) * 100}%`,
+                    height: `${(nB - nT) * 100}%`,
+                  }}
+                />
+                <div
+                  style={{
+                    ...s,
+                    background: "transparent",
+                    boxSizing: "border-box",
+                    top: `${nT * 100}%`,
+                    left: `${nL * 100}%`,
+                    width: `${(nR - nL) * 100}%`,
+                    height: `${(nB - nT) * 100}%`,
+                  }}
+                />
+              </div>
+            );
+          })()}
       </div>
 
       {swipeHint && (

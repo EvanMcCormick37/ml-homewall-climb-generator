@@ -1,7 +1,7 @@
 import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useLayouts } from "@/hooks/useLayouts";
-import { getSizePhotoUrl } from "@/api/layouts";
+import { getLayoutPhotoUrl } from "@/api/layouts";
 import { WakingScreen } from "@/components";
 import { useEffect, useRef } from "react";
 import { TITLE_STYLES } from "@/styles";
@@ -426,12 +426,10 @@ function HomePage() {
                 </SignedIn>
 
                 {layouts.map((layout) => {
-                  const firstSize = layout.sizes[0];
-                  const photoUrl = firstSize
-                    ? getSizePhotoUrl(layout.id, firstSize.id)
-                    : null;
-                  const dims = firstSize?.width_ft && firstSize?.height_ft
-                    ? `${firstSize.width_ft}×${firstSize.height_ft} ft`
+                  const hasPhoto = layout.sizes.length > 0;
+                  const photoUrl = hasPhoto ? getLayoutPhotoUrl(layout.id) : null;
+                  const dims = layout.dimensions[0] && layout.dimensions[1]
+                    ? `${layout.dimensions[0]} ft × ${layout.dimensions[1]} ft${layout.default_angle != null ? ` · ${layout.default_angle}°` : ""}`
                     : null;
                   return (
                   <button
@@ -492,8 +490,7 @@ function HomePage() {
                           letterSpacing: "0.06em",
                         }}
                       >
-                        {layout.num_holds} holds
-                        {dims && ` · ${dims}`}
+                        {dims ?? "—"}
                         {layout.sizes.length > 1 && ` · ${layout.sizes.length} sizes`}
                       </div>
                     </div>

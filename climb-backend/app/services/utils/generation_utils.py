@@ -380,19 +380,24 @@ class ClimbDDPMGenerator():
         self.ddpm = ddpm
         self.hold_classifier = hold_classifier
         self._cond_cache = {}
+        self.holds_manifolds = {}
+        self.holds_lookup = {}
         self.deterministic_noise_generator = torch.Generator(device=self.device)
 
-        with sqlite3.connect(settings.DB_PATH) as conn:
-            holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds", conn)
-            wall_ids = list(set(holds['wall_id'].values))
+        try:
+            with sqlite3.connect(settings.DB_PATH) as conn:
+                holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds", conn)
+                wall_ids = list(set(holds['wall_id'].values))
+            
             scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
-            self.holds_manifolds = {}
-            self.holds_lookup = {}
+            
             for wall_id in wall_ids:
                 df = scaled_holds[scaled_holds['wall_id']==wall_id]
                 self.holds_manifolds[wall_id] = torch.cat([torch.tensor(df[['x','y','pull_x','pull_y']].values, dtype=torch.float32), NULL_HOLD_SENTINELS], dim=0)
                 self.holds_lookup[wall_id] = df['hold_index'].values
                 self.holds_lookup[wall_id] = np.concatenate([self.holds_lookup[wall_id], np.array([-1, -1, -1, -1])])
+        except Exception as e:
+            pass
     
     def log_hold_means(self, wall_id: str | None = None):
         """Log the hold means for each wall."""
@@ -413,20 +418,6 @@ class ClimbDDPMGenerator():
         base = self._cond_cache[cache_key]
         tiled = np.tile(base, (n,1))
         return torch.tensor(tiled, device=self.device, dtype=torch.float32)
-    
-    def _get_offset_manifold(self, wall_id: str, x_offset: float | None)-> Tensor:
-        """Method for offsetting the current holds-manifold such that mean-x and mean-y is 0"""
-        offset_manifold = self.holds_manifolds[wall_id].clone()
-        means = torch.mean(offset_manifold, dim=0).round(decimals=3)
-        if x_offset is None:
-            x_offset = -(means[0].item())
-        y_offset = -(means[1].item())
-        
-        offset_manifold[:,0] += x_offset
-        offset_manifold[:,1] += y_offset
-        means = torch.mean(offset_manifold, dim=0)
-
-        return offset_manifold
     
     def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
         """

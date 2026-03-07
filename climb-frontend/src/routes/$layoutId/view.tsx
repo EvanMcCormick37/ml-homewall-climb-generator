@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
-import { useWall, useClimbs } from "@/hooks";
+import { useLayout, useClimbs } from "@/hooks";
 import { useBetaZeroAuth } from "@/hooks/useAuth";
 import { WakingScreen } from "@/components";
 import { GLOBAL_STYLES } from "@/styles";
@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import {
   type Climb,
-  type WallDetail,
+  type LayoutDetail,
   type GradeScale,
   type ClimbFilters,
   DEFAULT_CLIMB_FILTERS,
@@ -1005,11 +1005,11 @@ function ViewPage() {
   const navigate = useNavigate();
   const { layoutId: layoutIdParam } = Route.useParams();
   const {
-    wall,
+    layout,
     loading: wallLoading,
     waking,
     error: wallError,
-  } = useWall(layoutIdParam);
+  } = useLayout(layoutIdParam);
   if (waking) return <WakingScreen />;
   if (wallLoading) {
     return (
@@ -1028,7 +1028,7 @@ function ViewPage() {
       </div>
     );
   }
-  if (wallError || !wall) {
+  if (wallError || !layout) {
     return (
       <div
         style={{
@@ -1061,22 +1061,22 @@ function ViewPage() {
       </div>
     );
   }
-  return <MainViewPage wall={wall} navigate={navigate} />;
+  return <MainViewPage layout={layout} navigate={navigate} />;
 }
 
 // ─── MainViewPage ────────────────────────────────────────────────────────────
 
 function MainViewPage({
-  wall,
+  layout,
   navigate,
 }: {
-  wall: WallDetail;
+  layout: LayoutDetail;
   navigate: ReturnType<typeof useNavigate>;
 }) {
-  const wallId = wall.metadata.id;
+  const wallId = layout.metadata.id;
   const wallDimensions = {
-    width: wall.metadata.dimensions[0],
-    height: wall.metadata.dimensions[1],
+    width: layout.metadata.dimensions[0],
+    height: layout.metadata.dimensions[1],
   };
 
   const [imageDimensions, setImageDimensions] = useState({
@@ -1248,7 +1248,7 @@ function MainViewPage({
                 className="bz-oswald"
                 style={{ fontSize: "0.8rem", color: "var(--text-primary)" }}
               >
-                {wall.metadata.name}
+                {layout.metadata.name}
               </span>
             </div>
           </div>
@@ -1476,7 +1476,7 @@ function MainViewPage({
                 onFiltersReset={handleFiltersReset}
                 currentUserId={userId}
                 onDeleteClimb={setClimbToDelete}
-                wallOwnerId={wall.metadata.owner_id}
+                wallOwnerId={layout.metadata.owner_id}
               />
             </div>
           </div>
@@ -1573,7 +1573,7 @@ function MainViewPage({
                     onFiltersReset={handleFiltersReset}
                     currentUserId={userId}
                     onDeleteClimb={setClimbToDelete}
-                    wallOwnerId={wall.metadata.owner_id}
+                    wallOwnerId={layout.metadata.owner_id}
                   />
                 </div>
               </div>
@@ -1584,7 +1584,7 @@ function MainViewPage({
           <div style={{ flex: 1, minWidth: 0 }}>
             <WallCanvas
               wallId={wallId}
-              holds={wall.holds ?? []}
+              holds={layout.holds ?? []}
               wallDimensions={wallDimensions}
               selectedHoldset={selectedHoldset}
               imageDimensions={imageDimensions}

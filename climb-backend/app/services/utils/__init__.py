@@ -11,7 +11,6 @@ from app.services.utils.conversion_utils import (
     _parse_sizes,
     _row_to_size_metadata,
     _hold_detail_to_row,
-    _parse_dimensions,
     _row_to_hold_detail,
     _row_to_layout_metadata,
 )
@@ -24,7 +23,6 @@ __all__ = [
     "_parse_sizes",
     "_row_to_size_metadata",
     '_hold_detail_to_row',
-    '_parse_dimensions',
     '_row_to_hold_detail',
     '_row_to_layout_metadata',
 ]

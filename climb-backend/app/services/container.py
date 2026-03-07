@@ -27,15 +27,6 @@ class ServiceContainer:
     create_size: Callable
     delete_size: Callable
 
-    # Wall functions (legacy — kept for /walls API backward compat)
-    wall_exists: Callable
-    get_all_walls: Callable
-    get_wall: Callable
-    get_wall_visibility: Callable
-    create_wall: Callable
-    delete_wall: Callable
-    replace_photo: Callable
-
     # Climb functions
     get_climbs: Callable
     get_climb_setter_id: Callable

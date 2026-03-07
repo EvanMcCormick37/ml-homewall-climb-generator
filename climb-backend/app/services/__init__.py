@@ -5,7 +5,6 @@ from app.services.container import ServiceContainer
 from app.services import (
     layout_service,
     size_service,
-    wall_service,
     climb_service,
     generation_service,
     user_service,
@@ -29,15 +28,6 @@ services = ServiceContainer(
     get_size=size_service.get_size,
     create_size=size_service.create_size,
     delete_size=size_service.delete_size,
-
-    # Wall functions (legacy — kept for /walls API backward compat)
-    wall_exists=wall_service.wall_exists,
-    get_all_walls=wall_service.get_all_walls,
-    get_wall=wall_service.get_wall,
-    get_wall_visibility=wall_service.get_wall_visibility,
-    create_wall=wall_service.create_wall,
-    delete_wall=wall_service.delete_wall,
-    replace_photo=wall_service.replace_photo,
 
     # Climb functions
     get_climbs=climb_service.get_climbs,

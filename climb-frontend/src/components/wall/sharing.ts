@@ -1,4 +1,4 @@
-import { getWallPhotoUrl } from "@/api/walls";
+import { getLayoutPhotoUrl } from "@/api/layouts";
 import type { HoldDetail } from "@/types";
 import {
   HOLD_STROKE_COLOR,
@@ -66,7 +66,7 @@ export async function renderExportImage(
     el.crossOrigin = "anonymous";
     el.onload = () => resolve(el);
     el.onerror = reject;
-    el.src = getWallPhotoUrl(wallId);
+    el.src = getLayoutPhotoUrl(wallId);
   });
 
   const imgW = img.width,

@@ -66,7 +66,7 @@ def create_size(
                 size_id,
                 layout_id,
                 size_data.name,
-                size_data.edges,
+                json.dumps(size_data.edges),
                 size_data.kickboard,
                 now,
                 now,

@@ -1,7 +1,7 @@
 from datetime import datetime
 import json
 import uuid
-from app.schemas import SizeMetadata, LayoutMetadata, HoldDetail,
+from app.schemas import SizeMetadata, LayoutMetadata, HoldDetail
 
 def _row_to_size_metadata(row) -> SizeMetadata:
     return SizeMetadata(
@@ -29,7 +29,8 @@ def _row_to_layout_metadata(row, sizes: list[SizeMetadata]) -> LayoutMetadata:
         id=row["id"],
         name=row["name"],
         description=row["description"],
-        num_holds=row["num_holds"] or 0,
+        dimensions=json.loads(row["dimensions"]),
+        default_angle=row["default_angle"],
         sizes=sizes,
         owner_id=row["owner_id"],
         visibility=row["visibility"],
@@ -46,7 +47,6 @@ def _hold_detail_to_row(layout_id: str, hold: HoldDetail) -> tuple:
     return (
         hold_id,
         layout_id,
-        layout_id,   # also set wall_id for backward compat
         hold.hold_index,
         hold.x,
         hold.y,
@@ -55,16 +55,6 @@ def _hold_detail_to_row(layout_id: str, hold: HoldDetail) -> tuple:
         hold.useability,
         json.dumps(hold.tags or []),
     )
-
-def _parse_dimensions(dim_str: str | None = None) -> tuple[int, int] | None:
-    """Parse dimensions string 'width, height' into tuple."""
-    if not dim_str:
-        return None
-    try:
-        parts = dim_str.split(",")
-        return (int(parts[0].strip()), int(parts[1].strip()))
-    except (ValueError, IndexError):
-        return None
 
 
 def _row_to_hold_detail(row) -> HoldDetail:
@@ -78,21 +68,3 @@ def _row_to_hold_detail(row) -> HoldDetail:
         useability=row["useability"],
         tags=json.loads(row["tags"]) if row["tags"] else []
     )
-
-
-def _hold_detail_to_row(wall_id: str, hold: HoldDetail) -> tuple:
-    """Convert a HoldDetail object to database row values."""
-    hold_id = f"hold-{uuid.uuid4().hex[:15]}"
-    return (
-        hold_id,
-        wall_id,
-        hold.hold_index,
-        hold.x,
-        hold.y,
-        hold.pull_x,
-        hold.pull_y,
-        hold.useability,
-        hold.is_foot,
-        json.dumps(hold.tags or []),
-    )
-

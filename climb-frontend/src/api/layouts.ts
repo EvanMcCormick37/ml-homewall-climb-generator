@@ -32,13 +32,15 @@ export async function getLayout(
 }
 
 /**
- * Create a new layout (no photo — photo comes with the first size).
+ * Create a new layout (no photo — photo is uploaded separately via uploadLayoutPhoto).
  */
 export async function createLayout(
   data: LayoutCreate
 ): Promise<LayoutCreateResponse> {
   const formData = new FormData();
   formData.append("name", data.name);
+  formData.append("dimensions", JSON.stringify(data.dimensions));
+  if (data.default_angle != null) formData.append("default_angle", String(data.default_angle));
   if (data.description) formData.append("description", data.description);
   if (data.visibility) formData.append("visibility", data.visibility);
 
@@ -48,6 +50,21 @@ export async function createLayout(
     { headers: { "Content-Type": "multipart/form-data" } }
   );
   return response.data;
+}
+
+/**
+ * Upload or replace the photo for a layout.
+ */
+export async function uploadLayoutPhoto(
+  layoutId: string,
+  photo: File
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("photo", photo);
+
+  await apiClient.put(`/layouts/${layoutId}/photo`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 }
 
 /**
@@ -76,8 +93,8 @@ export async function setLayoutHolds(
 }
 
 /**
- * Get the photo URL for a specific size of a layout.
+ * Get the photo URL for a layout.
  */
-export function getSizePhotoUrl(layoutId: string, sizeId: string): string {
-  return `${BASE_URL}/layouts/${layoutId}/sizes/${sizeId}/photo`;
+export function getLayoutPhotoUrl(layoutId: string): string {
+  return `${BASE_URL}/layouts/${layoutId}/photo`;
 }

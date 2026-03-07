@@ -4,7 +4,7 @@ Climb Generator API - Main Application
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import walls, generate, climbs, layouts, sizes
+from app.routers import generate, climbs, layouts, sizes
 from app.database import init_db
 
 app = FastAPI(
@@ -36,19 +36,6 @@ app.include_router(
     climbs.router,
     prefix="/api/v1/layouts/{layout_id}/climbs",
     tags=["climbs"],
-)
-
-# ── Legacy wall-based routes (backward compat) ────────────────────────────────
-app.include_router(walls.router, prefix="/api/v1/walls", tags=["walls"])
-app.include_router(
-    generate.router,
-    prefix="/api/v1/walls/{layout_id}/generate",
-    tags=["generate (legacy)"],
-)
-app.include_router(
-    climbs.router,
-    prefix="/api/v1/walls/{layout_id}/climbs",
-    tags=["climbs (legacy)"],
 )
 
 

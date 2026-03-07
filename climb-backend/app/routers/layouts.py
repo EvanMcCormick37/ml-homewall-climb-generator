@@ -59,6 +59,8 @@ def get_layout(
 )
 def create_layout(
     name: str = Form(..., min_length=1, max_length=100),
+    dimensions: str = Form(...),
+    default_angle: int | None = Form(None),
     description: str | None = Form(None),
     visibility: str = Form("public"),
     user: dict = Depends(require_auth),
@@ -67,7 +69,7 @@ def create_layout(
     if visibility not in ("public", "private", "unlisted"):
         raise HTTPException(status_code=400, detail="Invalid visibility value.")
 
-    layout_data = LayoutCreate(name=name, description=description, visibility=visibility)
+    layout_data = LayoutCreate(name=name, description=description, dimensions=json.loads(dimensions), default_angle=default_angle, visibility=visibility)
 
     try:
         layout_id = services.create_layout(layout_data, owner_id=user["user_id"])
@@ -124,7 +126,7 @@ def delete_layout(
 def upload_layout_photo(
     layout_id: str,
     photo: UploadFile = File(...),
-    _: dict = Depends(require_auth),
+    # _: dict = Depends(require_auth),
 ):
     """Upload or replace the photo for a size."""
     if photo.content_type not in ["image/jpeg", "image/png"]:

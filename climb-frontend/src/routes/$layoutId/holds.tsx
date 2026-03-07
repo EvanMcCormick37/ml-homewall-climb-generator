@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { getLayout, setLayoutHolds, getSizePhotoUrl } from "@/api/layouts";
+import { getLayout, setLayoutHolds, getLayoutPhotoUrl } from "@/api/layouts";
 import { useHolds } from "@/hooks/useHolds";
 import { HoldFeaturesSidebar, EnabledFeaturesMenu } from "@/components";
 import { Eraser, Hand, Settings, Plus, Edit } from "lucide-react";
@@ -19,11 +19,10 @@ function HoldsEditorPage() {
   const navigate = useNavigate();
   const { layout } = Route.useLoaderData() as { layout: LayoutDetail };
   const layoutId = layout.metadata.id;
-  const firstSize = layout.metadata.sizes[0];
-  const sizeId = firstSize?.id;
+  const dims = layout.metadata.dimensions;
   const wallDimensions = {
-    width: firstSize?.width_ft ?? 12,
-    height: firstSize?.height_ft ?? 12,
+    width: dims[0] ?? 12,
+    height: dims[1] ?? 12,
   };
 
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -134,10 +133,8 @@ function HoldsEditorPage() {
         });
       }
     };
-    if (sizeId) {
-      img.src = getSizePhotoUrl(layoutId, sizeId);
-    }
-  }, [layoutId, sizeId]);
+    img.src = getLayoutPhotoUrl(layoutId);
+  }, [layoutId]);
 
   useEffect(() => {
     if (layout.holds && imageDimensions.width > 0) {

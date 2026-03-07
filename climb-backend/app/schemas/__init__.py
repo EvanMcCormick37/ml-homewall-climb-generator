@@ -7,14 +7,7 @@ from app.schemas.base import (
     HoldDetail,
     Holdset,
 )
-from app.schemas.walls import (
-    WallCreate,
-    WallDetail,
-    WallMetadata,
-    WallListResponse,
-    WallCreateResponse,
-    SetHoldsResponse as WallSetHoldsResponse,
-)
+
 from app.schemas.sizes import (
     SizeMetadata,
     SizeCreate,
@@ -63,13 +56,6 @@ __all__ = [
     "SizeMetadata",
     "SizeCreate",
     "SizeCreateResponse",
-    # Walls (legacy — kept for backward compat)
-    "WallCreate",
-    "WallDetail",
-    "WallMetadata",
-    "WallListResponse",
-    "WallCreateResponse",
-    "WallSetHoldsResponse",
     # Climbs
     "Climb",
     "ClimbCreate",

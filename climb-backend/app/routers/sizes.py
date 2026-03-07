@@ -6,6 +6,7 @@ All size endpoints are nested under /layouts/{layout_id}/sizes.
 """
 from fastapi import APIRouter, Form, File, UploadFile, HTTPException, Depends
 from fastapi.responses import FileResponse
+import json
 
 from app.schemas.sizes import SizeMetadata, SizeCreate, SizeCreateResponse
 from app.services import services
@@ -36,9 +37,9 @@ def list_sizes(
 def create_size(
     layout_id: str,
     name: str = Form(..., min_length=1, max_length=100),
-    edges: list[float] = Form(...),
+    edges: str = Form(...),
     kickboard: bool = Form(...),
-    user: dict = Depends(require_auth),
+    _: dict = Depends(require_auth),
 ):
     """Create a new size for a layout, optionally uploading a photo."""
     if not services.layout_exists(layout_id):
@@ -46,7 +47,7 @@ def create_size(
     
     size_data = SizeCreate(
         name=name,
-        edges=edges,
+        edges=json.loads(edges),
         kickboard=kickboard,
     )
 

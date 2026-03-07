@@ -15,7 +15,8 @@ class LayoutMetadata(BaseModel):
     id: str
     name: str
     description: str | None = None
-    num_holds: int
+    dimensions: list[int]
+    default_angle: int | None = None
     sizes: list[SizeMetadata] = []
     owner_id: str
     visibility: str
@@ -28,6 +29,8 @@ class LayoutCreate(BaseModel):
     """Schema for creating a layout (metadata only — photo comes via first size)."""
     name: str = Field(..., min_length=1, max_length=100)
     description: str | None = None
+    dimensions: list[int]
+    default_angle: int | None = None
     visibility: str = "public"
 
 

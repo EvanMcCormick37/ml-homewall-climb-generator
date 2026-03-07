@@ -3,7 +3,7 @@ import { useState, useCallback, useRef } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { useImageCrop } from "@/hooks/useImageCrop";
 import { ImageCropper } from "@/components";
-import { createLayout } from "@/api/layouts";
+import { createLayout, uploadLayoutPhoto } from "@/api/layouts";
 import { createSize } from "@/api/sizes";
 import { ArrowLeft, Globe, Lock, Link } from "lucide-react";
 import type { Visibility } from "@/types";
@@ -90,6 +90,7 @@ function NewLayoutPage() {
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [angle, setAngle] = useState("");
+  const [kickboard, setKickboard] = useState(false);
 
   const {
     imageUrl,
@@ -172,26 +173,29 @@ function NewLayoutPage() {
       setError(null);
 
       try {
-        // Step 1: create the layout (no photo yet)
+        const widthFt = parseFloat(width);
+        const heightFt = parseFloat(height);
+
+        // Step 1: create the layout with dimensions
+        const angleParsed = angle.trim() !== "" ? parseInt(angle, 10) : null;
         const layoutResponse = await createLayout({
           name: name.trim(),
+          dimensions: [widthFt, heightFt],
+          default_angle: angleParsed,
           visibility,
         });
 
-        // Step 2: create first size with the photo and dimensions
+        // Step 2: upload photo to the layout
         const photoFile = new File([croppedBlob], "wall-photo.jpg", {
           type: "image/jpeg",
         });
-        const widthFt = parseFloat(width);
-        const heightFt = parseFloat(height);
-        const angleDeg = parseInt(angle, 10);
+        await uploadLayoutPhoto(layoutResponse.id, photoFile);
 
+        // Step 3: create first size (full-panel edges, kickboard flag)
         await createSize(layoutResponse.id, {
-          name: `${widthFt}×${heightFt} ft`,
-          width_ft: widthFt || undefined,
-          height_ft: heightFt || undefined,
-          ...(angleDeg > 0 && { edge_top: angleDeg }), // store angle hint in edge_top for now
-          photo: photoFile,
+          name: "default",
+          edges: [0, widthFt, 0, heightFt],
+          kickboard,
         });
 
         navigate({
@@ -205,7 +209,7 @@ function NewLayoutPage() {
         setIsSubmitting(false);
       }
     },
-    [croppedBlob, name, width, height, angle, visibility, navigate],
+    [croppedBlob, name, width, height, angle, kickboard, visibility, navigate],
   );
 
   const inputStyle: React.CSSProperties = {
@@ -368,7 +372,11 @@ function NewLayoutPage() {
           />
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <div
-              style={{ width: "2px", height: "14px", background: "var(--cyan)" }}
+              style={{
+                width: "2px",
+                height: "14px",
+                background: "var(--cyan)",
+              }}
             />
             <span
               className="bz-oswald"
@@ -536,7 +544,8 @@ function NewLayoutPage() {
                           if (!isSelected) {
                             e.currentTarget.style.borderColor =
                               "rgba(6,182,212,0.3)";
-                            e.currentTarget.style.background = "var(--surface2)";
+                            e.currentTarget.style.background =
+                              "var(--surface2)";
                           }
                         }}
                         onMouseLeave={(e) => {
@@ -550,7 +559,9 @@ function NewLayoutPage() {
                           style={{
                             flexShrink: 0,
                             marginTop: "2px",
-                            color: isSelected ? "var(--cyan)" : "var(--text-dim)",
+                            color: isSelected
+                              ? "var(--cyan)"
+                              : "var(--text-dim)",
                             transition: "color 0.15s",
                           }}
                         >
@@ -611,7 +622,9 @@ function NewLayoutPage() {
                             height: "16px",
                             borderRadius: "50%",
                             border: `2px solid ${isSelected ? "var(--cyan)" : "var(--border)"}`,
-                            background: isSelected ? "var(--cyan)" : "transparent",
+                            background: isSelected
+                              ? "var(--cyan)"
+                              : "transparent",
                             marginTop: "3px",
                             transition: "all 0.15s",
                             display: "flex",
@@ -754,7 +767,8 @@ function NewLayoutPage() {
                       cursor: "pointer",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-active)";
+                      e.currentTarget.style.borderColor =
+                        "var(--border-active)";
                       e.currentTarget.style.color = "var(--text-primary)";
                     }}
                     onMouseLeave={(e) => {
@@ -886,7 +900,8 @@ function NewLayoutPage() {
                       transition: "border-color 0.15s",
                     }}
                     onFocus={(e) =>
-                      (e.currentTarget.style.borderColor = "var(--border-active)")
+                      (e.currentTarget.style.borderColor =
+                        "var(--border-active)")
                     }
                     onBlur={(e) =>
                       (e.currentTarget.style.borderColor = "var(--border)")
@@ -911,7 +926,11 @@ function NewLayoutPage() {
                     in feet.)
                   </label>
                   <div
-                    style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
                   >
                     <input
                       type="number"
@@ -964,11 +983,10 @@ function NewLayoutPage() {
                   </div>
                 </div>
 
-                {/* Angle */}
+                {/* Kickboard */}
                 <div style={{ marginBottom: "32px" }}>
                   <label
                     className="bz-mono"
-                    htmlFor="wall-angle"
                     style={{
                       display: "block",
                       fontSize: "0.6rem",
@@ -978,39 +996,111 @@ function NewLayoutPage() {
                       marginBottom: "8px",
                     }}
                   >
-                    Angle from vertical{" "}
-                    <span style={{ color: "var(--text-dim)" }}>(optional)</span>
+                    Kickboard
                   </label>
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                  <button
+                    type="button"
+                    onClick={() => setKickboard((prev) => !prev)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "10px 14px",
+                      background: kickboard
+                        ? "var(--cyan-dim)"
+                        : "var(--surface2)",
+                      border: `1px solid ${kickboard ? "var(--border-active)" : "var(--border)"}`,
+                      borderRadius: "var(--radius)",
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
                   >
-                    <input
-                      id="wall-angle"
-                      type="number"
-                      value={angle}
-                      onChange={(e) => setAngle(e.target.value)}
-                      placeholder="0"
-                      min="-90"
-                      max="90"
+                    <div
                       style={{
-                        ...inputStyle,
-                        width: "120px",
-                        transition: "border-color 0.15s",
+                        width: "32px",
+                        height: "18px",
+                        borderRadius: "9px",
+                        background: kickboard ? "var(--cyan)" : "var(--border)",
+                        position: "relative",
+                        transition: "background 0.15s",
+                        flexShrink: 0,
                       }}
-                      onFocus={(e) =>
-                        (e.currentTarget.style.borderColor =
-                          "var(--border-active)")
-                      }
-                      onBlur={(e) =>
-                        (e.currentTarget.style.borderColor = "var(--border)")
-                      }
-                    />
+                    >
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "3px",
+                          left: kickboard ? "17px" : "3px",
+                          width: "12px",
+                          height: "12px",
+                          borderRadius: "50%",
+                          background: "#fff",
+                          transition: "left 0.15s",
+                        }}
+                      />
+                    </div>
                     <span
                       className="bz-mono"
-                      style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}
+                      style={{
+                        fontSize: "0.65rem",
+                        color: kickboard ? "var(--cyan)" : "var(--text-muted)",
+                        transition: "color 0.15s",
+                      }}
                     >
-                      degrees
+                      {kickboard
+                        ? "Yes — this size has a kickboard"
+                        : "No kickboard"}
                     </span>
+                  </button>
+                </div>
+
+                {/* Default Angle */}
+                <div style={{ marginBottom: "32px" }}>
+                  <label
+                    className="bz-mono"
+                    style={{
+                      display: "block",
+                      fontSize: "0.6rem",
+                      letterSpacing: "0.15em",
+                      textTransform: "uppercase",
+                      color: "var(--text-muted)",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Default Angle (optional)
+                  </label>
+                  <input
+                    type="number"
+                    value={angle}
+                    onChange={(e) => setAngle(e.target.value)}
+                    placeholder="e.g. 40"
+                    min="0"
+                    max="90"
+                    step="1"
+                    style={{
+                      ...inputStyle,
+                      width: "100%",
+                      transition: "border-color 0.15s",
+                    }}
+                    onFocus={(e) =>
+                      (e.currentTarget.style.borderColor =
+                        "var(--border-active)")
+                    }
+                    onBlur={(e) =>
+                      (e.currentTarget.style.borderColor = "var(--border)")
+                    }
+                  />
+                  <div
+                    className="bz-mono"
+                    style={{
+                      fontSize: "0.55rem",
+                      color: "var(--text-dim)",
+                      marginTop: "6px",
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    Degrees from vertical. Used as the default angle when
+                    generating climbs.
                   </div>
                 </div>
 
@@ -1032,7 +1122,8 @@ function NewLayoutPage() {
                       cursor: "pointer",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-active)";
+                      e.currentTarget.style.borderColor =
+                        "var(--border-active)";
                       e.currentTarget.style.color = "var(--text-primary)";
                     }}
                     onMouseLeave={(e) => {

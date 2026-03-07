@@ -1,7 +1,64 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getLayouts, getLayout } from "@/api";
+import { getLayouts, getLayout, is502 } from "@/api";
 import type { LayoutMetadata, LayoutDetail } from "@/types";
-import { fetchWithWakeRetry } from "./useWalls";
+
+const DEFAULT_RETRY_INTERVAL_MS = 3000;
+const DEFAULT_MAX_RETRY_DURATION_MS = 20000;
+
+export interface WakeRetryOptions {
+  retryIntervalMs?: number;
+  maxRetryDurationMs?: number;
+  /** Called when the first 502 is detected (server is waking). */
+  onWaking?: () => void;
+  /** AbortSignal so callers can cancel retries (e.g. on unmount). */
+  signal?: AbortSignal;
+}
+
+/**
+ * Execute an async fetcher, automatically retrying on 502 (server waking)
+ * until the request succeeds or the retry window expires.
+ */
+export async function fetchWithWakeRetry<T>(
+  fetcher: () => Promise<T>,
+  options: WakeRetryOptions = {},
+): Promise<T> {
+  const {
+    retryIntervalMs = DEFAULT_RETRY_INTERVAL_MS,
+    maxRetryDurationMs = DEFAULT_MAX_RETRY_DURATION_MS,
+    onWaking,
+    signal,
+  } = options;
+
+  const deadline = Date.now() + maxRetryDurationMs;
+
+  while (true) {
+    // Bail out immediately if the caller has cancelled
+    signal?.throwIfAborted();
+
+    try {
+      return await fetcher();
+    } catch (err) {
+      if (is502(err) && Date.now() < deadline) {
+        onWaking?.();
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, retryIntervalMs);
+          // If the signal fires while we're sleeping, clean up and reject
+          signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(signal.reason);
+            },
+            { once: true },
+          );
+        });
+        // loop back to retry
+      } else {
+        throw err;
+      }
+    }
+  }
+}
 
 export function useLayouts() {
   const [layouts, setLayouts] = useState<LayoutMetadata[]>([]);
@@ -55,10 +112,7 @@ interface UseLayoutReturn {
   refetch: () => Promise<void>;
 }
 
-export function useLayout(
-  layoutId: string,
-  sizeId?: string
-): UseLayoutReturn {
+export function useLayout(layoutId: string, sizeId?: string): UseLayoutReturn {
   const [layout, setLayout] = useState<LayoutDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [waking, setWaking] = useState(false);
@@ -77,7 +131,7 @@ export function useLayout(
     try {
       const response = await fetchWithWakeRetry(
         () => getLayout(layoutId, sizeId),
-        { onWaking: () => setWaking(true), signal: controller.signal }
+        { onWaking: () => setWaking(true), signal: controller.signal },
       );
       setLayout(response);
     } catch (err) {

@@ -4,7 +4,7 @@ import {
   type UseNavigateResult,
 } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useWall } from "@/hooks";
+import { useLayout } from "@/hooks";
 import { generateClimbs } from "@/api/generate";
 import { createClimb } from "@/api/climbs";
 import { WakingScreen } from "@/components";
@@ -26,13 +26,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Layers,
 } from "lucide-react";
 import type {
   Holdset,
   GenerateRequest,
   GenerateSettings,
   GradeScale,
-  WallDetail,
+  LayoutDetail,
+  SizeMetadata,
 } from "@/types";
 import {
   DEFAULT_GENERATE_SETTINGS,
@@ -115,7 +117,7 @@ function ModelSettingsPanel({
       />
       <BzRange
         label="Projection Start"
-        desc="Projection start controls when the current wall's holds start to 'pull' on the diffusion model."
+        desc="Projection start controls when the current layout's holds start to 'pull' on the diffusion model."
         value={settings.t_start_projection}
         min={0.0}
         max={1.0}
@@ -182,7 +184,7 @@ function ModelSettingsPanel({
 
       <div>
         <div style={{ marginBottom: "8px" }}>
-          <SectionLabel desc="Whether to use a consistent or random noise vector at each timestep of reverse diffusion. Deterministic produces the same climb for a given seed, wall, and model configuration.">
+          <SectionLabel desc="Whether to use a consistent or random noise vector at each timestep of reverse diffusion. Deterministic produces the same climb for a given seed, layout, and model configuration.">
             Generation Style
           </SectionLabel>
         </div>
@@ -488,10 +490,10 @@ function GenerationPanel({
               />
             </div>
 
-            {/* Wall angle */}
+            {/* layout angle */}
             <div>
               <div style={{ marginBottom: "6px" }}>
-                <SectionLabel>Wall Angle (°)</SectionLabel>
+                <SectionLabel>layout Angle (°)</SectionLabel>
               </div>
               <input
                 type="number"
@@ -1157,7 +1159,7 @@ function EditPanel({
                   lineHeight: 1.7,
                 }}
               >
-                Click holds on the wall to cycle through roles. Edit name and
+                Click holds on the layout to cycle through roles. Edit name and
                 grade above.
               </p>
             </div>
@@ -1210,7 +1212,7 @@ function SetPage() {
   const navigate = useNavigate();
   const { layoutId: layoutIdParam } = Route.useParams();
   const { climb: climbParam } = Route.useSearch();
-  const { wall, loading, waking, error } = useWall(layoutIdParam);
+  const { layout, loading, waking, error } = useLayout(layoutIdParam);
   if (waking) {
     return (
       <div
@@ -1243,7 +1245,7 @@ function SetPage() {
       </div>
     );
   }
-  if (error || !wall) {
+  if (error || !layout) {
     return (
       <div
         style={{
@@ -1258,7 +1260,7 @@ function SetPage() {
           fontFamily: "'Space Mono', monospace",
         }}
       >
-        <p>{error ?? "Wall not found"}</p>
+        <p>{error ?? "layout not found"}</p>
         <button
           onClick={() => navigate({ to: "/" })}
           style={{
@@ -1277,7 +1279,11 @@ function SetPage() {
     );
   } else {
     return (
-      <MainSetPage wall={wall} climbParam={climbParam} navigate={navigate} />
+      <MainSetPage
+        layout={layout}
+        climbParam={climbParam}
+        navigate={navigate}
+      />
     );
   }
 }
@@ -1285,16 +1291,16 @@ function SetPage() {
 // ─── MainSetPage ─────────────────────────────────────────────────────────────
 
 interface MainSetPageProps {
-  wall: WallDetail;
+  layout: LayoutDetail;
   climbParam: string | undefined;
   navigate: UseNavigateResult<string>;
 }
 
-function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
-  const wallId = wall.metadata.id;
-  const wallDimensions = {
-    width: wall.metadata.dimensions[0],
-    height: wall.metadata.dimensions[1],
+function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
+  const layoutId = layout.metadata.id;
+  const layoutDimensions = {
+    width: layout.metadata.dimensions[0],
+    height: layout.metadata.dimensions[1],
   };
 
   const [imageDimensions, setImageDimensions] = useState({
@@ -1329,6 +1335,21 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
   const selectedClimb =
     selectedIndex !== null ? generatedClimbs[selectedIndex] : null;
   const selectedHoldset = selectedClimb?.holdset ?? null;
+
+  // Size state
+  const [activeSize, setActiveSize] = useState<SizeMetadata | null>(() => {
+    const sizes = layout.metadata.sizes;
+    return sizes.find((s) => s.name === "default") ?? sizes[0] ?? null;
+  });
+  const [showSizeDropdown, setShowSizeDropdown] = useState(false);
+
+  const handleSelectSize = useCallback((size: SizeMetadata) => {
+    setActiveSize(size);
+    setShowSizeDropdown(false);
+    setGeneratedClimbs([]);
+    originalHoldsetsRef.current = [];
+    setSelectedIndex(null);
+  }, []);
 
   // Auth state
   const { isSignedIn, user } = useUser();
@@ -1372,9 +1393,13 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
         num_climbs: numClimbs ?? 3,
         grade: generate_grade,
         grade_scale: gradingScale,
-        angle: angle ?? wall.metadata.angle,
+        angle: angle ?? null,
       };
-      const response = await generateClimbs(wallId, request, generateSettings);
+      const response = await generateClimbs(
+        layoutId,
+        request,
+        generateSettings,
+      );
       const named: NamedHoldset[] = response.climbs.map((holdset) => ({
         name: generateClimbName(),
         grade: generate_grade,
@@ -1394,7 +1419,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
       if (response.climbs.length > 0) setSelectedIndex(0);
       navigate({
         to: "/$layoutId/set",
-        params: { layoutId: wallId },
+        params: { layoutId: layoutId },
         search: {},
         replace: true,
       });
@@ -1404,13 +1429,12 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
       setIsGenerating(false);
     }
   }, [
-    wallId,
+    layoutId,
     numClimbs,
     grade,
     gradingScale,
     gradeOptions,
     generateSettings,
-    wall.metadata.angle,
     angle,
     navigate,
   ]);
@@ -1481,22 +1505,22 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
   const handleCopyLink = useCallback(() => {
     if (!selectedClimb) return;
     navigator.clipboard
-      .writeText(buildShareUrl(wallId, selectedClimb))
+      .writeText(buildShareUrl(layoutId, selectedClimb))
       .then(() => {
         setLinkCopied(true);
         setTimeout(() => setLinkCopied(false), 2000);
       });
-  }, [wallId, selectedClimb]);
+  }, [layoutId, selectedClimb]);
 
   const handleExportImage = useCallback(async () => {
     if (!selectedClimb) return;
     setIsExporting(true);
     try {
       const blob = await renderExportImage(
-        wallId,
-        wall.metadata.name,
-        wall.holds ?? [],
-        wallDimensions,
+        layoutId,
+        layout.metadata.name,
+        layout.holds ?? [],
+        layoutDimensions,
         selectedClimb,
         user?.fullName ?? null,
         displaySettings,
@@ -1514,19 +1538,19 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
     } finally {
       setIsExporting(false);
     }
-  }, [wallId, wall, wallDimensions, selectedClimb, displaySettings]);
+  }, [layoutId, layout, layoutDimensions, selectedClimb, displaySettings]);
 
   const handleNativeShare = useCallback(async () => {
     if (!selectedClimb) return;
     try {
-      const url = buildShareUrl(wallId, selectedClimb);
+      const url = buildShareUrl(layoutId, selectedClimb);
       let file: File | undefined;
       try {
         const blob = await renderExportImage(
-          wallId,
-          wall.metadata.name,
-          wall.holds ?? [],
-          wallDimensions,
+          layoutId,
+          layout.metadata.name,
+          layout.holds ?? [],
+          layoutDimensions,
           selectedClimb,
           user?.fullName ?? null,
           displaySettings,
@@ -1549,9 +1573,9 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
       if ((err as Error).name !== "AbortError") handleCopyLink();
     }
   }, [
-    wallId,
-    wall,
-    wallDimensions,
+    layoutId,
+    layout,
+    layoutDimensions,
     selectedClimb,
     displaySettings,
     handleCopyLink,
@@ -1562,7 +1586,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
     const blankClimb: NamedHoldset = {
       name: generateClimbName(),
       grade: grade ?? "V?",
-      angle: (angle ?? wall.metadata.angle ?? 45).toString(),
+      angle: (angle ?? 45).toString(),
       holdset: blankHoldset,
     };
     setGeneratedClimbs((prev) => [blankClimb, ...prev]);
@@ -1571,7 +1595,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
       ...originalHoldsetsRef.current,
     ];
     setSelectedIndex(0);
-  }, [grade, angle, wall.metadata.angle]);
+  }, [grade, angle]);
 
   const handleSaveToDatabase = useCallback(async () => {
     if (!selectedClimb || !isSignedIn) return;
@@ -1579,7 +1603,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
     setSaveSuccess(false);
     setSaveError(null);
     try {
-      await createClimb(wallId, {
+      await createClimb(layoutId, {
         name: selectedClimb.name,
         holdset: selectedClimb.holdset,
         scale: gradingScale,
@@ -1608,11 +1632,19 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [wallId, selectedClimb, isSignedIn]);
+  }, [layoutId, selectedClimb, isSignedIn]);
 
   const handleHoldClick = useCallback(
     (holdIndex: number) => {
       if (selectedIndex === null) return;
+      // Bounds check: ignore clicks on holds outside the active size window
+      if (activeSize && activeSize.name !== "default") {
+        const hold = layout.holds.find((h) => h.hold_index === holdIndex);
+        if (hold) {
+          const [leftFt, rightFt, bottomFt, topFt] = activeSize.edges;
+          if (hold.x < leftFt || hold.x > rightFt || hold.y < bottomFt || hold.y > topFt) return;
+        }
+      }
       setGeneratedClimbs((prev) => {
         const entry = prev[selectedIndex];
         if (!entry) return prev;
@@ -1662,7 +1694,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
         );
       });
     },
-    [selectedIndex],
+    [selectedIndex, activeSize, layout.holds],
   );
 
   const handleSelectClimb = useCallback((index: number) => {
@@ -1714,7 +1746,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
     numClimbs,
     onNumClimbsChange: setNumClimbs,
     angle,
-    angleFixed: !!wall.metadata.angle,
+    angleFixed: false,
     onAngleChange: setAngle,
     generateSettings,
     onGenerateSettingsChange: setGenerateSettings,
@@ -1829,7 +1861,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
                 className="bz-oswald"
                 style={{ fontSize: "0.8rem", color: "var(--text-primary)" }}
               >
-                {wall.metadata.name}
+                {layout.metadata.name}
               </span>
             </div>
           </div>
@@ -1846,7 +1878,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
             onClick={() =>
               navigate({
                 to: "/$layoutId/view",
-                params: { layoutId: wallId },
+                params: { layoutId: layoutId },
               })
             }
           >
@@ -1867,7 +1899,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
             Give Feedback
           </a>
 
-          {/* Right: display settings */}
+          {/* Right: sizes link + display settings */}
           <div
             style={{
               position: "relative",
@@ -1876,6 +1908,150 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
               gap: "10px",
             }}
           >
+            {/* Size picker dropdown */}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowSizeDropdown((v) => !v)}
+                title="Select Size"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "0 8px",
+                  height: "28px",
+                  border: `1px solid ${showSizeDropdown || activeSize?.name !== "default" ? "var(--border-active)" : "var(--border)"}`,
+                  borderRadius: "var(--radius)",
+                  background: showSizeDropdown || activeSize?.name !== "default" ? "var(--cyan-dim)" : "transparent",
+                  color: showSizeDropdown || activeSize?.name !== "default" ? "var(--cyan)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                <Layers size={13} />
+                <span className="bz-mono" style={{ fontSize: "0.55rem", letterSpacing: "0.08em" }}>
+                  {activeSize?.name ?? "—"}
+                </span>
+                <ChevronDown
+                  size={10}
+                  style={{
+                    transform: showSizeDropdown ? "rotate(180deg)" : "none",
+                    transition: "transform 0.15s",
+                  }}
+                />
+              </button>
+
+              {showSizeDropdown && (
+                <>
+                  <div
+                    style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                    onClick={() => setShowSizeDropdown(false)}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "calc(100% + 8px)",
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius)",
+                      boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+                      zIndex: 50,
+                      minWidth: "180px",
+                      animation: "bzFadeUp 0.15s ease-out",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "7px 12px",
+                        borderBottom: "1px solid var(--border)",
+                      }}
+                    >
+                      <span
+                        className="bz-mono"
+                        style={{
+                          fontSize: "0.55rem",
+                          letterSpacing: "0.12em",
+                          textTransform: "uppercase",
+                          color: "var(--text-dim)",
+                        }}
+                      >
+                        Active Size
+                      </span>
+                    </div>
+                    {layout.metadata.sizes.map((size) => {
+                      const isActive = activeSize?.id === size.id;
+                      return (
+                        <button
+                          key={size.id}
+                          onClick={() => handleSelectSize(size)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            width: "100%",
+                            padding: "9px 12px",
+                            background: isActive ? "var(--cyan-dim)" : "transparent",
+                            border: "none",
+                            borderBottom: "1px solid var(--border)",
+                            color: isActive ? "var(--cyan)" : "var(--text-primary)",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            transition: "background 0.1s",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              background: isActive ? "var(--cyan)" : "var(--border)",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span className="bz-mono" style={{ fontSize: "0.65rem", flex: 1 }}>
+                            {size.name}
+                          </span>
+                          {size.kickboard && (
+                            <span
+                              className="bz-mono"
+                              style={{ fontSize: "0.55rem", color: "var(--text-dim)" }}
+                            >
+                              KB
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => {
+                        setShowSizeDropdown(false);
+                        navigate({ to: "/$layoutId/sizes", params: { layoutId } });
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        width: "100%",
+                        padding: "8px 12px",
+                        background: "transparent",
+                        border: "none",
+                        color: "var(--text-dim)",
+                        cursor: "pointer",
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: "0.55rem",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        transition: "color 0.1s",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-dim)")}
+                    >
+                      Manage Sizes →
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <span
               className="bz-mono"
               style={{
@@ -1952,7 +2128,7 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
                     settings={displaySettings}
                     onChange={setDisplaySettings}
                   />
-                  {isSignedIn && user?.id === wall.metadata.owner_id && (
+                  {isSignedIn && user?.id === layout.metadata.owner_id && (
                     <>
                       <div
                         style={{
@@ -1963,7 +2139,10 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
                       <button
                         onClick={() => {
                           setShowDisplaySettings(false);
-                          navigate({ to: "/$layoutId/holds", params: { layoutId: wallId } });
+                          navigate({
+                            to: "/$layoutId/holds",
+                            params: { layoutId: layoutId },
+                          });
                         }}
                         style={{
                           display: "flex",
@@ -1984,7 +2163,8 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.background = "var(--cyan-dim)";
-                          e.currentTarget.style.borderColor = "var(--border-active)";
+                          e.currentTarget.style.borderColor =
+                            "var(--border-active)";
                           e.currentTarget.style.color = "var(--cyan)";
                         }}
                         onMouseLeave={(e) => {
@@ -2240,14 +2420,15 @@ function MainSetPage({ wall, climbParam, navigate }: MainSetPageProps) {
           {/* Canvas */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <WallCanvas
-              wallId={wallId}
-              holds={wall.holds ?? []}
-              wallDimensions={wallDimensions}
+              wallId={layoutId}
+              holds={layout.holds ?? []}
+              wallDimensions={layoutDimensions}
               selectedHoldset={selectedHoldset}
               imageDimensions={imageDimensions}
               onImageLoad={handleImageLoad}
               displaySettings={displaySettings}
               onHoldClick={handleHoldClick}
+              activeSize={activeSize}
             />
           </div>
 
