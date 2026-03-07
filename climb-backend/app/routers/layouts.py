@@ -5,6 +5,7 @@ A layout is a unique hold arrangement (replacing the old /walls concept).
 """
 from fastapi import APIRouter, Form, File, UploadFile, HTTPException, Depends, Query
 from fastapi.responses import FileResponse
+from app.config import settings
 import json
 
 from app.schemas import (
@@ -62,7 +63,7 @@ def create_layout(
     visibility: str = Form("public"),
     user: dict = Depends(require_auth),
 ):
-    """Create a new layout (no photo — photo comes with the first size)."""
+    """Create a new layout."""
     if visibility not in ("public", "private", "unlisted"):
         raise HTTPException(status_code=400, detail="Invalid visibility value.")
 
@@ -113,3 +114,58 @@ def delete_layout(
     if not success:
         raise HTTPException(status_code=404, detail="Layout not found")
     return {"id": layout_id}
+
+
+@router.put(
+    "/{layout_id}/photo",
+    status_code=200,
+    summary="Upload or replace a size photo (owner only)",
+)
+def upload_layout_photo(
+    layout_id: str,
+    photo: UploadFile = File(...),
+    _: dict = Depends(require_auth),
+):
+    """Upload or replace the photo for a size."""
+    if photo.content_type not in ["image/jpeg", "image/png"]:
+        raise HTTPException(status_code=400, detail="Only JPEG and PNG are supported.")
+
+    success = services.upload_layout_photo(layout_id, photo)
+    if not success:
+        raise HTTPException(status_code=404, detail="Size not found")
+    return {"message": "Photo uploaded successfully"}
+
+
+@router.get(
+    "/{layout_id}/photo",
+    response_class=FileResponse,
+    summary="Get size photo",
+)
+def get_layout_photo(
+    layout_id: str,
+    _=Depends(get_accessible_layout),
+):
+    """Get the photo for a specific layout."""
+
+    base_path = settings.LAYOUTS_DIR / layout_id / "photo"
+    extensions = [".png", ".jpg", ".jpeg"]
+
+    photo_path = None
+    for ext in extensions:
+        test_path = base_path.with_suffix(ext)
+        if test_path.exists():
+            photo_path = test_path
+            break
+    assert photo_path is not None
+
+    ext = photo_path.suffix
+    media_type = "image/jpeg" if ext == ".jpg" else "image/png"
+    return FileResponse(
+        photo_path,
+        media_type=media_type,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )

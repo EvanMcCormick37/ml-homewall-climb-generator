@@ -56,17 +56,6 @@ def generate_climbs(
         x_offset=x_offset,
         seed=seed,
     )
-    # Validate layout exists
-    if not services.layout_exists(layout_id):
-        raise HTTPException(status_code=404, detail="Layout not found")
-
-    # Validate layout has holds
-    num_holds = services.get_num_holds(layout_id)
-    if not num_holds or num_holds == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Layout has no holds. Upload holds before generating.",
-        )
 
     try:
         generated = services.generate_climbs(layout_id, request, settings)

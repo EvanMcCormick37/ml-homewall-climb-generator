@@ -27,33 +27,6 @@ def list_sizes(
     return services.get_sizes(layout_id)
 
 
-@router.get(
-    "/{size_id}/photo",
-    response_class=FileResponse,
-    summary="Get size photo",
-)
-def get_size_photo(
-    layout_id: str,
-    size_id: str,
-    _=Depends(get_accessible_layout),
-):
-    """Get the photo for a specific size."""
-    photo_path = services.get_size_photo_path(layout_id, size_id)
-    if photo_path is None:
-        raise HTTPException(status_code=404, detail="Photo not found")
-    ext = photo_path.suffix
-    media_type = "image/jpeg" if ext == ".jpg" else "image/png"
-    return FileResponse(
-        photo_path,
-        media_type=media_type,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET",
-            "Access-Control-Allow-Headers": "*",
-        },
-    )
-
-
 @router.post(
     "",
     response_model=SizeCreateResponse,
@@ -63,58 +36,28 @@ def get_size_photo(
 def create_size(
     layout_id: str,
     name: str = Form(..., min_length=1, max_length=100),
-    width_ft: float | None = Form(None),
-    height_ft: float | None = Form(None),
-    edge_left: float = Form(0.0),
-    edge_right: float | None = Form(None),
-    edge_bottom: float = Form(0.0),
-    edge_top: float | None = Form(None),
-    photo: UploadFile | None = File(None),
+    edges: list[float] = Form(...),
+    kickboard: bool = Form(...),
     user: dict = Depends(require_auth),
 ):
     """Create a new size for a layout, optionally uploading a photo."""
     if not services.layout_exists(layout_id):
         raise HTTPException(status_code=404, detail="Layout not found")
-
-    if photo and photo.content_type not in ["image/jpeg", "image/png"]:
-        raise HTTPException(status_code=400, detail="Only JPEG and PNG are supported.")
-
+    
     size_data = SizeCreate(
         name=name,
-        width_ft=width_ft,
-        height_ft=height_ft,
-        edge_left=edge_left,
-        edge_right=edge_right,
-        edge_bottom=edge_bottom,
-        edge_top=edge_top,
+        edges=edges,
+        kickboard=kickboard,
     )
 
     try:
-        size_id = services.create_size(layout_id, size_data, photo=photo)
+        size_id = services.create_size(layout_id, size_data)
         return SizeCreateResponse(id=size_id, layout_id=layout_id, name=name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create size: {e}")
 
 
-@router.put(
-    "/{size_id}/photo",
-    status_code=200,
-    summary="Upload or replace a size photo (owner only)",
-)
-def upload_size_photo(
-    layout_id: str,
-    size_id: str,
-    photo: UploadFile = File(...),
-    user: dict = Depends(require_auth),
-):
-    """Upload or replace the photo for a size."""
-    if photo.content_type not in ["image/jpeg", "image/png"]:
-        raise HTTPException(status_code=400, detail="Only JPEG and PNG are supported.")
 
-    success = services.upload_size_photo(layout_id, size_id, photo)
-    if not success:
-        raise HTTPException(status_code=404, detail="Size not found")
-    return {"message": "Photo uploaded successfully"}
 
 
 @router.delete(

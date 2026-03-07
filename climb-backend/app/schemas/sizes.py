@@ -13,14 +13,8 @@ class SizeMetadata(BaseModel):
     id: str
     layout_id: str
     name: str
-    width_ft: float | None = None
-    height_ft: float | None = None
-    edge_left: float = 0.0
-    edge_right: float | None = None
-    edge_bottom: float = 0.0
-    edge_top: float | None = None
-    photo_url: str | None = None
-    num_climbs: int = 0
+    edges: list[float]
+    kickboard: bool
     created_at: datetime
     updated_at: datetime
 
@@ -28,12 +22,8 @@ class SizeMetadata(BaseModel):
 class SizeCreate(BaseModel):
     """Schema for creating a new size."""
     name: str = Field(..., min_length=1, max_length=100)
-    width_ft: float | None = None
-    height_ft: float | None = None
-    edge_left: float = Field(0.0, ge=0)
-    edge_right: float | None = None
-    edge_bottom: float = Field(0.0, ge=0)
-    edge_top: float | None = None
+    edges: list[float] = Field(...)
+    kickboard: bool = Field(...)
 
 
 class SizeCreateResponse(BaseModel):

@@ -16,22 +16,19 @@ from app.services import (
 services = ServiceContainer(
     # Layout functions (new)
     layout_exists=layout_service.layout_exists,
-    get_num_holds=layout_service.get_num_holds,
     get_all_layouts=layout_service.get_all_layouts,
     get_layout=layout_service.get_layout,
     get_layout_visibility=layout_service.get_layout_visibility,
     create_layout=layout_service.create_layout,
     delete_layout=layout_service.delete_layout,
     set_holds=layout_service.set_holds,
-    get_layout_photo_path=layout_service.get_photo_path,
+    upload_layout_photo=layout_service.upload_layout_photo,
 
     # Size functions (new)
     get_sizes=size_service.get_sizes,
     get_size=size_service.get_size,
     create_size=size_service.create_size,
     delete_size=size_service.delete_size,
-    upload_size_photo=size_service.upload_size_photo,
-    get_size_photo_path=size_service.get_photo_path,
 
     # Wall functions (legacy — kept for /walls API backward compat)
     wall_exists=wall_service.wall_exists,

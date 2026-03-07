@@ -6,7 +6,6 @@ This module replaces wall_service.py for all new code; wall_service.py is
 kept for the legacy /walls API until Phase 6 cleanup.
 """
 import uuid
-import json
 from datetime import datetime
 from pathlib import Path
 
@@ -19,88 +18,8 @@ from app.schemas import (
     LayoutMetadata,
     HoldDetail,
 )
-from app.schemas.sizes import SizeMetadata
 from app.config import settings
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-def _parse_sizes(rows) -> list[SizeMetadata]:
-    """Convert size DB rows to SizeMetadata objects."""
-    sizes = []
-    for row in rows:
-        photo_url = None
-        if row["photo_path"]:
-            # Resolve legacy path (WALLS_DIR/layout_id/photo) or new path
-            photo_url = row["photo_path"]  # will be resolved to full URL by router
-        sizes.append(SizeMetadata(
-            id=row["id"],
-            layout_id=row["layout_id"],
-            name=row["name"],
-            width_ft=row["width_ft"],
-            height_ft=row["height_ft"],
-            edge_left=row["edge_left"] or 0.0,
-            edge_right=row["edge_right"],
-            edge_bottom=row["edge_bottom"] or 0.0,
-            edge_top=row["edge_top"],
-            photo_url=photo_url,
-            num_climbs=row["num_climbs"] or 0,
-            created_at=datetime.fromisoformat(row["created_at"])
-                if isinstance(row["created_at"], str) else row["created_at"],
-            updated_at=datetime.fromisoformat(row["updated_at"])
-                if isinstance(row["updated_at"], str) else row["updated_at"],
-        ))
-    return sizes
-
-
-def _row_to_layout_metadata(row, sizes: list[SizeMetadata]) -> LayoutMetadata:
-    return LayoutMetadata(
-        id=row["id"],
-        name=row["name"],
-        description=row["description"],
-        num_holds=row["num_holds"] or 0,
-        sizes=sizes,
-        owner_id=row["owner_id"],
-        visibility=row["visibility"],
-        share_token=row["share_token"],
-        created_at=datetime.fromisoformat(row["created_at"])
-            if isinstance(row["created_at"], str) else row["created_at"],
-        updated_at=datetime.fromisoformat(row["updated_at"])
-            if isinstance(row["updated_at"], str) else row["updated_at"],
-    )
-
-
-def _row_to_hold_detail(row) -> HoldDetail:
-    return HoldDetail(
-        hold_index=row["hold_index"],
-        x=row["x"],
-        y=row["y"],
-        pull_x=row["pull_x"],
-        pull_y=row["pull_y"],
-        useability=row["useability"],
-        is_foot=row["is_foot"],
-        tags=json.loads(row["tags"]) if row["tags"] else [],
-    )
-
-
-def _hold_detail_to_row(layout_id: str, hold: HoldDetail) -> tuple:
-    hold_id = f"hold-{uuid.uuid4().hex[:15]}"
-    return (
-        hold_id,
-        layout_id,
-        layout_id,   # also set wall_id for backward compat
-        hold.hold_index,
-        hold.x,
-        hold.y,
-        hold.pull_x,
-        hold.pull_y,
-        hold.useability,
-        hold.is_foot,
-        json.dumps(hold.tags or []),
-    )
-
+from app.services.utils import _parse_sizes, _row_to_hold_detail, _hold_detail_to_row, _row_to_layout_metadata
 
 # ---------------------------------------------------------------------------
 # Layout queries
@@ -327,45 +246,15 @@ def set_holds(layout_id: str, holds: list[HoldDetail]) -> bool:
         )
     return True
 
+def upload_layout_photo(layout_id: str, photo: UploadFile) -> bool:
+    """Upload or replace the photo for a size."""
+    assert photo.filename
 
-# ---------------------------------------------------------------------------
-# Photo helpers (legacy path support)
-# ---------------------------------------------------------------------------
-
-def get_photo_path(layout_id: str, size_id: str | None = None) -> Path | None:
-    """
-    Get the photo path for a layout/size combo.
-
-    - If size_id is provided: look up that size's photo_path.
-    - Otherwise: use the first size's photo_path.
-    - Falls back to legacy WALLS_DIR/layout_id/photo.jpg path.
-    """
-    with get_db() as conn:
-        if size_id:
-            row = conn.execute(
-                "SELECT photo_path FROM sizes WHERE id = ? AND layout_id = ?",
-                (size_id, layout_id),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT photo_path FROM sizes WHERE layout_id = ? ORDER BY created_at ASC LIMIT 1",
-                (layout_id,),
-            ).fetchone()
-
-    if not row or not row["photo_path"]:
-        return None
-
-    filename = row["photo_path"]
-
-    # New-style path: LAYOUTS_DIR/layout_id/sizes/size_id/photo.ext
-    if size_id:
-        new_path = settings.LAYOUTS_DIR / layout_id / "sizes" / size_id / filename
-        if new_path.exists():
-            return new_path
-
-    # Legacy path: WALLS_DIR/layout_id/photo.ext  (migrated walls)
-    legacy_path = settings.WALLS_DIR / layout_id / filename
-    if legacy_path.exists():
-        return legacy_path
-
-    return None
+    ext = Path(photo.filename).suffix
+    photo_dir = settings.LAYOUTS_DIR / layout_id
+    photo_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"photo{ext}"
+    contents = photo.file.read()
+    with open(photo_dir / filename, "wb") as f:
+        f.write(contents)
+    return True

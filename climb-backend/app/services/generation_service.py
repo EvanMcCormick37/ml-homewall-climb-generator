@@ -7,11 +7,10 @@ Manages:
 - Dispatching generation requests
 """
 import logging
-from os import times
 
 from app.schemas import Holdset, GenerateRequest, GenerateSettings
 from app.database import get_db
-from app.services.utils import generator, _get_wall_angle
+from app.services.utils import generator
 from app.services.climb_service import _holds_to_holdset
 
 logger = logging.getLogger(__name__)

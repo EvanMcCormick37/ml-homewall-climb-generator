@@ -13,22 +13,19 @@ class ServiceContainer:
 
     # Layout functions (new)
     layout_exists: Callable
-    get_num_holds: Callable        # shared — works for both layout and wall IDs
     get_all_layouts: Callable
     get_layout: Callable
     get_layout_visibility: Callable
     create_layout: Callable
     delete_layout: Callable
     set_holds: Callable
-    get_layout_photo_path: Callable
+    upload_layout_photo: Callable
 
     # Size functions (new)
     get_sizes: Callable
     get_size: Callable
     create_size: Callable
     delete_size: Callable
-    upload_size_photo: Callable
-    get_size_photo_path: Callable
 
     # Wall functions (legacy — kept for /walls API backward compat)
     wall_exists: Callable
