@@ -205,7 +205,7 @@ def migrate_boardlib_climbs(
                         existing_ids: set[str] = {
                             row[0]
                             for row in dest.execute(
-                                "SELECT id FROM climbs WHERE wall_id = ? AND layout_id = ? ", (db_name, layout)
+                                "SELECT id FROM climbs WHERE layout_id = ?", (f"{db_name}-{layout}",)
                             )
                         }
                     else:
@@ -261,7 +261,7 @@ def migrate_boardlib_climbs(
 
                     batch.append((
                         climb_id,               # id
-                        f"{db_name}-{layout}",  # wall_id+layout_id
+                        f"{db_name}-{layout}",  # layout_id
                         row['angle'],           # angle
                         row['uuid'],            # name  (source identifier)
                         json.dumps(holds),      # holds
@@ -296,7 +296,7 @@ def migrate_boardlib_climbs(
                     dest.executemany(
                         """
                         INSERT OR IGNORE INTO climbs
-                            (id, wall_id, angle, name, holds, tags,
+                            (id, layout_id, angle, name, holds, tags,
                             grade, quality, ascents, setter_name,
                             created_at, setter_id)
                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)

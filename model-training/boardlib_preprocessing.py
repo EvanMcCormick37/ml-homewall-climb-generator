@@ -32,19 +32,18 @@ def convert_dataframe_to_holds(
         default_useability: float = 0.5) -> list[dict]:
     """
     Convert pandas DataFrame to list of hold dictionaries.
-    
+
     Args:
         df: DataFrame with 'hole_id', 'x_ft', 'y_ft' columns
         default_pull_x: Default pull direction x-component
-        default_pull_y: Default pull direction y-component  
+        default_pull_y: Default pull direction y-component
         default_useability: Default difficulty rating (0-1)
-        default_is_foot: Whether hold is a foothold (0 or 1)
-    
+
     Returns:
         List of hold dictionaries matching the API schema
     """
     holds = []
-    
+
     for idx, row in df.iterrows():
         hold = {
             "hold_index": int(row[index_col]) if index_col else idx,
@@ -53,15 +52,14 @@ def convert_dataframe_to_holds(
             "pull_x": default_pull_x,
             "pull_y": default_pull_y,
             "useability": default_useability,
-            "is_foot": int(row['is_foot'])
         }
         holds.append(hold)
-    
+
     return holds
 
 def add_useability_features(wall_id, df_hold_diff):
     """Add useability to holds. Requires the holds to be uploaded, and a correctly formatted climbs_df to extract climb difficulty data from."""
-    endpoint = f"{API_BASE_URL}/api/v1/walls/{wall_id}"
+    endpoint = f"{API_BASE_URL}/api/v1/layouts/{wall_id}"
     response = requests.get(endpoint,)
     content = json.loads(response.text)
     holds = content['holds']
@@ -84,7 +82,7 @@ def upload_holds(wall_id: str, holds: list[dict], api_base_url: str = API_BASE_U
     Returns:
         Response JSON from the API
     """
-    endpoint = f"{api_base_url}/api/v1/walls/{wall_id}/holds"
+    endpoint = f"{api_base_url}/api/v1/layouts/{wall_id}/holds"
     
     # Prepare form data with JSON-encoded holds
     form_data = {
@@ -106,7 +104,7 @@ def upload_holds(wall_id: str, holds: list[dict], api_base_url: str = API_BASE_U
 
 def delete_wall(wall_id: str, api_base_url: str = API_BASE_URL):
     """Remotely delete a wall so I can resize the image."""
-    endpoint = f"{api_base_url}/api/v1/walls/{wall_id}"
+    endpoint = f"{api_base_url}/api/v1/layouts/{wall_id}"
     print(f"Deleting wall {wall_id}")
     response = requests.delete(endpoint)
     if response.status_code == 200:
@@ -143,19 +141,19 @@ def parse_frames_to_holdset(frames: str, role_map: dict | None) -> dict:
     return holdset
 
 def flush_backup_holds(
-    wall_id: str,
+    layout_id: str,
     backup_db_path: str = "data/storage.db",
 ):
     """Function for replacing holds with holds from the back-up DB. Use if you fuck up hold creation."""
     with sqlite3.connect(backup_db_path) as conn:
         df = pd.read_sql_query(
             """
-            SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot
+            SELECT hold_index, x, y, pull_x, pull_y, useability, tags
             FROM holds
-            WHERE wall_id = ?
+            WHERE layout_id = ?
             ORDER BY hold_index ASC
             """,conn,
-            params=(wall_id,))
+            params=(layout_id,))
     holds = []
     for idx, row in df.iterrows():
         hold = {
@@ -165,11 +163,10 @@ def flush_backup_holds(
             "pull_x": float(row['pull_x']),
             "pull_y": float(row['pull_y']),
             "useability": float(row['useability']),
-            "is_foot": int(row['is_foot']),
             "tags": json.loads(row['tags']) if row['tags'] else None
         }
         holds.append(hold)
-    upload_holds(wall_id,holds)
+    upload_holds(layout_id, holds)
 
 # ---------------------------------------------------------------
 #   Climb Upload Utilities
@@ -198,7 +195,7 @@ def upload_climbs_batch(
     Returns:
         List of results with original uuid and response/error
     """
-    endpoint = f"{base_url}/api/v1/walls/{wall_id}/climbs/batch"
+    endpoint = f"{base_url}/api/v1/layouts/{wall_id}/climbs/batch"
     results = []
     
     if try_one:

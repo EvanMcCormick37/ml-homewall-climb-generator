@@ -132,7 +132,7 @@ def add_hold_useability(
     if verbose:
         print(f"Loading climbs for wall '{training_wall_name}' from {storage_db} ...")
 
-    query = "SELECT holds, grade FROM climbs WHERE wall_id = ? AND grade IS NOT NULL"
+    query = "SELECT holds, grade FROM climbs WHERE layout_id = ? AND grade IS NOT NULL"
     params: list = [training_wall_name]
 
     if min_ascents > 0:
@@ -168,7 +168,7 @@ def add_hold_useability(
     if verbose:
         print(f"Fetching holds for API wall '{api_wall_id}' ...")
 
-    endpoint = f"{api_base_url}/api/v1/walls/{api_wall_id}"
+    endpoint = f"{api_base_url}/api/v1/layouts/{api_wall_id}"
     response = requests.get(endpoint)
     response.raise_for_status()
 
