@@ -23,6 +23,7 @@ export interface LayoutMetadata {
   name: string;
   description: string | null;
   dimensions: number[]; // [width_ft, height_ft]
+  image_edges: number[] | null; // [left, right, bottom, top] in ft — where each image edge sits in wall coords
   default_angle: number | null;
   sizes: SizeMetadata[];
   owner_id: string;
@@ -65,4 +66,12 @@ export interface SizeCreateResponse {
   id: string;
   layout_id: string;
   name: string;
+}
+
+export interface LayoutUpdate {
+  name?: string;
+  description?: string;
+  visibility?: "public" | "private" | "unlisted";
+  default_angle?: number | null;
+  image_edges?: number[]; // [left, right, bottom, top] in ft
 }

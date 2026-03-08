@@ -17,6 +17,7 @@ class ServiceContainer:
     get_layout: Callable
     get_layout_visibility: Callable
     create_layout: Callable
+    put_layout: Callable
     delete_layout: Callable
     set_holds: Callable
     upload_layout_photo: Callable

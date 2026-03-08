@@ -16,6 +16,7 @@ class LayoutMetadata(BaseModel):
     name: str
     description: str | None = None
     dimensions: list[int]
+    image_edges: list[float]
     default_angle: int | None = None
     sizes: list[SizeMetadata] = []
     owner_id: str
@@ -31,8 +32,16 @@ class LayoutCreate(BaseModel):
     description: str | None = None
     dimensions: list[int]
     default_angle: int | None = None
+    image_edges: list[float]
     visibility: str = "public"
 
+class LayoutEdit(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    dimensions: list[int] | None
+    default_angle: int | None = None
+    image_edges: list[float] | None = None
+    visibility: str | None = None
 
 class LayoutDetail(BaseModel):
     """Detailed layout info including holds and sizes."""

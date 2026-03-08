@@ -60,6 +60,7 @@ export async function renderExportImage(
   climb: NamedHoldset,
   setterName: string | null,
   displaySettings: DisplaySettings,
+  imageEdges?: [number, number, number, number] | null,
 ): Promise<Blob> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new window.Image();
@@ -129,9 +130,16 @@ export async function renderExportImage(
     filled,
   } = displaySettings;
 
+  const [imgEdgeL, imgEdgeR, imgEdgeB, imgEdgeT] = imageEdges ?? [
+    0,
+    wallDimensions.width,
+    0,
+    wallDimensions.height,
+  ];
+
   holds.forEach((hold) => {
-    const px = (hold.x / wallDimensions.width) * imgW;
-    const py = (1 - hold.y / wallDimensions.height) * imgH + topBannerH;
+    const px = ((hold.x - imgEdgeL) / (imgEdgeR - imgEdgeL)) * imgW;
+    const py = ((imgEdgeT - hold.y) / (imgEdgeT - imgEdgeB)) * imgH + topBannerH;
     const baseScale = imgH / 500;
     const radius = 10 * baseScale * userScale;
     const isUsed = usedSet.has(hold.hold_index);

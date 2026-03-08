@@ -13,7 +13,7 @@ Typical usage:
     from add_hold_useability import add_hold_useability
 
     add_hold_useability(
-        api_wall_id="wall-443c15cd12e0",   # backend wall ID
+        api_layout_id="wall-443c15cd12e0",   # backend wall ID
         training_wall_name="decoy",         # wall_id column value in storage.db
     )
 """
@@ -82,7 +82,7 @@ def _build_hold_difficulty_df(climbs: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_hold_useability(
-    api_wall_id: str,
+    api_layout_id: str,
     training_wall_name: str,
     storage_db: str | Path = STORAGE_DB,
     api_base_url: str      = API_BASE_URL,
@@ -97,13 +97,13 @@ def add_hold_useability(
         1. Load all climbs for `training_wall_name` from storage.db.
         2. Compute per-hold useability via inverse average difficulty, scaled
            to [0.01, 1.0] across all holds for this wall.
-        3. Fetch the current holds list for `api_wall_id` from the backend.
+        3. Fetch the current holds list for `api_layout_id` from the backend.
         4. Update the `useability` field on each hold that appears in the
            computed scores; holds with no climb appearances are left unchanged.
         5. PUT the updated holds list back to the backend.
 
     Args:
-        api_wall_id:
+        api_layout_id:
             The wall ID used by the backend API (e.g. "wall-443c15cd12e0").
             This is the target of the GET and PUT requests.
         training_wall_name:
@@ -132,7 +132,7 @@ def add_hold_useability(
     if verbose:
         print(f"Loading climbs for wall '{training_wall_name}' from {storage_db} ...")
 
-    query = "SELECT holds, grade FROM climbs WHERE layout_id = ? AND grade IS NOT NULL"
+    query = "SELECT holds, grade FROM climbs WHERE wall_id = ? AND grade IS NOT NULL"
     params: list = [training_wall_name]
 
     if min_ascents > 0:
@@ -166,9 +166,9 @@ def add_hold_useability(
     # 3. Fetch current holds from the backend
     # ------------------------------------------------------------------
     if verbose:
-        print(f"Fetching holds for API wall '{api_wall_id}' ...")
+        print(f"Fetching holds for API layout '{api_layout_id}' ...")
 
-    endpoint = f"{api_base_url}/api/v1/layouts/{api_wall_id}"
+    endpoint = f"{api_base_url}/api/v1/layouts/{api_layout_id}"
     response = requests.get(endpoint)
     response.raise_for_status()
 
@@ -197,9 +197,9 @@ def add_hold_useability(
     # 5. PUT updated holds back to the backend
     # ------------------------------------------------------------------
     if verbose:
-        print(f"Uploading updated holds to API wall '{api_wall_id}' ...")
+        print(f"Uploading updated holds to API wall '{api_layout_id}' ...")
 
-    upload_holds(api_wall_id, holds, api_base_url=api_base_url)
+    upload_holds(api_layout_id, holds, api_base_url=api_base_url)
 
     if verbose:
         print("Done.")

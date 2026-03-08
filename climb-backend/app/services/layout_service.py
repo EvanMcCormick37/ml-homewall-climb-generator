@@ -15,6 +15,7 @@ from fastapi import UploadFile
 from app.database import get_db
 from app.schemas import (
     LayoutCreate,
+    LayoutEdit,
     LayoutDetail,
     LayoutMetadata,
     HoldDetail,
@@ -90,7 +91,7 @@ def get_all_layouts(owner_id: str | None = None) -> list[LayoutMetadata]:
     with get_db() as conn:
         layout_rows = conn.execute(
             f"""
-            SELECT l.id, l.name, l.description, l.dimensions, l.default_angle,
+            SELECT l.id, l.name, l.description, l.dimensions, l.image_edges, l.default_angle,
                    l.owner_id, l.visibility, l.share_token,
                    l.created_at, l.updated_at
             FROM layouts l
@@ -119,12 +120,12 @@ def get_all_layouts(owner_id: str | None = None) -> list[LayoutMetadata]:
     return layouts
 
 
-def get_layout(layout_id: str, size_id: str | None = None) -> LayoutDetail | None:
+def get_layout(layout_id: str) -> LayoutDetail | None:
     """Get full layout details including holds (optionally size-filtered)."""
     with get_db() as conn:
         row = conn.execute(
             """
-            SELECT id, name, description, dimensions, default_angle, owner_id,
+            SELECT id, name, description, dimensions, image_edges, default_angle, owner_id,
                    visibility, share_token, created_at, updated_at
             FROM layouts WHERE id = ?
             """,
@@ -140,7 +141,7 @@ def get_layout(layout_id: str, size_id: str | None = None) -> LayoutDetail | Non
 
     sizes = _parse_sizes(size_rows)
     metadata = _row_to_layout_metadata(row, sizes)
-    holds = get_holds(layout_id, size_id)
+    holds = get_holds(layout_id)
     return LayoutDetail(metadata=metadata, holds=holds)
 
 
@@ -174,7 +175,7 @@ def create_layout(
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO layouts (id, name, description, dimensions, default_angle, owner_id,
+            INSERT INTO layouts (id, name, description, dimensions, image_edges, default_angle, owner_id,
                                  visibility, share_token, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -183,6 +184,7 @@ def create_layout(
                 layout_data.name,
                 layout_data.description,
                 json.dumps(layout_data.dimensions),
+                json.dumps(layout_data.image_edges),
                 layout_data.default_angle,
                 owner_id,
                 layout_data.visibility,
@@ -211,6 +213,64 @@ def delete_layout(layout_id: str) -> bool:
 
     return True
 
+
+def put_layout(layout_id: str, layout_data: LayoutEdit) -> str:
+    """Update an existing layout's metadata dynamically."""
+    if not layout_exists(layout_id): #
+        raise ValueError(f"Layout with id {layout_id} does not exist.")
+
+    # 1. Initialize lists to hold our dynamic SQL pieces
+    set_clauses = []
+    params = []
+
+    # 2. Check each field and add it if it's not None
+    if layout_data.name is not None:
+        set_clauses.append("name = ?")
+        params.append(layout_data.name)
+        
+    if layout_data.description is not None:
+        set_clauses.append("description = ?")
+        params.append(layout_data.description)
+        
+    if layout_data.dimensions is not None:
+        set_clauses.append("dimensions = ?")
+        params.append(json.dumps(layout_data.dimensions)) #
+        
+    if layout_data.image_edges is not None:
+        set_clauses.append("image_edges = ?")
+        params.append(json.dumps(layout_data.image_edges)) #
+        
+    if layout_data.default_angle is not None:
+        set_clauses.append("default_angle = ?")
+        params.append(layout_data.default_angle)
+        
+    if layout_data.visibility is not None:
+        set_clauses.append("visibility = ?")
+        params.append(layout_data.visibility)
+
+    # 3. If everything was None, we don't need to hit the database at all
+    if not set_clauses:
+        return layout_id
+
+    # 4. Always update the 'updated_at' timestamp if changes are being made
+    set_clauses.append("updated_at = ?")
+    params.append(datetime.now())
+
+    # 5. Add the layout_id to the end of the parameters for the WHERE clause
+    params.append(layout_id)
+
+    # 6. Construct the final query string
+    query = f"""
+        UPDATE layouts 
+        SET {", ".join(set_clauses)}
+        WHERE id = ?
+    """
+
+    # 7. Execute the dynamic query
+    with get_db() as conn: #
+        conn.execute(query, tuple(params))
+        
+    return layout_id
 
 def set_holds(layout_id: str, holds: list[HoldDetail]) -> bool:
     """Set or replace the full hold set for a layout."""

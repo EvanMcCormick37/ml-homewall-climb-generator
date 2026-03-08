@@ -19,6 +19,7 @@ services = ServiceContainer(
     get_layout=layout_service.get_layout,
     get_layout_visibility=layout_service.get_layout_visibility,
     create_layout=layout_service.create_layout,
+    put_layout=layout_service.put_layout,
     delete_layout=layout_service.delete_layout,
     set_holds=layout_service.set_holds,
     upload_layout_photo=layout_service.upload_layout_photo,

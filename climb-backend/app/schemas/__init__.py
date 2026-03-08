@@ -15,6 +15,7 @@ from app.schemas.sizes import (
 )
 from app.schemas.layouts import (
     LayoutCreate,
+    LayoutEdit,
     LayoutDetail,
     LayoutMetadata,
     LayoutListResponse,
@@ -47,6 +48,7 @@ __all__ = [
     "Holdset",
     # Layouts (new)
     "LayoutCreate",
+    "LayoutEdit",
     "LayoutDetail",
     "LayoutMetadata",
     "LayoutListResponse",

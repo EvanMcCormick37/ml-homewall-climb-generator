@@ -30,6 +30,7 @@ def _row_to_layout_metadata(row, sizes: list[SizeMetadata]) -> LayoutMetadata:
         name=row["name"],
         description=row["description"],
         dimensions=json.loads(row["dimensions"]),
+        image_edges=json.loads(row["image_edges"]),
         default_angle=row["default_angle"],
         sizes=sizes,
         owner_id=row["owner_id"],

@@ -14,6 +14,7 @@ from app.schemas import (
     LayoutListResponse,
     LayoutCreateResponse,
     LayoutCreate,
+    LayoutEdit,
     SetHoldsResponse,
 )
 from app.services import services
@@ -41,11 +42,10 @@ def list_layouts(user: dict | None = Depends(sync_auth)):
 )
 def get_layout(
     layout_id: str,
-    size_id: str | None = Query(None, description="Filter holds to this size's edge bounds"),
     _=Depends(get_accessible_layout),
 ):
     """Get detailed layout info including holds and sizes."""
-    detail = services.get_layout(layout_id, size_id=size_id)
+    detail = services.get_layout(layout_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="Layout not found")
     return detail
@@ -63,19 +63,64 @@ def create_layout(
     default_angle: int | None = Form(None),
     description: str | None = Form(None),
     visibility: str = Form("public"),
+    image_edges: str = Form(...),
     user: dict = Depends(require_auth),
 ):
     """Create a new layout."""
     if visibility not in ("public", "private", "unlisted"):
         raise HTTPException(status_code=400, detail="Invalid visibility value.")
 
-    layout_data = LayoutCreate(name=name, description=description, dimensions=json.loads(dimensions), default_angle=default_angle, visibility=visibility)
+    layout_data = LayoutCreate(
+        name=name,
+        description=description,
+        dimensions=json.loads(dimensions),
+        default_angle=default_angle,
+        image_edges=json.loads(image_edges),
+        visibility=visibility
+        )
 
     try:
         layout_id = services.create_layout(layout_data, owner_id=user["user_id"])
         return LayoutCreateResponse(id=layout_id, name=layout_data.name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create layout: {e}")
+
+
+@router.put(
+    "/{layout_id}/edit",
+    response_model=LayoutDetail,
+    status_code=201,
+    summary="Create a new layout",
+)
+def edit_layout(
+    layout_id: str,
+    name: str | None = Form(None, min_length=1, max_length=100),
+    dimensions: str | None = Form(None),
+    default_angle: int | None = Form(None),
+    description: str | None = Form(None),
+    visibility: str | None = Form(None),
+    image_edges: str  | None = Form(None),
+    # _=Depends(require_layout_owner),
+
+):
+    """Create a new layout."""
+    if visibility is not None and visibility not in ("public", "private", "unlisted"):
+        raise HTTPException(status_code=400, detail="Invalid visibility value.")
+
+    layout_data = LayoutEdit(
+        name=name,
+        description=description,
+        dimensions=json.loads(dimensions) if dimensions else None,
+        default_angle=default_angle,
+        image_edges=json.loads(image_edges) if image_edges else None,
+        visibility=visibility
+    )
+
+    layout_id = services.put_layout(layout_id, layout_data)
+    detail = services.get_layout(layout_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Layout not found")
+    return detail
 
 
 @router.put(

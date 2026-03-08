@@ -4,6 +4,7 @@ import type {
   LayoutDetail,
   LayoutCreate,
   LayoutCreateResponse,
+  LayoutUpdate,
 } from "@/types";
 import type { HoldDetail } from "@/types";
 
@@ -22,7 +23,7 @@ export async function getLayouts(): Promise<LayoutListResponse> {
  */
 export async function getLayout(
   layoutId: string,
-  sizeId?: string
+  sizeId?: string,
 ): Promise<LayoutDetail> {
   const params = sizeId ? { size_id: sizeId } : undefined;
   const response = await apiClient.get<LayoutDetail>(`/layouts/${layoutId}`, {
@@ -35,21 +36,48 @@ export async function getLayout(
  * Create a new layout (no photo — photo is uploaded separately via uploadLayoutPhoto).
  */
 export async function createLayout(
-  data: LayoutCreate
+  data: LayoutCreate,
 ): Promise<LayoutCreateResponse> {
   const formData = new FormData();
   formData.append("name", data.name);
   formData.append("dimensions", JSON.stringify(data.dimensions));
-  if (data.default_angle != null) formData.append("default_angle", String(data.default_angle));
+  if (data.default_angle != null)
+    formData.append("default_angle", String(data.default_angle));
   if (data.description) formData.append("description", data.description);
   if (data.visibility) formData.append("visibility", data.visibility);
 
   const response = await apiClient.post<LayoutCreateResponse>(
     "/layouts",
     formData,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return response.data;
+}
+
+/**
+ * Update editable fields on an existing layout.
+ */
+export async function updateLayout(
+  layoutId: string,
+  data: LayoutUpdate,
+): Promise<void> {
+  const formData = new FormData();
+  if (data.name !== undefined) formData.append("name", data.name);
+  if (data.description !== undefined)
+    formData.append("description", data.description);
+  if (data.visibility !== undefined)
+    formData.append("visibility", data.visibility);
+  if (data.default_angle !== undefined)
+    formData.append(
+      "default_angle",
+      data.default_angle === null ? "" : String(data.default_angle),
+    );
+  if (data.image_edges !== undefined)
+    formData.append("image_edges", JSON.stringify(data.image_edges));
+
+  await apiClient.put(`/layouts/${layoutId}/edit`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 }
 
 /**
@@ -57,7 +85,7 @@ export async function createLayout(
  */
 export async function uploadLayoutPhoto(
   layoutId: string,
-  photo: File
+  photo: File,
 ): Promise<void> {
   const formData = new FormData();
   formData.append("photo", photo);
@@ -79,7 +107,7 @@ export async function deleteLayout(layoutId: string): Promise<void> {
  */
 export async function setLayoutHolds(
   layoutId: string,
-  holds: HoldDetail[]
+  holds: HoldDetail[],
 ): Promise<{ id: string }> {
   const formData = new FormData();
   formData.append("holds", JSON.stringify(holds));
@@ -87,7 +115,7 @@ export async function setLayoutHolds(
   const response = await apiClient.put<{ id: string }>(
     `/layouts/${layoutId}/holds`,
     formData,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    { headers: { "Content-Type": "multipart/form-data" } },
   );
   return response.data;
 }

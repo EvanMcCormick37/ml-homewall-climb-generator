@@ -1590,6 +1590,11 @@ function MainViewPage({
               imageDimensions={imageDimensions}
               onImageLoad={handleImageLoad}
               displaySettings={displaySettings}
+              imageEdges={
+                layout.metadata.image_edges as
+                  | [number, number, number, number]
+                  | null
+              }
             />
           </div>
 

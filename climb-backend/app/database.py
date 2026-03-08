@@ -82,6 +82,7 @@ def init_db():
                 name TEXT NOT NULL,
                 description TEXT,
                 dimensions INTEGER,
+                image_edges TEXT NOT NULL,      --4 coordinate edges of the layout image. List of 4 floats, [left, right, bottom, top]
                 default_angle INTEGER,
                 owner_id TEXT,
                 visibility TEXT DEFAULT 'public',

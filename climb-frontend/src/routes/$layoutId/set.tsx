@@ -1524,6 +1524,9 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
         selectedClimb,
         user?.fullName ?? null,
         displaySettings,
+        layout.metadata.image_edges as
+          | [number, number, number, number]
+          | null,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1554,6 +1557,9 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
           selectedClimb,
           user?.fullName ?? null,
           displaySettings,
+          layout.metadata.image_edges as
+            | [number, number, number, number]
+            | null,
         );
         file = new File(
           [blob],
@@ -1642,7 +1648,13 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
         const hold = layout.holds.find((h) => h.hold_index === holdIndex);
         if (hold) {
           const [leftFt, rightFt, bottomFt, topFt] = activeSize.edges;
-          if (hold.x < leftFt || hold.x > rightFt || hold.y < bottomFt || hold.y > topFt) return;
+          if (
+            hold.x < leftFt ||
+            hold.x > rightFt ||
+            hold.y < bottomFt ||
+            hold.y > topFt
+          )
+            return;
         }
       }
       setGeneratedClimbs((prev) => {
@@ -1921,14 +1933,23 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                   height: "28px",
                   border: `1px solid ${showSizeDropdown || activeSize?.name !== "default" ? "var(--border-active)" : "var(--border)"}`,
                   borderRadius: "var(--radius)",
-                  background: showSizeDropdown || activeSize?.name !== "default" ? "var(--cyan-dim)" : "transparent",
-                  color: showSizeDropdown || activeSize?.name !== "default" ? "var(--cyan)" : "var(--text-muted)",
+                  background:
+                    showSizeDropdown || activeSize?.name !== "default"
+                      ? "var(--cyan-dim)"
+                      : "transparent",
+                  color:
+                    showSizeDropdown || activeSize?.name !== "default"
+                      ? "var(--cyan)"
+                      : "var(--text-muted)",
                   cursor: "pointer",
                   transition: "all 0.15s",
                 }}
               >
                 <Layers size={13} />
-                <span className="bz-mono" style={{ fontSize: "0.55rem", letterSpacing: "0.08em" }}>
+                <span
+                  className="bz-mono"
+                  style={{ fontSize: "0.55rem", letterSpacing: "0.08em" }}
+                >
                   {activeSize?.name ?? "—"}
                 </span>
                 <ChevronDown
@@ -1991,10 +2012,14 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                             gap: "8px",
                             width: "100%",
                             padding: "9px 12px",
-                            background: isActive ? "var(--cyan-dim)" : "transparent",
+                            background: isActive
+                              ? "var(--cyan-dim)"
+                              : "transparent",
                             border: "none",
                             borderBottom: "1px solid var(--border)",
-                            color: isActive ? "var(--cyan)" : "var(--text-primary)",
+                            color: isActive
+                              ? "var(--cyan)"
+                              : "var(--text-primary)",
                             cursor: "pointer",
                             textAlign: "left",
                             transition: "background 0.1s",
@@ -2005,17 +2030,25 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                               width: "6px",
                               height: "6px",
                               borderRadius: "50%",
-                              background: isActive ? "var(--cyan)" : "var(--border)",
+                              background: isActive
+                                ? "var(--cyan)"
+                                : "var(--border)",
                               flexShrink: 0,
                             }}
                           />
-                          <span className="bz-mono" style={{ fontSize: "0.65rem", flex: 1 }}>
+                          <span
+                            className="bz-mono"
+                            style={{ fontSize: "0.65rem", flex: 1 }}
+                          >
                             {size.name}
                           </span>
                           {size.kickboard && (
                             <span
                               className="bz-mono"
-                              style={{ fontSize: "0.55rem", color: "var(--text-dim)" }}
+                              style={{
+                                fontSize: "0.55rem",
+                                color: "var(--text-dim)",
+                              }}
                             >
                               KB
                             </span>
@@ -2026,7 +2059,10 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                     <button
                       onClick={() => {
                         setShowSizeDropdown(false);
-                        navigate({ to: "/$layoutId/sizes", params: { layoutId } });
+                        navigate({
+                          to: "/$layoutId/sizes",
+                          params: { layoutId },
+                        });
                       }}
                       style={{
                         display: "flex",
@@ -2043,8 +2079,12 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                         textTransform: "uppercase",
                         transition: "color 0.1s",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-dim)")}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.color = "var(--text-muted)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.color = "var(--text-dim)")
+                      }
                     >
                       Manage Sizes →
                     </button>
@@ -2053,7 +2093,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
               )}
             </div>
             <span
-              className="bz-mono"
+              className="hidden lg:flex bz-mono"
               style={{
                 fontSize: "0.55rem",
                 letterSpacing: "0.12em",
@@ -2429,6 +2469,11 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
               displaySettings={displaySettings}
               onHoldClick={handleHoldClick}
               activeSize={activeSize}
+              imageEdges={
+                layout.metadata.image_edges as
+                  | [number, number, number, number]
+                  | null
+              }
             />
           </div>
 

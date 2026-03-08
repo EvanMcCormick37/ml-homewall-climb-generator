@@ -25,6 +25,11 @@ export interface WallCanvasProps {
   onSwipePrev?: () => void;
   /** Active size for spatial filtering overlay. Hidden when null or name === "default". */
   activeSize?: SizeMetadata | null;
+  /**
+   * Where each edge of the layout photo sits in wall-coordinate space (ft).
+   * [left, right, bottom, top]. Defaults to [0, wallWidth, 0, wallHeight].
+   */
+  imageEdges?: [number, number, number, number] | null;
 }
 
 export function WallCanvas({
@@ -39,7 +44,15 @@ export function WallCanvas({
   onSwipeNext,
   onSwipePrev,
   activeSize,
+  imageEdges,
 }: WallCanvasProps) {
+  // Resolve image_edges, falling back to full wall dimensions
+  const [imgL, imgR, imgB, imgT] = imageEdges ?? [
+    0,
+    wallDimensions.width,
+    0,
+    wallDimensions.height,
+  ];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -88,10 +101,10 @@ export function WallCanvas({
 
   const toPixelCoords = useCallback(
     (hold: HoldDetail) => ({
-      x: (hold.x / wallDimensions.width) * imageDimensions.width,
-      y: (1 - hold.y / wallDimensions.height) * imageDimensions.height,
+      x: ((hold.x - imgL) / (imgR - imgL)) * imageDimensions.width,
+      y: ((imgT - hold.y) / (imgT - imgB)) * imageDimensions.height,
     }),
-    [imageDimensions, wallDimensions],
+    [imageDimensions, imgL, imgR, imgB, imgT],
   );
 
   // Draw canvas
@@ -409,11 +422,12 @@ export function WallCanvas({
           activeSize.name !== "default" &&
           (() => {
             const [lFt, rFt, bFt, tFt] = activeSize.edges;
-            const { width: wFt, height: hFt } = wallDimensions;
-            const nL = lFt / wFt;
-            const nR = rFt / wFt;
-            const nT = 1 - tFt / hFt;
-            const nB = 1 - bFt / hFt;
+            const span = imgR - imgL;
+            const vspan = imgT - imgB;
+            const nL = (lFt - imgL) / span;
+            const nR = (rFt - imgL) / span;
+            const nT = (imgT - tFt) / vspan;
+            const nB = (imgT - bFt) / vspan;
             const bg = "rgba(9,9,11,0.65)";
             const s: React.CSSProperties = {
               position: "absolute",

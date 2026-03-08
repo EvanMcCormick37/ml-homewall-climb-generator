@@ -16,7 +16,7 @@ ROLE_MAP = {
 # ---------------------------------------------------------------
 #   Hold Upload Utilities
 # ---------------------------------------------------------------
-def df_sql(db_name, query,index_col='uuid'):
+def df_sql(db_name, query,index_col=None):
     """Extract table <table_name> from database <db_name>.db"""
     with sqlite3.connect(f"data/boardlib/{db_name}.db") as conn:
         df = pd.read_sql_query(query,conn,index_col=index_col)
@@ -57,9 +57,9 @@ def convert_dataframe_to_holds(
 
     return holds
 
-def add_useability_features(wall_id, df_hold_diff):
+def add_useability_features(layout_id, df_hold_diff):
     """Add useability to holds. Requires the holds to be uploaded, and a correctly formatted climbs_df to extract climb difficulty data from."""
-    endpoint = f"{API_BASE_URL}/api/v1/layouts/{wall_id}"
+    endpoint = f"{API_BASE_URL}/api/v1/layouts/{layout_id}"
     response = requests.get(endpoint,)
     content = json.loads(response.text)
     holds = content['holds']
@@ -68,28 +68,28 @@ def add_useability_features(wall_id, df_hold_diff):
             hold['useability'] = float(df_hold_diff.loc[float(hold['hold_index']),'difficulty_level'])
         except:
             continue
-    upload_holds(wall_id,holds)
+    upload_holds(layout_id,holds)
 
-def upload_holds(wall_id: str, holds: list[dict], api_base_url: str = API_BASE_URL):
+def upload_holds(layout_id: str, holds: list[dict], api_base_url: str = API_BASE_URL):
     """
     Upload holds to the API.
     
     Args:
-        wall_id: The wall ID to upload holds to
+        layout_id: The wall ID to upload holds to
         holds: List of hold dictionaries
         api_base_url: Base URL of the API
     
     Returns:
         Response JSON from the API
     """
-    endpoint = f"{api_base_url}/api/v1/layouts/{wall_id}/holds"
+    endpoint = f"{api_base_url}/api/v1/layouts/{layout_id}/holds"
     
     # Prepare form data with JSON-encoded holds
     form_data = {
         "holds": json.dumps(holds)
     }
     
-    print(f"Uploading {len(holds)} holds to wall {wall_id}...")
+    print(f"Uploading {len(holds)} holds to wall {layout_id}...")
     print(f"Endpoint: {endpoint}")
     
     response = requests.put(endpoint, data=form_data)
@@ -102,10 +102,25 @@ def upload_holds(wall_id: str, holds: list[dict], api_base_url: str = API_BASE_U
         print(f"Error: {response.text}")
         response.raise_for_status()
 
-def delete_wall(wall_id: str, api_base_url: str = API_BASE_URL):
+def add_holds(db_name, layout_id_boardlib, layout_id_betazero):
+    with sqlite3.connect(f"data/boardlib/{db_name}.db") as conn:
+        dfp = pd.read_sql_query("""
+        SELECT p.id, h.x, h.y
+        FROM (SELECT * FROM placements WHERE layout_id = ?) AS p
+        INNER JOIN holes h ON p.hole_id = h.id;
+        """, conn, index_col="id", params=(layout_id_boardlib,))
+        dfp['x'] -= dfp['x'].min()
+        dfp['y'] -= dfp['y'].min()
+        dfp['x_ft'] = dfp['x']/12
+        dfp['y_ft'] = dfp['y']/12
+        
+        holds = convert_dataframe_to_holds(dfp)
+        upload_holds(layout_id_betazero, holds)
+
+def delete_wall(layout_id: str, api_base_url: str = API_BASE_URL):
     """Remotely delete a wall so I can resize the image."""
-    endpoint = f"{api_base_url}/api/v1/layouts/{wall_id}"
-    print(f"Deleting wall {wall_id}")
+    endpoint = f"{api_base_url}/api/v1/layouts/{layout_id}"
+    print(f"Deleting wall {layout_id}")
     response = requests.delete(endpoint)
     if response.status_code == 200:
         print("Deletion Successful!")
@@ -172,7 +187,7 @@ def flush_backup_holds(
 #   Climb Upload Utilities
 # ---------------------------------------------------------------
 def upload_climbs_batch(
-    wall_id: str,
+    layout_id: str,
     df: pd.DataFrame,
     role_map: str | None = None,
     base_url: str = API_BASE_URL,
@@ -186,7 +201,7 @@ def upload_climbs_batch(
     Args:
         df: DataFrame with columns [uuid, angle, frames, difficulty_average, 
             quality_average, ascensionist_count, fa_username, created_at]
-        wall_id: The wall ID to upload climbs to
+        layout_id: The wall ID to upload climbs to
         base_url: Base URL of the API
         batch_size: Number of climbs per batch request
         verbose: Print progress updates
@@ -195,7 +210,7 @@ def upload_climbs_batch(
     Returns:
         List of results with original uuid and response/error
     """
-    endpoint = f"{base_url}/api/v1/layouts/{wall_id}/climbs/batch"
+    endpoint = f"{base_url}/api/v1/layouts/{layout_id}/climbs/batch"
     results = []
     
     if try_one:
