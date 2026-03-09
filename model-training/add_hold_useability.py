@@ -32,8 +32,8 @@ from boardlib_preprocessing import upload_holds
 STORAGE_DB   = Path("data/storage.db")
 API_BASE_URL = "http://localhost:8000"
 
-def _build_hold_difficulty_df(climbs: pd.DataFrame) -> pd.DataFrame:
-    holds_dict = defaultdict(lambda:([],[]))
+def _build_hold_difficulty_dict(climbs: pd.DataFrame):
+    holds_dict = {}
 
     for _, row in climbs.iterrows():
         try:
@@ -41,6 +41,8 @@ def _build_hold_difficulty_df(climbs: pd.DataFrame) -> pd.DataFrame:
             grade = float(row['grade'])
             
             for hold_index, role in holdset:
+                if hold_index not in holds_dict:
+                    holds_dict[hold_index] = ([],[])
                 if role == 3:
                     holds_dict[hold_index][1].append(grade)
                 else:
@@ -49,20 +51,25 @@ def _build_hold_difficulty_df(climbs: pd.DataFrame) -> pd.DataFrame:
         except (json.JSONDecodeError, TypeError, ValueError):
             continue
     
-    grade_info = []
     for k, v in holds_dict.items():
         diffs = v[0] if (len(v[0])>len(v[1])) else v[1]
-        is_foot = False if (len(v[0])>len(v[1])) else True 
-        useability = 1.0 / np.mean(diffs)
-        grade_info.append([k, useability, is_foot])
+        is_foot = False if (len(v[0])*0.9 > len(v[1])) else True
+        # Instead of using a MinMax scaler, we can follow along with boardlib's default grading scale. 10=V0, 33=V16. To convert to normalized difficulty levels within [0,1],
+        # simply subtract a constant and divide by the range, then subtract from 1 to convert from difficulty (higher=harder) to useability (higher=easier).
+        useability = round(1 - (np.mean(diffs)-10.0)/23, 2)
+        holds_dict[k] = [useability, is_foot]
 
-    df = pd.DataFrame(grade_info, columns=['hold_index', 'difficulty_level', 'is_foot']).set_index('hold_index')
+    return holds_dict
 
-    scaler = MinMaxScaler(feature_range=(5, 100))
-    df['difficulty_level'] = np.round(
-        scaler.fit_transform(df[['difficulty_level']]) / 100.0,
-        decimals=2,
-    )
+def diff_df(layout_name, min_ascents):
+    query = "SELECT holds, grade FROM climbs WHERE wall_id = ? AND grade IS NOT NULL AND ascents >= ?"
+
+    with sqlite3.connect(STORAGE_DB) as conn:
+        climbs = pd.read_sql_query(query, conn, params=(layout_name, min_ascents))
+
+    holds_dict = _build_hold_difficulty_dict(climbs)
+
+    df = pd.DataFrame([(k, v1, v2) for k, (v1, v2) in holds_dict.items()], columns=["index", "useability", "is_foot"])
     return df
 
 def add_hold_useability(
@@ -135,16 +142,10 @@ def add_hold_useability(
     if verbose:
         print(f"  {len(climbs)} climbs loaded.")
 
-    # ------------------------------------------------------------------
-    # 2. Compute per-hold useability scores
-    # ------------------------------------------------------------------
     if verbose:
         print("Computing hold useability scores ...")
 
-    df_hold_diff = _build_hold_difficulty_df(climbs)
-
-    if verbose:
-        print(f"  Scores computed for {len(df_hold_diff)} unique holds.")
+    edit_holds_dict = _build_hold_difficulty_dict(climbs)
 
     # ------------------------------------------------------------------
     # 3. Fetch current holds from the backend
@@ -167,8 +168,9 @@ def add_hold_useability(
     updated = 0
     for hold in holds:
         try:
-            hold['useability'] = float(df_hold_diff.loc[float(hold['hold_index']), 'difficulty_level'])
-            hold['is_foot'] = float(df_hold_diff.loc[float(hold['hold_index']), 'is_foot'])
+            edit_hold = edit_holds_dict[hold['hold_index']]
+            hold['useability'] = edit_hold[0]
+            hold['is_foot'] = edit_hold[1]
             updated += 1
         except KeyError:
             continue
@@ -186,3 +188,4 @@ def add_hold_useability(
 
     if verbose:
         print("Done.")
+

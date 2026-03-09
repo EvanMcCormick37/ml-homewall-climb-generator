@@ -109,15 +109,13 @@ def add_holds(db_name, layout_id_boardlib, layout_id_betazero):
         FROM (SELECT * FROM placements WHERE layout_id = ?) AS p
         INNER JOIN holes h ON p.hole_id = h.id;
         """, conn, index_col="id", params=(layout_id_boardlib,))
-        dfp['x'] -= dfp['x'].min()
-        dfp['y'] -= dfp['y'].min()
-        dfp['x_ft'] = dfp['x']/12
-        dfp['y_ft'] = dfp['y']/12
+    dfp['x'] -= dfp['x'].min()
+    dfp['y'] -= dfp['y'].min()
+    dfp['x_ft'] = dfp['x']/12
+    dfp['y_ft'] = dfp['y']/12
         
-        holds = convert_dataframe_to_holds(dfp)
-        upload_holds(layout_id_betazero, holds)
-    
-    return
+    holds = convert_dataframe_to_holds(dfp)
+    upload_holds(layout_id_betazero, holds)
 
 def delete_wall(layout_id: str, api_base_url: str = API_BASE_URL):
     """Remotely delete a wall so I can resize the image."""
@@ -193,7 +191,7 @@ def upload_climbs_batch(
     df: pd.DataFrame,
     role_map: str | None = None,
     base_url: str = API_BASE_URL,
-    batch_size: int = 500,
+    batch_size: int = 1000,
     verbose: bool = True,
     try_one: bool = False,
 ) -> list[dict]:
