@@ -115,6 +115,7 @@ def init_db():
                 pull_x REAL DEFAULT 0.0,
                 pull_y REAL DEFAULT 0.0,
                 useability REAL DEFAULT 0.5,
+                is_foot BOOLEAN DEFAULT false,
                 tags TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -43,7 +43,7 @@ def get_holds(layout_id: str, size_id: str | None = None) -> list[HoldDetail]:
     with get_db() as conn:
         rows = conn.execute(
             """
-            SELECT hold_index, x, y, pull_x, pull_y, useability, tags
+            SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags
             FROM holds
             WHERE layout_id = ?
             ORDER BY hold_index ASC
@@ -282,8 +282,8 @@ def set_holds(layout_id: str, holds: list[HoldDetail]) -> bool:
         conn.executemany(
             """
             INSERT INTO holds (id, layout_id, hold_index, x, y,
-                               pull_x, pull_y, useability, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               pull_x, pull_y, useability, is_foot, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [_hold_detail_to_row(layout_id, hold) for hold in holds],
         )

@@ -48,6 +48,10 @@ function HoldsEditorPage() {
   const [activeHoldIndex, setActiveHoldIndex] = useState<number | null>(null);
   const [stickyTags, setStickyTags] = useState<Tag[]>([]);
 
+  const imageEdges = layout.metadata.image_edges as
+    | [number, number, number, number]
+    | null;
+
   const {
     holds,
     addHold,
@@ -60,7 +64,7 @@ function HoldsEditorPage() {
     loadHolds,
     toPixelCoords,
     toFeetCoords,
-  } = useHolds(imageDimensions, wallDimensions);
+  } = useHolds(imageDimensions, wallDimensions, imageEdges);
 
   const activeHold =
     activeHoldIndex !== null
@@ -91,7 +95,7 @@ function HoldsEditorPage() {
     dragY: number;
     originalHold?: HoldDetail;
     useability?: number;
-    is_foot?: number;
+    is_foot?: boolean;
   }>({
     isDragging: false,
     dragX: 0,
@@ -220,7 +224,7 @@ function HoldsEditorPage() {
           undefined,
           undefined,
           undefined,
-          enabledFeatures.footholds && isAddFoot ? 1 : 0,
+          enabledFeatures.footholds && isAddFoot,
           enabledFeatures.tags && stickyTags.length > 0 ? [...stickyTags] : [],
         );
         setActiveHoldIndex(idx);
@@ -286,7 +290,7 @@ function HoldsEditorPage() {
         enabledFeatures.direction ? params.pull_x : undefined,
         enabledFeatures.direction ? params.pull_y : undefined,
         enabledFeatures.useability ? params.useability : undefined,
-        enabledFeatures.footholds && isAddFoot ? 1 : 0,
+        enabledFeatures.footholds && isAddFoot ? true : false,
         enabledFeatures.tags && stickyTags.length > 0 ? [...stickyTags] : [],
       );
       setActiveHoldIndex(idx);
@@ -306,13 +310,20 @@ function HoldsEditorPage() {
         (h) => h.hold_index === originalHold.hold_index,
       );
       const existingTags = existingHold?.tags ?? originalHold.tags ?? [];
-      const params = calculateHoldParams(pixelCoords.x, pixelCoords.y, dragX, dragY);
+      const params = calculateHoldParams(
+        pixelCoords.x,
+        pixelCoords.y,
+        dragX,
+        dragY,
+      );
       const updatedParams: Partial<HoldDetail> = {
         ...(enabledFeatures.direction
           ? { pull_x: params.pull_x, pull_y: params.pull_y }
           : {}),
-        ...(enabledFeatures.useability ? { useability: params.useability } : {}),
-        ...(enabledFeatures.footholds ? { is_foot: Number(isAddFoot) } : {}),
+        ...(enabledFeatures.useability
+          ? { useability: params.useability }
+          : {}),
+        ...(enabledFeatures.footholds ? { is_foot: isAddFoot } : {}),
         ...(enabledFeatures.tags && stickyTags.length > 0
           ? { tags: [...new Set([...existingTags, ...stickyTags])] }
           : {}),
@@ -393,11 +404,16 @@ function HoldsEditorPage() {
     const handleKeydown = (e: KeyboardEvent) => {
       if (!enabledFeatures.tags) return;
       const tagMap: Record<string, Tag> = {
-        p: "pinch", P: "pinch",
-        m: "macro", M: "macro",
-        s: "sloper", S: "sloper",
-        v: "versatile", V: "versatile",
-        j: "jug", J: "jug",
+        p: "pinch",
+        P: "pinch",
+        m: "macro",
+        M: "macro",
+        s: "sloper",
+        S: "sloper",
+        v: "versatile",
+        V: "versatile",
+        j: "jug",
+        J: "jug",
       };
       const tag = tagMap[e.key];
       if (!tag) return;
@@ -425,7 +441,7 @@ function HoldsEditorPage() {
 
     holds.forEach((hold) => {
       const { x, y } = toPixelCoords(hold);
-      const isFoot = !!hold.is_foot;
+      const isFoot = hold.is_foot;
       const scale = height / 1500;
       const sizeMultiplier = isFoot ? 0.5 * scale : scale;
       const useability = hold.useability ?? 0.5;
@@ -433,6 +449,8 @@ function HoldsEditorPage() {
 
       const circleSize = 4 * sizeMultiplier;
       const arrowSize = 2 * sizeMultiplier;
+
+      ctx.globalAlpha = 0.6;
 
       if (mode === "select" && selectedHold?.hold_index === hold.hold_index) {
         ctx.beginPath();
@@ -487,6 +505,7 @@ function HoldsEditorPage() {
         ctx.stroke();
       }
 
+      ctx.globalAlpha = 1;
       ctx.fillStyle = "white";
       ctx.font = `bold ${10 * sizeMultiplier}px sans-serif`;
       ctx.textAlign = "center";
@@ -534,7 +553,7 @@ function HoldsEditorPage() {
         dragY,
       );
       const sizeMultiplier = originalHold.is_foot ? 0.5 : 1;
-      const color = getHoldColor(params.useability, originalHold.is_foot === 1);
+      const color = getHoldColor(params.useability, originalHold.is_foot);
 
       const circleSize = 6 * sizeMultiplier;
       const arrowSize = 4 * sizeMultiplier;
@@ -749,7 +768,12 @@ function HoldsEditorPage() {
               </button>
               <button
                 onClick={() => setHoldMode("edit")}
-                style={modeButtonStyle(mode === "edit", "#f59e0b")}
+                style={modeButtonStyle(
+                  mode === "edit",
+                  enabledFeatures.footholds && isAddFoot
+                    ? "#9333ea"
+                    : "#f59e0b",
+                )}
               >
                 <Edit size={13} />
               </button>

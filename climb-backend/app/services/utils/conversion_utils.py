@@ -54,6 +54,7 @@ def _hold_detail_to_row(layout_id: str, hold: HoldDetail) -> tuple:
         hold.pull_x,
         hold.pull_y,
         hold.useability,
+        hold.is_foot,
         json.dumps(hold.tags or []),
     )
 
@@ -67,5 +68,6 @@ def _row_to_hold_detail(row) -> HoldDetail:
         pull_x=row["pull_x"],
         pull_y=row["pull_y"],
         useability=row["useability"],
+        is_foot=row["is_foot"],
         tags=json.loads(row["tags"]) if row["tags"] else []
     )

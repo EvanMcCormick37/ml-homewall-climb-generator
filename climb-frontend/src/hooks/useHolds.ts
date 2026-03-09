@@ -8,35 +8,45 @@ interface Dimensions {
 
 export function useHolds(
   imageDimensions: Dimensions,
-  wallDimensions: Dimensions
+  wallDimensions: Dimensions,
+  imageEdges?: [number, number, number, number] | null
 ) {
   const [holds, setHolds] = useState<HoldDetail[]>([]);
   const maxHoldIndex = useMemo(
     () => (holds.length > 0 ? Math.max(...holds.map((h) => h.hold_index)) : 0),
     [holds]
   );
+
+  // Resolve image_edges, falling back to full wall dimensions
+  const [imgL, imgR, imgB, imgT] = imageEdges ?? [
+    0,
+    wallDimensions.width,
+    0,
+    wallDimensions.height,
+  ];
+
   // Convert pixel coordinates to feet
   const toFeetCoords = useCallback(
     (pixelX: number, pixelY: number) => {
-      const xFeet = (pixelX / imageDimensions.width) * wallDimensions.width;
+      const xFeet = imgL + (pixelX / imageDimensions.width) * (imgR - imgL);
       const yFeet =
+        imgB +
         ((imageDimensions.height - pixelY) / imageDimensions.height) *
-        wallDimensions.height;
+          (imgT - imgB);
       return { x: xFeet, y: yFeet };
     },
-    [imageDimensions, wallDimensions]
+    [imageDimensions, imgL, imgR, imgB, imgT]
   );
 
   // Convert feet coordinates to pixels
   const toPixelCoords = useCallback(
     (hold: HoldDetail) => {
-      const pixelX = (hold.x / wallDimensions.width) * imageDimensions.width;
+      const pixelX = ((hold.x - imgL) / (imgR - imgL)) * imageDimensions.width;
       const pixelY =
-        imageDimensions.height -
-        (hold.y / wallDimensions.height) * imageDimensions.height;
+        ((imgT - hold.y) / (imgT - imgB)) * imageDimensions.height;
       return { x: pixelX, y: pixelY };
     },
-    [imageDimensions, wallDimensions]
+    [imageDimensions, imgL, imgR, imgB, imgT]
   );
 
   // Add a new hold with optional features
@@ -48,7 +58,7 @@ export function useHolds(
       pull_x?: number,
       pull_y?: number,
       useability?: number,
-      is_foot?: number,
+      is_foot?: boolean,
       tags?: Tag[]
     ): number => {
       const { x, y } = toFeetCoords(pixelX, pixelY);
@@ -59,7 +69,7 @@ export function useHolds(
         pull_x: pull_x ?? null,
         pull_y: pull_y ?? null,
         useability: useability ?? null,
-        is_foot: is_foot ?? 0,
+        is_foot: is_foot ?? false,
         tags: tags ?? [],
       };
 

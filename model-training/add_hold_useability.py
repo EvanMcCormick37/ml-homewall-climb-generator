@@ -25,61 +25,45 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
+from collections import defaultdict
 
 from boardlib_preprocessing import upload_holds
 
 STORAGE_DB   = Path("data/storage.db")
 API_BASE_URL = "http://localhost:8000"
 
-
 def _build_hold_difficulty_df(climbs: pd.DataFrame) -> pd.DataFrame:
-    """
-    Compute per-hold difficulty scores from a DataFrame of migrated climbs.
-
-    For each hold, collects the grade of every climb it appears in, then
-    computes inverse-mean difficulty.  This gives holds used on easier climbs
-    a higher raw score.  The values are then MinMax-scaled to [0.01, 1.0].
-
-    Args:
-        climbs: DataFrame with columns ['holds', 'grade'], where 'holds' is a
-                JSON-encoded list of [hold_index, role_int] pairs and 'grade'
-                is the numeric difficulty average (non-null).
-
-    Returns:
-        DataFrame indexed by hold_index (float) with a single column
-        'difficulty_level' (float, range [0.01, 1.0]).
-    """
-    grades_dict: dict[int, list[float]] = {}
+    holds_dict = defaultdict(lambda:([],[]))
 
     for _, row in climbs.iterrows():
         try:
             holdset = json.loads(row['holds'])
+            grade = float(row['grade'])
+            
             for hold_index, role in holdset:
-                # We do not need to consider holds which are used as feet
                 if role == 3:
-                    continue
-                if hold_index not in grades_dict:
-                    grades_dict[hold_index] = []
-                grades_dict[hold_index].append(float(row['grade']))
+                    holds_dict[hold_index][1].append(grade)
+                else:
+                    holds_dict[hold_index][0].append(grade)
+                    
         except (json.JSONDecodeError, TypeError, ValueError):
             continue
+    
+    grade_info = []
+    for k, v in holds_dict.items():
+        diffs = v[0] if (len(v[0])>len(v[1])) else v[1]
+        is_foot = False if (len(v[0])>len(v[1])) else True 
+        useability = 1.0 / np.mean(diffs)
+        grade_info.append([k, useability, is_foot])
 
-    if not grades_dict:
-        raise ValueError("No hold-difficulty data could be extracted from the climbs DataFrame.")
+    df = pd.DataFrame(grade_info, columns=['hold_index', 'difficulty_level', 'is_foot']).set_index('hold_index')
 
-    # Build raw DataFrame: one row per hold, value = 1 / mean(difficulty)
-    raw = np.array([[k, 1.0 / np.mean(v)] for k, v in grades_dict.items()])
-    df = pd.DataFrame(raw, columns=['hold_index', 'difficulty_level']).set_index('hold_index')
-
-    # Scale inverse-mean values to [0.01, 1.0]  (divide (1,100) range by 100)
-    scaler = MinMaxScaler(feature_range=(1, 100))
+    scaler = MinMaxScaler(feature_range=(5, 100))
     df['difficulty_level'] = np.round(
         scaler.fit_transform(df[['difficulty_level']]) / 100.0,
         decimals=2,
     )
-
     return df
-
 
 def add_hold_useability(
     api_layout_id: str,
@@ -122,7 +106,7 @@ def add_hold_useability(
         verbose:
             Print progress messages to stdout.
     """
-    import requests  # imported here to keep the module importable without requests
+    import requests
 
     storage_db = Path(storage_db)
 
@@ -183,11 +167,10 @@ def add_hold_useability(
     updated = 0
     for hold in holds:
         try:
-            score = float(df_hold_diff.loc[float(hold['hold_index']), 'difficulty_level'])
-            hold['useability'] = score
+            hold['useability'] = float(df_hold_diff.loc[float(hold['hold_index']), 'difficulty_level'])
+            hold['is_foot'] = float(df_hold_diff.loc[float(hold['hold_index']), 'is_foot'])
             updated += 1
         except KeyError:
-            # Hold has no climb appearances — leave its current useability intact
             continue
 
     if verbose:

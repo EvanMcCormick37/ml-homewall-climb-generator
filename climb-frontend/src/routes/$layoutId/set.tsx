@@ -1876,6 +1876,48 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                 {layout.metadata.name}
               </span>
             </div>
+            {isSignedIn && user?.id === layout.metadata.owner_id && (
+              <>
+                <div
+                  style={{
+                    width: "1px",
+                    height: "16px",
+                    background: "var(--border)",
+                  }}
+                />
+                <button
+                  onClick={() =>
+                    navigate({
+                      to: "/$layoutId/holds",
+                      params: { layoutId: layoutId },
+                    })
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    background: "transparent",
+                    border: "none",
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "0.65rem",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    transition: "color 0.15s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.color = "var(--cyan)")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.color = "var(--text-muted)")
+                  }
+                >
+                  <Pencil size={12} />
+                  <span className="hidden sm:inline">Edit Holds</span>
+                </button>
+              </>
+            )}
           </div>
 
           {/* Center */}
@@ -2168,56 +2210,6 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                     settings={displaySettings}
                     onChange={setDisplaySettings}
                   />
-                  {isSignedIn && user?.id === layout.metadata.owner_id && (
-                    <>
-                      <div
-                        style={{
-                          borderTop: "1px solid var(--border)",
-                          margin: "14px 0 10px",
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          setShowDisplaySettings(false);
-                          navigate({
-                            to: "/$layoutId/holds",
-                            params: { layoutId: layoutId },
-                          });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          width: "100%",
-                          padding: "7px 10px",
-                          background: "transparent",
-                          border: "1px solid var(--border)",
-                          borderRadius: "var(--radius)",
-                          cursor: "pointer",
-                          color: "var(--text-muted)",
-                          fontFamily: "'Space Mono', monospace",
-                          fontSize: "0.6rem",
-                          letterSpacing: "0.1em",
-                          textTransform: "uppercase",
-                          transition: "all 0.15s",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--cyan-dim)";
-                          e.currentTarget.style.borderColor =
-                            "var(--border-active)";
-                          e.currentTarget.style.color = "var(--cyan)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.borderColor = "var(--border)";
-                          e.currentTarget.style.color = "var(--text-muted)";
-                        }}
-                      >
-                        <Pencil size={12} />
-                        Edit Holds
-                      </button>
-                    </>
-                  )}
                 </div>
               </>
             )}

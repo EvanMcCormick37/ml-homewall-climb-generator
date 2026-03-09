@@ -13,7 +13,7 @@ export interface HoldDetail {
   pull_x: number | null;
   pull_y: number | null;
   useability: number | null;
-  is_foot: number;
+  is_foot: boolean;
   tags: Tag[];
 }
 

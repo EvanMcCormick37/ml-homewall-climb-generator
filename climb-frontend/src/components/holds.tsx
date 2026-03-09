@@ -75,7 +75,7 @@ const TAG_META: { key: Tag; label: string; hotkey: string; desc: string }[] = [
     key: "pinch",
     label: "PINCH",
     hotkey: "p",
-    desc: "A bilateral pinch (can be held two ways). Align the pull vector parallel with the hold's edges if possible.",
+    desc: "A bilateral pinch (can be held two ways). Align the pull vector perpendicular to the dominant edge of the pinch (If perfectly symetric, choose the upwards-facing edge. If perfectly vertical, choose the edge facing away from the center. If right in the center, choose the left side. /-;}-/).",
   },
   {
     key: "macro",
@@ -195,13 +195,23 @@ export function EnabledFeaturesMenu({
         {FEATURES.map(({ key, label, desc }) => (
           <label
             key={key}
-            style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              cursor: "pointer",
+            }}
           >
             <input
               type="checkbox"
               checked={enabledFeatures[key]}
               onChange={() => onToggle(key)}
-              style={{ width: "14px", height: "14px", accentColor: "var(--cyan)", flexShrink: 0 }}
+              style={{
+                width: "14px",
+                height: "14px",
+                accentColor: "var(--cyan)",
+                flexShrink: 0,
+              }}
             />
             <div>
               <div
@@ -235,7 +245,9 @@ export function EnabledFeaturesMenu({
 
 type HotkeysAndInstructionsProps = { enabledFeatures: EnabledFeatures };
 
-function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps) {
+function HotkeysAndInstructions({
+  enabledFeatures,
+}: HotkeysAndInstructionsProps) {
   const kbd = (label: string, color?: string) => (
     <span
       style={{
@@ -274,7 +286,14 @@ function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps
       >
         Hotkeys
       </h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "11px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+          fontSize: "11px",
+        }}
+      >
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("1", "#34d399")}
           <Plus size={12} style={{ color: "#34d399", flexShrink: 0 }} />
@@ -292,12 +311,16 @@ function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("3", "rgb(248,113,113)")}
           <Eraser size={12} style={{ color: "#f87171", flexShrink: 0 }} />
-          <span style={{ color: "var(--text-muted)" }}>Click — delete hold</span>
+          <span style={{ color: "var(--text-muted)" }}>
+            Click — delete hold
+          </span>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {kbd("4", "rgb(96,165,250)")}
           <Hand size={12} style={{ color: "#60a5fa", flexShrink: 0 }} />
-          <span style={{ color: "var(--text-muted)" }}>Click — select / view hold</span>
+          <span style={{ color: "var(--text-muted)" }}>
+            Click — select / view hold
+          </span>
         </span>
         <div
           style={{
@@ -309,23 +332,59 @@ function HotkeysAndInstructions({ enabledFeatures }: HotkeysAndInstructionsProps
             gap: "3px",
           }}
         >
-          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              color: "var(--text-muted)",
+            }}
+          >
             · {kbd("Shift + Drag")} Pan
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              color: "var(--text-muted)",
+            }}
+          >
             · {kbd("Scroll")} Zoom
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              color: "var(--text-muted)",
+            }}
+          >
             · {kbd("Ctrl+Z")} Delete last added hold
           </span>
           {enabledFeatures.footholds && (
-            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "var(--text-muted)",
+              }}
+            >
               · {kbd("x")} Toggle hand / foot
             </span>
           )}
           {enabledFeatures.tags && (
-            <span style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)" }}>
-              · {kbd("p")} {kbd("m")} {kbd("s")} {kbd("v")} {kbd("j")} Sticky tag toggle
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                color: "var(--text-muted)",
+              }}
+            >
+              · {kbd("p")} {kbd("m")} {kbd("s")} {kbd("v")} {kbd("j")} Sticky
+              tag toggle
             </span>
           )}
         </div>
@@ -358,7 +417,10 @@ function UseabilityBar({
     (clientX: number) => {
       if (!barRef.current || !isLocked) return;
       const rect = barRef.current.getBoundingClientRect();
-      const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const percentage = Math.max(
+        0,
+        Math.min(1, (clientX - rect.left) / rect.width),
+      );
       onUseabilityChange(percentage);
     },
     [isLocked, onUseabilityChange],
@@ -449,7 +511,14 @@ function UseabilityBar({
           />
         </div>
       </div>
-      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          cursor: "pointer",
+        }}
+      >
         <input
           type="checkbox"
           checked={isLocked}
@@ -525,7 +594,9 @@ export function HoldFeaturesSidebar({
     "pull_y" in displayHold &&
     displayHold.pull_y != null;
   const hasUseability =
-    displayHold && "useability" in displayHold && displayHold.useability != null;
+    displayHold &&
+    "useability" in displayHold &&
+    displayHold.useability != null;
 
   const showLockControls =
     mode === "add" &&
@@ -534,8 +605,10 @@ export function HoldFeaturesSidebar({
     onLockedUseabilityChange;
 
   const showTags = enabledFeatures.tags && activeHold != null;
-  const showUseability = showLockControls || (!showLockControls && hasUseability);
-  const hasContent = displayHold || showUseability || showTags || enabledFeatures.tags;
+  const showUseability =
+    showLockControls || (!showLockControls && hasUseability);
+  const hasContent =
+    displayHold || showUseability || showTags || enabledFeatures.tags;
 
   const sidebarStyle: React.CSSProperties = {
     width: "272px",
@@ -562,11 +635,19 @@ export function HoldFeaturesSidebar({
   };
 
   const useability = hasUseability ? displayHold!.useability! : 0.5;
-  const displayColor = getColor(useabilityLocked ? lockedUseability : useability);
+  const displayColor = getColor(
+    useabilityLocked ? lockedUseability : useability,
+  );
 
   if (!hasContent) {
     return (
-      <aside style={{ ...sidebarStyle, alignItems: "center", justifyContent: "center" }}>
+      <aside
+        style={{
+          ...sidebarStyle,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <HotkeysAndInstructions enabledFeatures={enabledFeatures} />
       </aside>
     );
@@ -586,7 +667,9 @@ export function HoldFeaturesSidebar({
             }}
           >
             <h2 style={sectionHeaderStyle}>
-              {mode === "add" ? "New Hold" : `Hold #${selectedHold?.hold_index}`}
+              {mode === "add"
+                ? "New Hold"
+                : `Hold #${selectedHold?.hold_index}`}
             </h2>
             {mode === "select" && selectedHold && (
               <button
@@ -734,7 +817,9 @@ export function HoldFeaturesSidebar({
       {/* ── Tags (active hold) ── */}
       {showTags && (
         <div style={sectionStyle}>
-          <h2 style={sectionHeaderStyle}>Tags — Hold #{activeHold!.hold_index}</h2>
+          <h2 style={sectionHeaderStyle}>
+            Tags — Hold #{activeHold!.hold_index}
+          </h2>
 
           {/* Tag buttons */}
           <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
@@ -745,7 +830,9 @@ export function HoldFeaturesSidebar({
                 <button
                   key={key}
                   onClick={() => onTagToggle?.(key)}
-                  title={isSticky ? `Sticky — auto-applies to new/edited holds` : ""}
+                  title={
+                    isSticky ? `Sticky — auto-applies to new/edited holds` : ""
+                  }
                   style={{
                     flex: 1,
                     padding: "5px 0",
@@ -754,7 +841,11 @@ export function HoldFeaturesSidebar({
                       : isSticky
                         ? "rgba(6,182,212,0.12)"
                         : "transparent",
-                    color: isActive ? "#09090b" : isSticky ? "var(--cyan)" : "var(--text-muted)",
+                    color: isActive
+                      ? "#09090b"
+                      : isSticky
+                        ? "var(--cyan)"
+                        : "var(--text-muted)",
                     border: `1px solid ${isActive ? "var(--cyan)" : isSticky ? "rgba(6,182,212,0.35)" : "var(--border)"}`,
                     borderRadius: "var(--radius)",
                     fontFamily: "'Space Mono', monospace",
