@@ -951,11 +951,23 @@ export function HoldFeaturesSidebar({
               return (
                 <div
                   key={key}
+                  onClick={() => onStickyTagToggle(key)}
                   style={{
                     padding: "8px 10px",
                     background: isSticky ? "rgba(6,182,212,0.07)" : "var(--bg)",
                     borderRadius: "var(--radius)",
                     border: `1px solid ${isSticky ? "rgba(6,182,212,0.2)" : "transparent"}`,
+                    cursor: "pointer",
+                    transition: "background 0.15s, border-color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSticky)
+                      e.currentTarget.style.background =
+                        "rgba(6,182,212,0.04)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSticky)
+                      e.currentTarget.style.background = "var(--bg)";
                   }}
                 >
                   <div

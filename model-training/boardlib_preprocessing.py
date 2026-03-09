@@ -116,6 +116,8 @@ def add_holds(db_name, layout_id_boardlib, layout_id_betazero):
         
         holds = convert_dataframe_to_holds(dfp)
         upload_holds(layout_id_betazero, holds)
+    
+    return
 
 def delete_wall(layout_id: str, api_base_url: str = API_BASE_URL):
     """Remotely delete a wall so I can resize the image."""

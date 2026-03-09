@@ -39,8 +39,8 @@ function HoldsEditorPage() {
   const [showFeatureMenu, setShowFeatureMenu] = useState(false);
   const [enabledFeatures, setEnabledFeatures] = useState({
     direction: true,
-    useability: true,
-    footholds: true,
+    useability: false,
+    footholds: false,
     tags: true,
   });
   const [useabilityLocked, setUseabilityLocked] = useState(false);
@@ -450,7 +450,7 @@ function HoldsEditorPage() {
       const circleSize = 4 * sizeMultiplier;
       const arrowSize = 2 * sizeMultiplier;
 
-      ctx.globalAlpha = 0.6;
+      ctx.globalAlpha = 0.4;
 
       if (mode === "select" && selectedHold?.hold_index === hold.hold_index) {
         ctx.beginPath();
@@ -506,11 +506,18 @@ function HoldsEditorPage() {
       }
 
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "white";
-      ctx.font = `bold ${10 * sizeMultiplier}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(hold.hold_index.toString(), x, y);
+
+      // Tag-match indicator: filled cyan dot when any stickyTag matches this hold
+      if (
+        stickyTags.length > 0 &&
+        hold.tags.length >= stickyTags.length &&
+        hold.tags.some((t) => stickyTags.includes(t))
+      ) {
+        ctx.beginPath();
+        ctx.arc(x, y, circleSize * 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#06b6d4";
+        ctx.fill();
+      }
     });
 
     // Add-hold drag preview
@@ -588,6 +595,7 @@ function HoldsEditorPage() {
     toPixelCoords,
     enabledFeatures,
     isAddFoot,
+    stickyTags,
   ]);
 
   const dragParams = addHoldState.isDragging
@@ -856,7 +864,6 @@ function HoldsEditorPage() {
                 setError(null);
                 try {
                   await setLayoutHolds(layoutId, holds);
-                  navigate({ to: "/$layoutId/set", params: { layoutId } });
                 } catch (err) {
                   setError(
                     err instanceof Error ? err.message : "Failed to save holds",
