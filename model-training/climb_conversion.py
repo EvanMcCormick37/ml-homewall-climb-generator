@@ -20,7 +20,7 @@ NUM_ROLES = 5
 COND_FEATURES = ['grade', 'quality', 'ascents', 'angle']
 
 
-class ClimbsFeatureArrayV3:
+class ClimbsFeatureArray:
     def __init__(
             self,
             db_path: str = DB_PATH,
@@ -32,7 +32,7 @@ class ClimbsFeatureArrayV3:
         print("Initializing ClimbsFeatureArray...")
         self.db_path = db_path
         self.to_length = to_length
-        self.scaler = ClimbsFeatureScalerV3(weights_path=load_weights_path)
+        self.scaler = ClimbsFeatureScaler(weights_path=load_weights_path)
 
         # Null token: -2 sentinel for spatial, 0 for everything else
         self.null_hold = [0] * (NUM_HOLD_FEATURES)
@@ -237,7 +237,7 @@ class ClimbsFeatureArrayV3:
         return self._augment_and_tensorize(x, r, c, augment=augment_reflections, dim=dim)
 
 
-class ClimbsFeatureScalerV3:
+class ClimbsFeatureScaler:
     def __init__(self, weights_path: str | None = None):
         self.set_weights = False
         self.cond_features_scaler = MinMaxScaler(feature_range=(-1, 1))

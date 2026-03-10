@@ -4,10 +4,13 @@ from torch import nn, Tensor
 from torch.utils.data import TensorDataset, DataLoader
 from pathlib import Path
 import matplotlib.pyplot as plt
+import sqlite3
+from torchinfo import summary
+import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
 
-from climb_conversion import ClimbsFeatureScalerV3
+from climb_conversion import ClimbsFeatureScaler
 from diffusion_utils import (
     DDPM_WEIGHTS_PATH,
     SCALER_WEIGHTS_PATH,
@@ -60,7 +63,7 @@ class ResidualBlock1D(nn.Module):
 
 class Noiser(nn.Module):
     """Noiser class with concatenation U-Net architecture, learnable null embeddings, and zero-COM input projection."""
-    def __init__(self, hidden_dim=128, layers = 5, in_feature_dim = 16, out_feature_dim = 11, cond_dim = 4, sinusoidal = True):
+    def __init__(self, hidden_dim=128, layers = 3, in_feature_dim = 16, out_feature_dim = 11, cond_dim = 4, sinusoidal = True):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -292,7 +295,7 @@ class ClimbDDPMGenerator():
     def __init__(
             self,
             wall_id: str,
-            scaler: ClimbsFeatureScalerV3,
+            scaler: ClimbsFeatureScaler,
             model: ClimbDDPM
         ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
