@@ -1,19 +1,36 @@
-import numpy as np
+import math
 import torch
-from torch import nn
-from torch import Tensor
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
-from tqdm import tqdm
-import pandas as pd
+from torch import nn, Tensor
+from torch.utils.data import TensorDataset, DataLoader
 from pathlib import Path
 import matplotlib.pyplot as plt
-import sqlite3
-import math
+from tqdm import tqdm
+import numpy as np
 
-# Input Data Format:
-# climbs: Tensor [Batch_length, 20, 5]
-# conditions: Tensor [Batch_length, 4]
+from climb_conversion import ClimbsFeatureScalerV3
+from diffusion_utils import (
+    DDPM_WEIGHTS_PATH,
+    SCALER_WEIGHTS_PATH,
+    GRADE_TO_DIFF,
+    HC_WEIGHTS_PATH,
+    DB_PATH,
+    SinusoidalPositionEmbeddings,
+    clear_compile_keys,
+    plot_climb,
+    zero_com,
+    test_single_batch,
+    moving_average
+)
+
+#-----------------------------------------------------------------------
+# UNET Diffusion Building Blocks
+#-----------------------------------------------------------------------
+#-----------------------------------------------------------------------
+# UNET Diffusion Building Blocks
+#-----------------------------------------------------------------------
+from numpy import save
+
+
 class ResidualBlock1D(nn.Module):
     def __init__(self, in_channels, out_channels, cond_dim, padding=1):
         super().__init__()
@@ -32,83 +49,20 @@ class ResidualBlock1D(nn.Module):
 
         gamma, beta = self.cond_proj(cond).unsqueeze(-1).chunk(2, dim=1)
         h = h*(1+gamma) + beta
+        h = self.act(h)
 
         h = self.conv2(h)
         h = self.norm2(h)
         h = self.act(h)
 
         return h + self.shortcut(x)
-    
-class Denoiser(nn.Module):
-    def __init__(self, hidden_dim=64, layers = 4):
-        super().__init__()
 
-        self.cond_mlp = nn.Sequential(
-            nn.Linear(5, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim)
-        )
-
-        self.init_conv = ResidualBlock1D(4, hidden_dim, hidden_dim)
-
-        self.residuals = nn.ModuleList([nn.Sequential(
-            nn.Conv1d(hidden_dim, hidden_dim, 3, padding=1),
-            nn.GroupNorm(8, hidden_dim),
-            nn.ReLU()
-        ) for _ in range(layers)])
-
-        self.head = nn.Conv1d(hidden_dim, 4, 1)
-    
-    def forward(self, climbs: Tensor, cond: Tensor, t: Tensor)-> Tensor:
-        """
-        Run denoising pass. Predicts the denoised dataset from the noisy data.
-        
-        :param climbs: Tensor with hold-set positions. [B, S, 4]
-        :param cond: Tensor with conditional variables. [B, 4]
-        :param t: Tensor with timestep of diffusion. [B, 1]
-        """
-        emb_c = self.cond_mlp(torch.cat([cond,t], dim=1))
-        emb_h = self.init_conv(climbs.transpose(1,2), emb_c)
-
-        for layer in self.residuals:
-            emb_h = emb_h + layer(emb_h)
-
-
-        result = self.head(emb_h).transpose(1,2)
-
-        return result
-
-class AttentionBlock1D(nn.Module):
-    """
-    Self-Attention block for 1D sequence data.
-    Allows every hold to 'attend' to every other hold, capturing global dependencies.
-    """
-    def __init__(self, channels, num_heads=4):
-        super().__init__()
-        self.num_heads = num_heads
-        self.norm = nn.GroupNorm(8, channels)
-        self.attention = nn.MultiheadAttention(embed_dim=channels, num_heads=num_heads, batch_first=True)
-        
-    def forward(self, x):
-        # x: (Batch, Channels, Length)
-        B, C, L = x.shape
-        
-        # Norm and rearrange for Attention: (Batch, Length, Channels)
-        h = self.norm(x).permute(0, 2, 1)
-        
-        # Self-Attention
-        # attn_output: (Batch, Length, Channels)
-        attn_output, _ = self.attention(h, h, h)
-        
-        # Rearrange back to (Batch, Channels, Length)
-        h = attn_output.permute(0, 2, 1)
-        
-        # Residual connection
-        return x + h
 
 class Noiser(nn.Module):
-    def __init__(self, hidden_dim=128, layers = 5, feature_dim = 4, cond_dim = 4, sinusoidal = True):
+    """Noiser class with concatenation U-Net architecture, learnable null embeddings, and zero-COM input projection."""
+    def __init__(self, hidden_dim=128, layers = 5, in_feature_dim = 16, out_feature_dim = 11, cond_dim = 4, sinusoidal = True):
         super().__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.time_mlp = nn.Sequential(
             (SinusoidalPositionEmbeddings(hidden_dim) if sinusoidal else nn.Linear(1,hidden_dim)),
@@ -122,7 +76,10 @@ class Noiser(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
-        
+
+        self.null_cond_emb = nn.Parameter(torch.randn(1, hidden_dim, device=self.device))
+        self.null_roles = torch.full((1, 20, 5),-1, dtype=torch.float32, device=self.device)
+
         self.combine_t_mlp = nn.Sequential(
             nn.Linear(hidden_dim*2,hidden_dim),
             nn.ReLU(),
@@ -131,139 +88,112 @@ class Noiser(nn.Module):
             nn.Linear(hidden_dim, hidden_dim)
         )
 
-        self.init_conv = ResidualBlock1D(feature_dim, hidden_dim, hidden_dim)
+        self.init_conv = ResidualBlock1D(in_feature_dim, hidden_dim, hidden_dim)
 
         self.down_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i+2), hidden_dim) for i in range(layers)])
-        self.up_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i), hidden_dim) for i in range(layers,0,-1)])
+        # No concatenation of inputs for bottom block
+        self.bottom_block = ResidualBlock1D(hidden_dim*(layers+1), hidden_dim*(layers), hidden_dim)
+        # Concatenate inputs for up blocks
+        self.up_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i)*2, hidden_dim*(i-1), hidden_dim) for i in range(layers,1,-1)])
 
-        self.head = nn.Conv1d(hidden_dim, feature_dim, 1)
+        self.top_block = ResidualBlock1D(hidden_dim*2,hidden_dim, hidden_dim)
+
+        self.head = nn.Conv1d(hidden_dim, out_feature_dim, 1)
     
-    def forward(self, climbs: Tensor, cond: Tensor, t: Tensor)-> Tensor:
+    def forward(self, climbs: Tensor, roles: Tensor | None, cond: Tensor | None, t: Tensor)-> Tensor:
         """
         Run denoising pass. Predicts the added noise from the noisy data.
         
-        :param climbs: Tensor with hold-set positions. [B, S, 4]
-        :param cond: Tensor with conditional variables. [B, 4]
+        :param climbs: Tensor with hold-set features, including conditional features and roles. [B, S, 11]
+        :param cond: Tensor with correct hold roles, used as a conditional feature tensor. [B, S, 5]
+        :param cond: Tensor with climb conditional variables. [B, 4]
         :param t: Tensor with timestep of diffusion. [B, 1]
+        :returns: Tensor, the predicted noise added after timestep t.
         """
+        (B, S, H) = climbs.shape
         emb_t = self.time_mlp(t)
-        emb_c = self.cond_mlp(cond)
-        emb_c = self.combine_t_mlp(torch.cat([emb_t, emb_c],dim=1))
-        emb_h = self.init_conv(climbs.transpose(1,2), emb_c)
+
+        if roles is None:
+            roles = self.null_roles.repeat(B, 1, 1)
+        h = torch.cat([climbs, roles], dim=2)
+        
+        if cond is not None: 
+            emb_c = self.cond_mlp(cond)
+        else:
+            emb_c = self.null_cond_emb.repeat(B, 1)
+        emb_c = self.combine_t_mlp(torch.cat([emb_t, emb_c], dim=1))
+        emb_h = self.init_conv(h.transpose(1,2), emb_c)
         
         residuals = []
         for layer in self.down_blocks:
             residuals.append(emb_h)
             emb_h = layer(emb_h, emb_c)
         
+        emb_h = self.bottom_block(emb_h, emb_c)
+        
         for layer in self.up_blocks:
             residual = residuals.pop()
-            emb_h = residual + layer(emb_h, emb_c)
+            emb_h = layer(torch.cat([emb_h, residual], dim=1), emb_c)
         
+        residual = residuals.pop()
+        emb_h = self.top_block(torch.cat([emb_h, residual], dim=1), emb_c)
         result = self.head(emb_h).transpose(1,2)
 
         return result
 
+#-----------------------------------------------------------------------
+# DDPM MODEL
+#-----------------------------------------------------------------------
 class ClimbDDPM(nn.Module):
-    def __init__(self, model: nn.Module, weights_path: Path | str):
+    def __init__(self, model: nn.Module, weights_path: Path | str | None = None):
         super().__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.model = model
-        self.load_state_dict(clear_compile_keys(weights_path))
+        if weights_path:
+            self.load_state_dict(clear_compile_keys(weights_path))
     
     def _cos_alpha_bar(self, t: Tensor)-> Tensor:
         t = t.view(-1,1,1)
         epsilon = 0.0004
         return  torch.cos((t+epsilon)/(1+2*epsilon)*torch.pi/2)**2
     
-    def loss(self, sample_climbs, cond):
-        """Perform a diffusion Training step and return the loss resulting from the model in the training run. Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
+    def loss(self, sample_climbs: Tensor, roles: Tensor | None, cond: Tensor | None):
+        """Perform a diffusion Training step and return the loss resulting from the model in the training run.
+        Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
         B, S, H = sample_climbs.shape
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
-        x_0 = torch.randn((B, S, H), device = self.device)
-        noisy = self.forward_diffusion(sample_climbs, t, x_0)
-        pred_x_0 = self.model(noisy, cond, t)
-        return F.mse_loss(pred_x_0, x_0)
+        noise = torch.randn((B, S, H), device = self.device)
+        noisy = self.forward_diffusion(sample_climbs, t, noise)
+        pred_noise = self.model(noisy, roles, cond, t)
+        return F.mse_loss(pred_noise, noise)
     
-    def predict_clean(self, noisy, cond, t):
+    def predict_clean(self, noisy, roles, cond, t):
         """Return predicted clean data."""
         a = self._cos_alpha_bar(t)
-        prediction = self.model(noisy, cond, t)
+        prediction = self.model(noisy, roles, cond, t)
         clean = (noisy - torch.sqrt(1-a)*prediction)/torch.sqrt(a)
         return clean
     
-    def forward_diffusion(self, clean: Tensor, t: Tensor, x_0: Tensor)-> Tensor:
+    def predict_cfg(self, noisy, roles, cond, t, guidance_value=1.0):
+        a = self._cos_alpha_bar(t)
+        cf_pred = self.model(noisy, None, None, t)
+        pred = self.model(noisy, roles, cond, t)
+        cfg = cf_pred+(pred-cf_pred)*guidance_value
+        clean = (noisy - torch.sqrt(1-a)*cfg)/torch.sqrt(a)
+        return clean
+    
+    def forward_diffusion(self, clean: Tensor, t: Tensor, noise: Tensor)-> Tensor:
         """Perform forward diffusion to add noise to clean data based on noise adding schedule."""
         a = self._cos_alpha_bar(t)
-        return torch.sqrt(a) * clean + torch.sqrt(1-a) * x_0
+        return torch.sqrt(a) * clean + torch.sqrt(1-a) * noise
     
-    def forward(self, noisy, cond, t):
-        return self.predict_clean(noisy, cond, t)
+    def forward(self, noisy, roles, cond, t):
+        return self.predict_clean(noisy, roles, cond, t)
 
-class ClimbDASD(nn.Module):
-    def __init__(self, hidden_dim=128, layers=3, sinusoidal=False):
-        super().__init__()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.timesteps = 100
-        self.model = Noiser(hidden_dim,layers, feature_dim=9, sinusoidal=sinusoidal)
-        self.roles_head = nn.Softmax(dim=2)
-
-    def _cos_alpha_bar(self, t: Tensor)-> Tensor:
-        t = t.view(-1,1,1)
-        epsilon = 0.0004
-        return  torch.cos((t+epsilon)/(1+2*epsilon)*torch.pi/2)**2
-        
-    def predict(self, noisy, cond, t):
-        """Return prediction for noise."""
-        pred = self.model(noisy, cond, t)
-        pred_noise = pred[:,:,:4]
-        pred_roles = self.discrete_features_head(pred[:,:,4:])
-
-        a = self._cos_alpha_bar(t)
-
-        pred_clean_cont = (noisy - torch.sqrt(1-a)*pred_noise)/torch.sqrt(a)
-
-        return pred_clean_cont, pred_roles
-    
-    def loss(self, clean, cond):
-        """Get the model's loss from training on a dataset of clean (denoised) data."""
-        B, H, S = clean.shape
-        t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
-        x_0 = torch.randn((B, H, S-5))
-        noisy = self.forward_diffusion(clean, t, x_0)
-
-        pred = self.model(noisy, cond, t)
-        pred_roles = self.roles_head(pred[:,:,4:])
-        continuous_loss = F.mse_loss(pred[:,:,:4], x_0[:,:,:4])
-        discrete_loss = F.cross_entropy(pred_roles, clean[:,:,4:])
-
-        return continuous_loss + discrete_loss, continuous_loss, discrete_loss
-    
-    def forward_diffusion(self, clean, t, x_0: Tensor):
-        """
-        Perform the forward Diffusion process in two stages:
-            *Continuous Diffusion over Continuous Features [0:4]
-            *Discrete Absorbing State Diffusion over Discrete Features [4:9]
-        
-        :param clean: Full feature set (4 continuous, 5 discrete roles OH-Encoded)
-        :param t: Timestep Tensor
-        :param x_0: Optionally include the tensor for the prior 'full-noise' array to use instead of random noise. This makes the generation process deterministic.
-        :return: Diffused climbs, conditioned on timestep
-        :rtype: Tensor
-        """
-        cont_feat = clean[:,:,:4]
-        disc_feat = clean[:,:,4:]
-        a = self._cos_alpha_bar(t)
-
-        diff_cont = torch.sqrt(a)*cont_feat + torch.sqrt(1-a)*(x_0)
-
-        das_mask = (a > torch.rand_like(a)).float()
-        diff_disc = disc_feat*das_mask
-
-        return torch.cat([diff_cont,diff_disc],dim=2)
-    
-    def forward(self, noisy, cond, t):
-        return self.predict(noisy, cond, t)
-
+#-----------------------------------------------------------------------
+# TRAINING
+#-----------------------------------------------------------------------
 class DDPMTrainer():
     def __init__(
         self,
@@ -282,12 +212,13 @@ class DDPMTrainer():
     def train(
         self,
         epochs: int,
-        save_path: str,
+        save_path: str | None = None,
         batch_size: int | None = None,
         num_workers: int | None = None,
         dataset: TensorDataset | None = None,
         save_on_best: bool = False,
-        clip_grad_norm: bool = True
+        clip_grad_norm: bool = True,
+        dropout: tuple[float,float] = (0.25, 0.25)
     )-> tuple[nn.Module, list]:
         """
         Train a model (probably of type ClimbDDPM) on the dataset contained in the trainer. (If dataset is provided, train on that dataset instead)
@@ -304,6 +235,8 @@ class DDPMTrainer():
         :type dataset: TensorDataset | None
         :param save_on_best: boolean indicating whether to save model weights every time a minimum loss is reached.
         :type save_on_best: bool
+        :param save_on_best: Tuple of dropout probabilities for Roles and Climbs conditional feature vectors, respectively.
+        :type save_on_best: bool
         :return: Tuple of (best_model: nn.Module, training_data: np.array)
         :rtype: tuple[Module, Any]
         """
@@ -318,16 +251,24 @@ class DDPMTrainer():
 
         batches = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True)
         losses = []
+        print(f"Begining Training. {epochs} Epochs. {len(batches)} Batches. Model Params: {sum([p.numel() for p in self.model.parameters()])}")
 
         with tqdm(range(epochs)) as pbar:
+            pbar.set_postfix_str(f"Epoch: {0}, Batches:{len(batches)}")
             for epoch in pbar:
                 total_loss = 0
-                for x, c in batches:
-                    x, c = x.to(self.device), c.to(self.device)
+                for x, r, c in batches:
+                    x, r, c = x.to(self.device), r.to(self.device), c.to(self.device)
+                    if np.random.rand(1).item() < dropout[0]:
+                        r = None
+                    if np.random.rand(1).item() < dropout[1]:
+                        c = None
+                    
                     self.optimizer.zero_grad()
-                    loss = self.model.loss(x, c)
+                    loss = self.model.loss(x, r, c)
                     if clip_grad_norm:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    
                     loss.backward()
                     self.optimizer.step()
 
@@ -340,14 +281,18 @@ class DDPMTrainer():
                 if save_on_best and total_loss > min(losses) and len(losses) % 2 == 0:
                     torch.save(self.model.state_dict(), save_path)
             self.scheduler.step()
-        torch.save(self.model.state_dict(), save_path)
+        if save_path is not None:
+            torch.save(self.model.state_dict(), save_path)
         return self.model, losses
 
+#-----------------------------------------------------------------------
+# GENERATION
+#-----------------------------------------------------------------------
 class ClimbDDPMGenerator():
     def __init__(
             self,
             wall_id: str,
-            scaler: ClimbsFeatureScaler,
+            scaler: ClimbsFeatureScalerV3,
             model: ClimbDDPM
         ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
