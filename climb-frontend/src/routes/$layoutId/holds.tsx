@@ -51,6 +51,7 @@ function HoldsEditorPage() {
   const imageEdges = layout.metadata.image_edges as
     | [number, number, number, number]
     | null;
+  const homographySrcCorners = layout.metadata.homography_src_corners ?? null;
 
   const {
     holds,
@@ -64,7 +65,7 @@ function HoldsEditorPage() {
     loadHolds,
     toPixelCoords,
     toFeetCoords,
-  } = useHolds(imageDimensions, wallDimensions, imageEdges);
+  } = useHolds(imageDimensions, wallDimensions, imageEdges, homographySrcCorners);
 
   const activeHold =
     activeHoldIndex !== null

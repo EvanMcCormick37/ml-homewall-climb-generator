@@ -64,6 +64,7 @@ def create_layout(
     description: str | None = Form(None),
     visibility: str = Form("public"),
     image_edges: str = Form(...),
+    homography_src_corners: str | None = Form(None),
     user: dict = Depends(require_auth),
 ):
     """Create a new layout."""
@@ -76,7 +77,8 @@ def create_layout(
         dimensions=json.loads(dimensions),
         default_angle=default_angle,
         image_edges=json.loads(image_edges),
-        visibility=visibility
+        homography_src_corners=json.loads(homography_src_corners) if homography_src_corners else None,
+        visibility=visibility,
         )
 
     try:
@@ -99,11 +101,12 @@ def edit_layout(
     default_angle: int | None = Form(None),
     description: str | None = Form(None),
     visibility: str | None = Form(None),
-    image_edges: str  | None = Form(None),
+    image_edges: str | None = Form(None),
+    homography_src_corners: str | None = Form(None),
     # _=Depends(require_layout_owner),
 
 ):
-    """Create a new layout."""
+    """Edit an existing layout."""
     if visibility is not None and visibility not in ("public", "private", "unlisted"):
         raise HTTPException(status_code=400, detail="Invalid visibility value.")
 
@@ -113,7 +116,8 @@ def edit_layout(
         dimensions=json.loads(dimensions) if dimensions else None,
         default_angle=default_angle,
         image_edges=json.loads(image_edges) if image_edges else None,
-        visibility=visibility
+        homography_src_corners=json.loads(homography_src_corners) if homography_src_corners else None,
+        visibility=visibility,
     )
 
     layout_id = services.put_layout(layout_id, layout_data)

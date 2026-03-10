@@ -2466,6 +2466,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                   | [number, number, number, number]
                   | null
               }
+              homographySrcCorners={layout.metadata.homography_src_corners}
             />
           </div>
 

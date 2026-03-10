@@ -91,7 +91,8 @@ def get_all_layouts(owner_id: str | None = None) -> list[LayoutMetadata]:
     with get_db() as conn:
         layout_rows = conn.execute(
             f"""
-            SELECT l.id, l.name, l.description, l.dimensions, l.image_edges, l.default_angle,
+            SELECT l.id, l.name, l.description, l.dimensions, l.image_edges,
+                   l.homography_src_corners, l.default_angle,
                    l.owner_id, l.visibility, l.share_token,
                    l.created_at, l.updated_at
             FROM layouts l
@@ -125,8 +126,8 @@ def get_layout(layout_id: str) -> LayoutDetail | None:
     with get_db() as conn:
         row = conn.execute(
             """
-            SELECT id, name, description, dimensions, image_edges, default_angle, owner_id,
-                   visibility, share_token, created_at, updated_at
+            SELECT id, name, description, dimensions, image_edges, homography_src_corners,
+                   default_angle, owner_id, visibility, share_token, created_at, updated_at
             FROM layouts WHERE id = ?
             """,
             (layout_id,),
@@ -175,9 +176,10 @@ def create_layout(
     with get_db() as conn:
         conn.execute(
             """
-            INSERT INTO layouts (id, name, description, dimensions, image_edges, default_angle, owner_id,
+            INSERT INTO layouts (id, name, description, dimensions, image_edges,
+                                 homography_src_corners, default_angle, owner_id,
                                  visibility, share_token, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 layout_id,
@@ -185,6 +187,7 @@ def create_layout(
                 layout_data.description,
                 json.dumps(layout_data.dimensions),
                 json.dumps(layout_data.image_edges),
+                json.dumps(layout_data.homography_src_corners) if layout_data.homography_src_corners is not None else None,
                 layout_data.default_angle,
                 owner_id,
                 layout_data.visibility,
@@ -238,8 +241,12 @@ def put_layout(layout_id: str, layout_data: LayoutEdit) -> str:
         
     if layout_data.image_edges is not None:
         set_clauses.append("image_edges = ?")
-        params.append(json.dumps(layout_data.image_edges)) #
-        
+        params.append(json.dumps(layout_data.image_edges))
+
+    if layout_data.homography_src_corners is not None:
+        set_clauses.append("homography_src_corners = ?")
+        params.append(json.dumps(layout_data.homography_src_corners))
+
     if layout_data.default_angle is not None:
         set_clauses.append("default_angle = ?")
         params.append(layout_data.default_angle)

@@ -139,3 +139,11 @@ def init_db():
                 FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE
             )
         """)
+
+        # Migrations — add new columns to existing tables without data loss
+        _add_column_if_missing(
+            conn,
+            "layouts",
+            "homography_src_corners",
+            "TEXT DEFAULT NULL",  # JSON array of 8 floats [tlx,tly, trx,try, blx,bly, brx,bry]
+        )

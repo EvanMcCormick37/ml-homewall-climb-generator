@@ -1595,6 +1595,7 @@ function MainViewPage({
                   | [number, number, number, number]
                   | null
               }
+              homographySrcCorners={layout.metadata.homography_src_corners}
             />
           </div>
 

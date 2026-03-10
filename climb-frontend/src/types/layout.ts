@@ -27,6 +27,7 @@ export interface LayoutMetadata {
   description: string | null;
   dimensions: number[]; // [width_ft, height_ft]
   image_edges: number[] | null; // [left, right, bottom, top] in ft — where each image edge sits in wall coords
+  homography_src_corners: number[] | null; // [tlx,tly, trx,try, blx,bly, brx,bry] normalized 0-1 — null for rect/as-is mode
   default_angle: number | null;
   sizes: SizeMetadata[];
   owner_id: string;
@@ -49,6 +50,8 @@ export interface LayoutListResponse {
 export interface LayoutCreate {
   name: string;
   dimensions: number[]; // [width_ft, height_ft]
+  image_edges: number[]; // [left, right, bottom, top] in ft
+  homography_src_corners?: number[] | null; // 8 floats, null when not using trapezoid mode
   default_angle?: number | null;
   description?: string;
   visibility?: "public" | "private" | "unlisted";
@@ -77,4 +80,5 @@ export interface LayoutUpdate {
   visibility?: "public" | "private" | "unlisted";
   default_angle?: number | null;
   image_edges?: number[]; // [left, right, bottom, top] in ft
+  homography_src_corners?: number[] | null;
 }

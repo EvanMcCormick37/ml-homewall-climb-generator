@@ -2,7 +2,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { useImageCrop } from "@/hooks/useImageCrop";
-import { ImageCropper } from "@/components";
+import { ImageCropper, TrapezoidCropper } from "@/components";
+import type { TrapCorners } from "@/components";
 import { createLayout, uploadLayoutPhoto } from "@/api/layouts";
 import { createSize } from "@/api/sizes";
 import { ArrowLeft, Globe, Lock, Link } from "lucide-react";
@@ -92,6 +93,16 @@ function NewLayoutPage() {
   const [angle, setAngle] = useState("");
   const [kickboard, setKickboard] = useState(false);
 
+  // Crop mode selection + raw file for as-is / trapezoid upload
+  const [cropMode, setCropMode] = useState<"none" | "rect" | "trapezoid">("rect");
+  const [rawImageFile, setRawImageFile] = useState<File | null>(null);
+  const [trapCorners, setTrapCorners] = useState<TrapCorners>([
+    0.05, 0.05,  // TL
+    0.95, 0.05,  // TR
+    0.05, 0.95,  // BL
+    0.95, 0.95,  // BR
+  ]);
+
   const {
     imageUrl,
     cropArea,
@@ -113,6 +124,7 @@ function NewLayoutPage() {
           return;
         }
         setError(null);
+        setRawImageFile(file);
         setImage(file);
         setStep("crop");
       }
@@ -130,6 +142,7 @@ function NewLayoutPage() {
           return;
         }
         setError(null);
+        setRawImageFile(file);
         setImage(file);
         setStep("crop");
       }
@@ -142,12 +155,21 @@ function NewLayoutPage() {
   }, []);
 
   const handleCropConfirm = useCallback(async () => {
-    const blob = await getCroppedImage();
-    if (blob) {
-      setCroppedBlob(blob);
-      setStep("details");
+    if (cropMode === "rect") {
+      // Rectangular crop: produce a cropped image blob via canvas
+      const blob = await getCroppedImage();
+      if (blob) {
+        setCroppedBlob(blob);
+        setStep("details");
+      }
+    } else {
+      // "none" or "trapezoid": upload the original image unchanged
+      if (rawImageFile) {
+        setCroppedBlob(rawImageFile);
+        setStep("details");
+      }
     }
-  }, [getCroppedImage]);
+  }, [cropMode, getCroppedImage, rawImageFile]);
 
   const handleBackToCrop = useCallback(() => {
     setCroppedBlob(null);
@@ -181,6 +203,8 @@ function NewLayoutPage() {
         const layoutResponse = await createLayout({
           name: name.trim(),
           dimensions: [widthFt, heightFt],
+          image_edges: [0, widthFt, 0, heightFt],
+          homography_src_corners: cropMode === "trapezoid" ? trapCorners : null,
           default_angle: angleParsed,
           visibility,
         });
@@ -209,7 +233,7 @@ function NewLayoutPage() {
         setIsSubmitting(false);
       }
     },
-    [croppedBlob, name, width, height, angle, kickboard, visibility, navigate],
+    [croppedBlob, name, width, height, angle, kickboard, visibility, navigate, cropMode, trapCorners],
   );
 
   const inputStyle: React.CSSProperties = {
@@ -411,7 +435,9 @@ function NewLayoutPage() {
             >
               {step === "visibility" && "Choose who can access this layout"}
               {step === "upload" && "Upload a photo of your climbing wall"}
-              {step === "crop" && "Crop the image to align with the wall edges"}
+              {step === "crop" && cropMode === "rect" && "Crop the image to align with the wall edges"}
+              {step === "crop" && cropMode === "none" && "Image will be used as uploaded"}
+              {step === "crop" && cropMode === "trapezoid" && "Drag the corner handles to the wall corners"}
               {step === "details" && "Add wall details and submit"}
             </p>
 
@@ -739,16 +765,112 @@ function NewLayoutPage() {
             )}
 
             {/* ── Step 2: Crop ── */}
-            {step === "crop" && imageUrl && cropArea && (
+            {step === "crop" && imageUrl && (
               <div>
-                <ImageCropper
-                  imageUrl={imageUrl}
-                  cropArea={cropArea}
-                  isDragging={isDragging}
-                  onStartDrag={startDrag}
-                  onUpdateDrag={updateDrag}
-                  onEndDrag={endDrag}
-                />
+                {/* Mode selector */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    marginBottom: "20px",
+                    background: "var(--surface2)",
+                    borderRadius: "var(--radius)",
+                    padding: "4px",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  {(
+                    [
+                      { value: "rect", label: "Rect Crop" },
+                      { value: "trapezoid", label: "Trapezoid" },
+                      { value: "none", label: "Use As-Is" },
+                    ] as { value: "rect" | "trapezoid" | "none"; label: string }[]
+                  ).map(({ value, label }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setCropMode(value)}
+                      className="bz-mono"
+                      style={{
+                        flex: 1,
+                        padding: "7px 10px",
+                        borderRadius: "2px",
+                        border: "none",
+                        fontSize: "0.6rem",
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        transition: "all 0.15s",
+                        background:
+                          cropMode === value ? "var(--cyan)" : "transparent",
+                        color:
+                          cropMode === value
+                            ? "#09090b"
+                            : "var(--text-muted)",
+                        fontWeight: cropMode === value ? 700 : 400,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Mode-specific crop UI */}
+                {cropMode === "rect" && cropArea && (
+                  <ImageCropper
+                    imageUrl={imageUrl}
+                    cropArea={cropArea}
+                    isDragging={isDragging}
+                    onStartDrag={startDrag}
+                    onUpdateDrag={updateDrag}
+                    onEndDrag={endDrag}
+                  />
+                )}
+
+                {cropMode === "trapezoid" && (
+                  <TrapezoidCropper
+                    imageUrl={imageUrl}
+                    corners={trapCorners}
+                    onChange={setTrapCorners}
+                  />
+                )}
+
+                {cropMode === "none" && (
+                  <div
+                    style={{
+                      position: "relative",
+                      borderRadius: "var(--radius)",
+                      overflow: "hidden",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <img
+                      src={imageUrl}
+                      alt="Wall photo preview"
+                      style={{ width: "100%", height: "auto", display: "block" }}
+                      draggable={false}
+                    />
+                    <div
+                      className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded"
+                      style={{
+                        background: "rgba(0,0,0,0.75)",
+                        color: "var(--text-muted)",
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: "0.65rem",
+                        letterSpacing: "0.06em",
+                        whiteSpace: "nowrap",
+                        pointerEvents: "none",
+                        position: "absolute",
+                        bottom: "16px",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                      }}
+                    >
+                      Full image will be uploaded as-is
+                    </div>
+                  </div>
+                )}
+
                 <div
                   style={{ display: "flex", gap: "12px", marginTop: "20px" }}
                 >
@@ -767,8 +889,7 @@ function NewLayoutPage() {
                       cursor: "pointer",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor =
-                        "var(--border-active)";
+                      e.currentTarget.style.borderColor = "var(--border-active)";
                       e.currentTarget.style.color = "var(--text-primary)";
                     }}
                     onMouseLeave={(e) => {
@@ -794,12 +915,14 @@ function NewLayoutPage() {
                       textTransform: "uppercase",
                       cursor: "pointer",
                     }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.opacity = "0.85")
-                    }
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
                     onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
                   >
-                    Confirm Crop
+                    {cropMode === "rect"
+                      ? "Confirm Crop"
+                      : cropMode === "trapezoid"
+                        ? "Confirm Trapezoid"
+                        : "Continue"}
                   </button>
                 </div>
               </div>
@@ -842,6 +965,29 @@ function NewLayoutPage() {
                         display: "block",
                       }}
                     />
+                    {/* Crop mode badge */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "8px",
+                        left: "8px",
+                        padding: "3px 8px",
+                        background: "rgba(6,182,212,0.15)",
+                        border: "1px solid rgba(6,182,212,0.4)",
+                        borderRadius: "var(--radius)",
+                        fontFamily: "'Space Mono', monospace",
+                        fontSize: "0.55rem",
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                        color: "var(--cyan)",
+                      }}
+                    >
+                      {cropMode === "rect"
+                        ? "Rect Crop"
+                        : cropMode === "trapezoid"
+                          ? "Trapezoid"
+                          : "As-Is"}
+                    </div>
                     <button
                       type="button"
                       onClick={handleBackToCrop}
@@ -867,7 +1013,7 @@ function NewLayoutPage() {
                         (e.currentTarget.style.color = "var(--text-muted)")
                       }
                     >
-                      Re-crop
+                      {cropMode === "rect" ? "Re-crop" : "Re-map"}
                     </button>
                   </div>
                 </div>
@@ -922,8 +1068,7 @@ function NewLayoutPage() {
                       marginBottom: "8px",
                     }}
                   >
-                    Wall Dimensions (exact height and width of the cropped area,
-                    in feet.)
+                    Wall Dimensions (total width and height of the wall, in feet)
                   </label>
                   <div
                     style={{

@@ -17,6 +17,7 @@ class LayoutMetadata(BaseModel):
     description: str | None = None
     dimensions: list[int]
     image_edges: list[float]
+    homography_src_corners: list[float] | None = None
     default_angle: int | None = None
     sizes: list[SizeMetadata] = []
     owner_id: str
@@ -33,14 +34,16 @@ class LayoutCreate(BaseModel):
     dimensions: list[int]
     default_angle: int | None = None
     image_edges: list[float]
+    homography_src_corners: list[float] | None = None
     visibility: str = "public"
 
 class LayoutEdit(BaseModel):
     name: str | None = None
     description: str | None = None
-    dimensions: list[int] | None
+    dimensions: list[int] | None = None
     default_angle: int | None = None
     image_edges: list[float] | None = None
+    homography_src_corners: list[float] | None = None
     visibility: str | None = None
 
 class LayoutDetail(BaseModel):

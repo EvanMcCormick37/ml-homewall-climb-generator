@@ -41,6 +41,9 @@ export async function createLayout(
   const formData = new FormData();
   formData.append("name", data.name);
   formData.append("dimensions", JSON.stringify(data.dimensions));
+  formData.append("image_edges", JSON.stringify(data.image_edges));
+  if (data.homography_src_corners != null)
+    formData.append("homography_src_corners", JSON.stringify(data.homography_src_corners));
   if (data.default_angle != null)
     formData.append("default_angle", String(data.default_angle));
   if (data.description) formData.append("description", data.description);
@@ -74,6 +77,8 @@ export async function updateLayout(
     );
   if (data.image_edges !== undefined)
     formData.append("image_edges", JSON.stringify(data.image_edges));
+  if (data.homography_src_corners !== undefined)
+    formData.append("homography_src_corners", JSON.stringify(data.homography_src_corners));
 
   await apiClient.put(`/layouts/${layoutId}/edit`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
