@@ -263,31 +263,13 @@ class ClimbsFeatureScaler:
 
         return dfh
 
-
-# Refactors for new Database and thus Climb/Hold Schemas
-
-import sqlite3
-import json
-import math
-import os
-import numpy as np
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-import torch
-from torch.utils.data import TensorDataset
-import joblib
-
-SCALER_WEIGHTS_PATH = 'data/weights/climbs-feature-scaler.joblib'
-DDPM_WEIGHTS_PATH = 'data/weights/simpler-diffusion-large.pth'
-DB_PATH = 'data/storage.db'
-
 # --- Constants ---
-STYLE_TAGS = ["sloper", "pinch", "macro", "flat", "jug", "foothold"]
+STYLE_TAGS = ["sloper", "pinch", "macro", "flat", "jug"]
 SCALED_FEATURES = ['x', 'y', 'pull_x', 'pull_y']
-BINARY_FEATURES = ['is_foot'] + STYLE_TAGS  # 7 binary features → mapped to [-1, 1]
+BINARY_FEATURES = ['is_foot'] + STYLE_TAGS  # 6 binary features → mapped to [-1, 1]
 HOLD_FEATURE_COLS = SCALED_FEATURES + ['useability'] + BINARY_FEATURES  # 12 total
 NUM_HOLD_FEATURES = len(HOLD_FEATURE_COLS)  # 12
-NUM_ROLES = 5  # start(0), finish(1), hand(2), foot(3), null(4)
+NUM_ROLES = 5
 COND_FEATURES = ['grade', 'quality', 'ascents', 'angle']
 
 
@@ -303,7 +285,7 @@ class ClimbsFeatureArrayV3:
         print("Initializing ClimbsFeatureArray...")
         self.db_path = db_path
         self.to_length = to_length
-        self.scaler = ClimbsFeatureScaler(weights_path=load_weights_path)
+        self.scaler = ClimbsFeatureScalerV3(weights_path=load_weights_path)
 
         # Null token: -2 sentinel for spatial, 0 for everything else
         self.null_hold = [-2, 0, -2, 0] + [0] * (NUM_HOLD_FEATURES - 4)  # 12-dim
@@ -312,14 +294,14 @@ class ClimbsFeatureArrayV3:
         with sqlite3.connect(db_path) as conn:
             # Load climbs
             climbs_to_fit = pd.read_sql_query(
-                "SELECT * FROM climbs WHERE ascents > 1", conn, index_col='id'
+                "SELECT * FROM climbs WHERE ascents > 2", conn, index_col='id'
             )
             climbs_to_fit['holds'] = climbs_to_fit['holds'].apply(json.loads)
             climbs_to_fit = climbs_to_fit[climbs_to_fit['holds'].map(len) <= to_length]
 
             # Load holds (now including tags column)
             holds_to_fit = pd.read_sql_query(
-                "SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags, wall_id FROM holds",
+                "SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags, layout_id FROM holds",
                 conn
             )
             
@@ -327,11 +309,11 @@ class ClimbsFeatureArrayV3:
             scaled_climbs, scaled_holds = self.scaler.transform(climbs_to_fit, holds_to_fit)
             self.hold_features_df = scaled_holds
             
-            # Create fast lookup: wall_id → {hold_index → {feature_name: value}}
+            # Create fast lookup: layout_id → {hold_index → {feature_name: value}}
             lookup_cols = HOLD_FEATURE_COLS  # all 12 hold features
             self.holds_lookup = {
-                wall_id: group[['hold_index'] + lookup_cols].set_index('hold_index').to_dict('index')
-                for wall_id, group in scaled_holds.groupby('wall_id')
+                layout_id: group[['hold_index'] + lookup_cols].set_index('hold_index').to_dict('index')
+                for layout_id, group in scaled_holds.groupby('layout_id')
             }
             self.climbs_df = scaled_climbs
         
@@ -397,9 +379,9 @@ class ClimbsFeatureArrayV3:
         for _, row in df.iterrows():
             try:
                 climb_holds = row['holds']
-                wall_id = row['wall_id']
+                layout_id = row['layout_id']
                 angle = row['angle']
-                wall_holds = self.holds_lookup[wall_id]
+                wall_holds = self.holds_lookup[layout_id]
                 
                 # Buckets for sorting by role
                 start_holds, middle_holds, finish_holds = [], [], []
@@ -410,7 +392,6 @@ class ClimbsFeatureArrayV3:
                     
                     feat = feat_fn(h_data) if dim == 2 else feat_fn(h_data, angle)
                     
-                    # OHE role vector
                     role_vec = [0.0] * NUM_ROLES
                     role_vec[role] = 1.0
                     
@@ -481,7 +462,6 @@ class ClimbsFeatureArrayV3:
 
         if augment:
             refl_x = x_arr.copy()
-            # Flip x (index 0) and pull_x (index 2 for 2D, index 3 for 3D)
             pull_x_idx = 3 if dim == 3 else 2
             refl_x[:, :, [0, pull_x_idx]] *= -1
             
@@ -608,7 +588,7 @@ class ClimbsFeatureScalerV3:
     def transform_hold_features(self, holds_to_transform: pd.DataFrame, to_df: bool = False):
         """Turn hold features into normalized features for inference.
         
-        Input DataFrame should have columns: x, y, pull_x, pull_y, useability, is_foot, tags, wall_id
+        Input DataFrame should have columns: x, y, pull_x, pull_y, useability, is_foot, tags, layout_id
         Returns all 12 hold feature columns (or their transposed array).
         """
         dfh = holds_to_transform.copy()
