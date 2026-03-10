@@ -1,661 +1,466 @@
-# Comprehensive Project Plan: BetaZero Climb Generator
+# Architecture — BetaZero Climb Generator
 
-## Executive Summary
+BetaZero is an ML-powered climbing route generator. Users upload photos of their home walls, place holds, and generate training climbs conditioned on grade and angle using a DDPM-based generative model.
 
-## After analyzing your codebase and project outline, I've identified several critical design decisions that must be resolved before proceeding, along with gaps and inefficiencies in the current plan. This document provides a restructured, actionable roadmap.
+---
 
-## Part 1: Critical Design Decisions (Resolve Before Coding)
-
-These decisions have cascading effects on the entire architecture. Making the wrong choice here means refactoring later.
-
-### Decision 1: Climb Representation for Diffusion
-
-The Problem: Your current Holdset structure is:
+## Repository Structure
 
 ```
-interface Holdset {
-  start: number[];   // hold indices
-  finish: number[];
-  hand: number[];
-  foot: number[];
-}
+ml-homewall-climb-generator/
+├── climb-frontend/       # React + TypeScript frontend
+├── climb-backend/        # FastAPI Python backend
+├── model-training/       # ML model training scripts (offline, not in production)
+├── cache/                # Reference/prototype frontend
+├── tasks/                # Project planning docs
+└── docker-compose.yaml   # Local dev setup
 ```
 
-This is a _sparse categorical_ representation (which holds are used, and their categories). Diffusion models work best in _continuous dense_ spaces.
-
-**Options:**
-
-| Option                                 | Description                                                                                              | Pros                                                          | Cons                                                                                |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **A: Binary mask + category heads**    | Model predicts P(hold_used) for each hold, then separate heads for P(start\|used), P(finish\|used), etc. | Clean separation of concerns; works with variable hold counts | Two-stage inference; category predictions may be inconsistent                       |
-| **B: Multi-class per hold**            | Model predicts 5-class distribution per hold: {unused, start, finish, hand, foot}                        | Single forward pass; consistent                               | Class imbalance (most holds unused); doesn't naturally handle "both start AND hand" |
-| **C: Multi-label per hold**            | Model predicts independent P(start), P(finish), P(hand), P(foot) per hold                                | Handles overlapping categories                                | More outputs; need to handle correlations                                           |
-| **D: Continuous embedding + decoding** | Encode entire climb as fixed-dim vector, diffuse in that space, decode to holds                          | Most "pure" diffusion approach                                | Requires encoder-decoder architecture; reconstruction loss may be lossy             |
-
-**My Recommendation:** Option A or C, depending on whether holds can belong to multiple categories (can a start hold also be a hand hold?). Looking at your current UI, you cycle through categories, implying mutual exclusivity → **Option B is cleanest**.
-
-**Action Required:** Decide if categories are mutually exclusive. If yes, use Option B. If a hold can be both "start" and "hand", use Option C.
-
 ---
 
-### Decision 2: Conditioning Mechanism
+## Frontend (`climb-frontend/`)
 
-**The Problem:** Users want to generate climbs by specifying:
+### Tech Stack
 
-- Target grade (V0-V17)
-- Wall angle
-- Style tags (crimpy, dynamic, etc.)
-- Specific holds to include/exclude
+| Concern   | Library                                                 |
+| --------- | ------------------------------------------------------- |
+| Framework | React 19 + TypeScript 5.9                               |
+| Build     | Vite 7.2                                                |
+| Routing   | TanStack Router 1.143 (file-based)                      |
+| Auth      | Clerk (`@clerk/clerk-react` 5.61)                       |
+| HTTP      | Axios 1.13 with Bearer token interceptor                |
+| Styling   | Tailwind CSS 4 + CSS variables (BetaZero design system) |
+| Icons     | lucide-react                                            |
 
-**Options:**
+### Design System
 
-| Option                                  | Description                                             | Complexity                      |
-| --------------------------------------- | ------------------------------------------------------- | ------------------------------- |
-| **Classifier-Free Guidance**            | Train with random condition dropout, guide at inference | Medium - proven approach        |
-| **Conditional embedding concatenation** | Embed conditions, concat to input                       | Low - simpler but less flexible |
-| **Cross-attention conditioning**        | Conditions attend to hold features                      | High - most expressive          |
+Global CSS variables are defined in `src/components/wall/styles.ts` as the `GLOBAL_STYLES` string. Each page that needs them must include `<style>{GLOBAL_STYLES}</style>`.
 
-**My Recommendation:** Start with **conditional embedding concatenation** for simplicity. Grade/angle as continuous, tags as multi-hot encoded, required/excluded holds as binary masks per hold.
-
----
-
-### Decision 3: Model Architecture Choice
-
-**The Problem:** "Diffusion model" is broad. What specifically?
-
-**Options:**
-
-| Architecture                  | Best For                 | Inference Speed   | Implementation Complexity |
-| ----------------------------- | ------------------------ | ----------------- | ------------------------- |
-| **DDPM (standard)**           | High quality             | Slow (many steps) | Medium                    |
-| **DDIM**                      | Quality + speed tradeoff | Medium            | Medium                    |
-| **Flow Matching**             | Fast inference           | Fast              | Higher                    |
-| **Discrete Diffusion (D3PM)** | Categorical data         | Medium            | Higher                    |
-
-**My Recommendation:** Given your data is inherently discrete (which holds are selected), consider **D3PM (Discrete Denoising Diffusion)** or **standard DDPM with continuous relaxation** (treat categories as probabilities during diffusion, discretize at output).
-
-**Action Required:** Prototype both approaches on a small dataset before committing.
-
----
-
-### Decision 4: Aurora Data Structure & Legal
-
-**Critical Questions:**
-
-1. What format is Aurora data in? (API? Database dump? Scraped?)
-2. Do you have rights to redistribute/use this data commercially?
-3. How do Aurora hold coordinates map to your schema?
-4. Do Aurora boards have fixed layouts (same holds always in same positions)?
-
-**Action Required:** Before any data work:
-
-- Document the Aurora data format you have access to
-- Verify licensing/terms of use
-- Create a mapping document: Aurora schema → BetaZero schema
-
----
-
-### Decision 5: Generation UX - Synchronous vs Asynchronous
-
-**The Problem:** Diffusion models can be slow. How does the UX handle this?
-
-| Approach                     | UX                               | Backend Complexity               |
-| ---------------------------- | -------------------------------- | -------------------------------- |
-| **Synchronous**              | User waits 2-10s, sees result    | Simple - single request          |
-| **Asynchronous (polling)**   | User submits, polls for result   | Medium - needs job queue         |
-| **Asynchronous (WebSocket)** | User submits, gets pushed result | Higher - needs WS infrastructure |
-| **Optimistic + refinement**  | Show fast rough result, refine   | Highest - two-stage model        |
-
-**My Recommendation:** Start with **synchronous** if inference < 5s. Fall back to **async polling** if needed. Your existing `jobs` types suggest you planned for async.
-
-**Action Required:** Benchmark your model's inference time before deciding.
-
----
-
-### Decision 6: Sharing Mechanism
-
-**The Problem:** "Users should be able to easily share generated climbs with others, possibly as a link."
-
-**Options:**
-
-| Approach                    | URL Example                                  | Storage                   | Privacy               |
-| --------------------------- | -------------------------------------------- | ------------------------- | --------------------- |
-| **Persist all generations** | `/climbs/abc123`                             | Every generation saved    | Need cleanup policy   |
-| **Encode in URL**           | `/generate?params=base64...`                 | Stateless                 | Limited by URL length |
-| **Share = explicit save**   | Generate → "Save & Share" → `/climbs/abc123` | Only saved climbs persist | Clear user intent     |
-
-**My Recommendation:** **Option 3** - Generated climbs are ephemeral until user explicitly saves. Saved climbs get a shareable URL. This avoids database bloat and makes user intent clear.
-
----
-
-### Decision 7: Authentication Model
-
-**Current mentions:**
-
-- Setter password for editing holds
-- Private walls
-- Public sharing
-
-**Proposed coherent model:**
-
-```
-Wall:
-  - owner_password_hash (for editing)
-  - visibility: "public" | "unlisted" | "private"
-    - public: appears in list, anyone can view
-    - unlisted: not in list, anyone with link can view
-    - private: not in list, requires password to view
-
-Climb:
-  - wall_id (inherits wall visibility by default)
-  - is_generated: boolean
-  - visibility_override: null | "public" | "unlisted"
+```css
+--cyan: #06b6d4; /* Primary action */
+--cyan-dim: rgba(6, 182, 212, 0.15);
+--bg: #09090b; /* Main background */
+--surface: #111113; /* Card surface */
+--surface2: #1c1c1e; /* Elevated surface */
+--border: rgba(255, 255, 255, 0.08);
+--border-active: rgba(6, 182, 212, 0.4);
+--text-primary: #f4f4f5;
+--text-muted: #71717a;
+--text-dim: #52525b;
+--radius: 4px;
 ```
 
-**Action Required:** Finalize auth model before implementing any password/privacy features.
+Fonts: **Oswald** (headers, `.bz-oswald`) and **Space Mono** (body/mono, `.bz-mono`) via Google Fonts.
 
----
+### Route Structure
 
-## Part 2: Restructured Project Plan
+File-based routing via TanStack Router (`src/routes/`):
 
-Based on the decisions above, here's a revised, ordered plan with dependencies made explicit.
+| Route              | File                  | Purpose                                    |
+| ------------------ | --------------------- | ------------------------------------------ |
+| `/`                | `index.tsx`           | Homepage — layout cards, "Add Wall" button |
+| `/signIn`          | `signIn.tsx`          | Clerk sign-in page                         |
+| `/signUp`          | `signUp.tsx`          | Clerk sign-up page                         |
+| `/layouts/new`     | `layouts/new.tsx`     | 4-step layout creation wizard              |
+| `/$layoutId/holds` | `$layoutId/holds.tsx` | Canvas-based holds editor                  |
+| `/$layoutId/set`   | `$layoutId/set.tsx`   | Climb generator (main feature)             |
+| `/$layoutId/view`  | `$layoutId/view.tsx`  | Saved climb browser                        |
+| `/$layoutId/sizes` | `$layoutId/sizes.tsx` | Size variant manager                       |
+| (root)             | `__root.tsx`          | ClerkProvider + AuthInit wrapper           |
 
-### Phase 0: Foundation & Decisions (Week 1)
+### API Client
 
-**0.1 Finalize Design Decisions**
+`src/api/client.ts` — Axios instance pointed at `VITE_API_URL`. A request interceptor injects the Clerk JWT as a `Bearer` token on every outgoing request via `setAuthTokenProvider`.
 
-- [ ] Document choice for each of the 7 decisions above
-- [ ] Create `ARCHITECTURE.md` with chosen approaches
-- [ ] Review with any collaborators/stakeholders
+API functions are organized by resource:
 
-**0.2 Audit Current Codebase**
+**`src/api/layouts.ts`**
 
-- [ ] Document current backend API (you haven't shared it - I'm inferring from frontend)
-- [ ] List all existing endpoints and their implementations
-- [ ] Identify what's implemented vs stubbed
-- [ ] Create `CURRENT_STATE.md`
+- `getLayouts()` — `GET /layouts`
+- `getLayout(id, sizeId?)` — `GET /layouts/{id}`
+- `createLayout(data)` — `POST /layouts`
+- `updateLayout(id, data)` — `PUT /layouts/{id}/edit`
+- `uploadLayoutPhoto(id, file)` — `PUT /layouts/{id}/photo`
+- `deleteLayout(id)` — `DELETE /layouts/{id}`
+- `setLayoutHolds(id, holds)` — `PUT /layouts/{id}/holds`
+- `getLayoutPhotoUrl(id)` — Returns a static URL string (no auth required for public layouts)
 
-**0.3 Define Data Contracts**
+**`src/api/sizes.ts`**
 
-- [ ] Finalize `HoldDetail` schema (is current sufficient for ML?)
-- [ ] Finalize `Climb` schema (add `is_generated`, `source` fields?)
-- [ ] Define `GenerationRequest` schema
-- [ ] Define `GenerationResult` schema
-- [ ] Version these as OpenAPI spec
+- `getSizes(layoutId)` — `GET /layouts/{id}/sizes`
+- `createSize(layoutId, data)` — `POST /layouts/{id}/sizes`
+- `deleteSize(layoutId, sizeId)` — `DELETE /layouts/{id}/sizes/{sizeId}`
 
----
+**`src/api/climbs.ts`**
 
-### Phase 1: Data Pipeline (Weeks 2-3)
+- `getClimbs(wallId, filters)` — `GET /walls/{id}/climbs?...`
+- `createClimb(wallId, data)` — `POST /walls/{id}/climbs`
+- `deleteClimb(wallId, climbId)` — `DELETE /walls/{id}/climbs/{climbId}`
 
-**1.1 Aurora Data Acquisition**
+**`src/api/generate.ts`**
 
-- [ ] Document Aurora data source and format
-- [ ] Verify legal right to use data
-- [ ] Write extraction script (if needed)
-- [ ] Store raw data in version-controlled location
+- `generateClimbs(wallId, request, settings?)` — `GET /walls/{id}/generate?...`
 
-**1.2 Aurora Data Transformation**
+### Types
 
-- [ ] Map Aurora board layouts to `WallMetadata` schema
-  - [ ] Handle different board sizes (Kilter 8x10, 12x12, etc.)
-  - [ ] Map Aurora hold IDs to your hold indexing
-  - [ ] Extract hold positions (x, y in feet)
-  - [ ] Handle LED positions → hold positions mapping
-- [ ] Map Aurora climbs to `Climb` schema
-  - [ ] Map Aurora grades to your V-scale (0-170)
-  - [ ] Map Aurora angles to your angle field
-  - [ ] Transform hold lists to `Holdset` structure
-  - [ ] Filter to climbs with ≥1 ascent (as you mentioned)
-- [ ] Write transformation scripts with validation
-- [ ] Create data quality report
+**`src/types/layout.ts`** — `LayoutMetadata`, `LayoutDetail`, `SizeMetadata`, `LayoutCreate`, `SizeCreate`
 
-**1.3 Data Loading**
+- `LayoutMetadata.dimensions: number[]` — `[width_ft, height_ft]`
+- `SizeMetadata.edges: number[]` — `[left, right, bottom, top]` in feet
 
-- [ ] Create bulk upload endpoint: `POST /walls/bulk`
-- [ ] Create bulk climb upload: `POST /walls/{id}/climbs/bulk`
-- [ ] Load all Aurora walls
-- [ ] Load all Aurora climbs
-- [ ] Verify data integrity in database
+**`src/types/wall.ts`** — `HoldDetail`, `HoldMode`, `Visibility`, `Tag`
 
-**1.4 ML Dataset Preparation**
+- `HoldMode = "add" | "remove" | "select" | "edit"`
+- `HoldDetail.x/y` — position in feet; `is_foot` — `0`=hand hold, `1`=foot hold
 
-- [ ] Export training data: (wall_id, hold_features, climb_holdset, grade, angle)
-- [ ] Create train/validation/test splits (by wall? by time? random?)
-- [ ] Compute dataset statistics (grade distribution, holds per climb, etc.)
-- [ ] Save as efficient format (Parquet, TFRecord, or PyTorch datasets)
+**`src/types/climb.ts`** — `Climb`, `Holdset` (`{ start, finish, hand, foot }` as `number[]` of hold indices)
 
----
+**`src/types/generate.ts`** — `GenerateRequest`, `GenerateSettings`, `GenerateResponse`
 
-### Phase 2: Model Development (Weeks 4-7)
+### Hooks
 
-**2.1 Baseline Model**
+| Hook                            | File                    | Purpose                                       |
+| ------------------------------- | ----------------------- | --------------------------------------------- |
+| `useLayouts()`                  | `hooks/useLayouts.ts`   | Fetch all layouts, with 502 wake retry        |
+| `useLayout(id, sizeId?)`        | `hooks/useLayouts.ts`   | Fetch a single layout                         |
+| `useHolds(imageDims, wallDims)` | `hooks/useHolds.ts`     | Hold state + pixel↔feet coordinate conversion |
+| `useClimbs()`                   | `hooks/useClimbs.ts`    | Fetch and filter saved climbs                 |
+| `useImageCrop()`                | `hooks/useImageCrop.ts` | Crop state for the layout creation wizard     |
+| `useAuth()`                     | `hooks/useAuth.ts`      | Clerk JWT token retrieval                     |
 
-- [ ] Implement simple baseline (random hold selection)
-- [ ] Define evaluation metrics:
-  - [ ] Reconstruction accuracy (on held-out climbs)
-  - [ ] Grade prediction accuracy (train classifier, check generated climbs)
-  - [ ] Validity rate (start + finish present, reasonable # holds)
-  - [ ] Diversity (unique climbs generated)
-- [ ] Establish baseline scores
+`fetchWithWakeRetry()` (defined in `useLayouts.ts`) retries failed requests for up to 20 seconds on 502 responses and surfaces a "Waking..." UI state — handling cold starts on free-tier hosting.
 
-**2.2 Feature Engineering**
+### Components
 
-- [ ] Design hold embedding: how to represent a single hold
-  - Position (x, y) - normalized to wall dimensions
-  - Physical features (pull_x, pull_y, useability, is_foot)
-  - Contextual features (distance to neighbors, local density?)
-- [ ] Design wall embedding: how to represent entire wall
-  - Set of hold embeddings
-  - Wall metadata (angle, dimensions)
-- [ ] Design condition embedding
-  - Grade (scalar, normalized)
-  - Angle (scalar, normalized)
-  - Tags (multi-hot or learned embeddings)
+**`src/components/wall/`** — Core climb visualization
 
-**2.3 Diffusion Model Implementation**
+- `WallCanvas.tsx` — Renders the layout photo, hold markers, and active climb overlay
+- `DisplaySettingsPanel.tsx` — UI for filtering which holds/climbs are shown
+- `SaveShareMenu.tsx` — Save a climb + copy a share link
+- `MobileSwipeNav.tsx` — Swipe between climbs on mobile
+- `sharing.ts` — Encode/decode climbs as URL parameters for link sharing
+- `styles.ts` — `GLOBAL_STYLES` CSS variable definitions
 
-- [ ] Choose framework (PyTorch recommended)
-- [ ] Implement noise schedule
-- [ ] Implement forward diffusion process
-- [ ] Implement denoising network
-  - Architecture choice: Transformer? Graph neural network? MLP?
-  - I recommend **Set Transformer** or **Perceiver** for variable-size hold sets
-- [ ] Implement conditional embedding injection
-- [ ] Implement loss function
-- [ ] Write training loop with logging (Weights & Biases recommended)
+**Other components**
 
-**2.4 Training Infrastructure**
+- `ImageCropper.tsx` — Crop UI with 8 draggable resize handles (used in `/layouts/new`)
+- `HoldFeaturesSidebar`, `EnabledFeaturesMenu` — Hold property editing panels
+- `screens.tsx` — `WakingScreen` loading state
 
-- [ ] Set up GPU training environment (local or cloud)
-- [ ] Implement checkpointing
-- [ ] Implement early stopping
-- [ ] Create training config system (Hydra or simple YAML)
+### Coordinate System
 
-**2.5 Training & Iteration**
-
-- [ ] Train initial model
-- [ ] Evaluate on test set
-- [ ] Analyze failure cases
-- [ ] Iterate on architecture/hyperparameters
-- [ ] Document final model choice with rationale
-
-**2.6 ClimbGenerator Wrapper**
-
-- [ ] Implement `ClimbGenerator` class that wraps diffusion model
-- [ ] Add inference-time features:
-  - [ ] Classifier-free guidance for grade control
-  - [ ] Temperature/diversity control
-  - [ ] Required/excluded hold constraints
-  - [ ] Post-processing (ensure valid start/finish)
-- [ ] Optimize inference speed
-  - [ ] DDIM for fewer steps
-  - [ ] Batching for multiple generations
-  - [ ] ONNX export if needed
-- [ ] Write comprehensive unit tests
-
----
-
-### Phase 3: Backend Integration (Weeks 8-9)
-
-**3.1 Model Serving Setup**
-
-- [ ] Decide serving approach:
-  - [ ] In-process (model loaded in FastAPI)
-  - [ ] Separate service (gRPC or REST)
-  - [ ] Managed service (SageMaker, Vertex AI)
-- [ ] Implement model loading with versioning
-- [ ] Add health check endpoint for model readiness
-
-**3.2 Generation API**
-
-- [ ] Implement `POST /walls/{wall_id}/generate` endpoint
+Holds are stored in **feet** (origin: bottom-left of wall). The canvas displays them in **pixels** (origin: top-left of image). `useHolds` converts between them:
 
 ```
-  Request:
-    grade: int | null
-    angle: int | null
-    tags: string[] | null
-    required_holds: int[] | null
-    excluded_holds: int[] | null
-    count: int (default 1, max 10)
+toFeetCoords:   x = pixelX / imgWidth * wallWidth
+                y = (imgHeight - pixelY) / imgHeight * wallHeight   ← Y axis is inverted
 
-  Response:
-    generations: [{
-      holdset: Holdset,
-      predicted_grade: int,
-      confidence: float
-    }]
+toPixelCoords:  px = hold.x / wallWidth * imgWidth
+                py = imgHeight - hold.y / wallHeight * imgHeight
 ```
 
-- [ ] Add request validation
-- [ ] Add rate limiting
-- [ ] Add generation logging for analytics
-
-**3.3 Save Generated Climb**
-
-- [ ] Extend `POST /walls/{wall_id}/climbs` to accept `source: "generated"`
-- [ ] Store generation metadata (model version, input params)
-
-**3.4 Async Generation (if needed)**
-
-- [ ] Set up job queue (Redis + RQ, or Celery)
-- [ ] Implement `POST /walls/{wall_id}/generate/async` → returns job_id
-- [ ] Implement `GET /jobs/{job_id}` for polling
-- [ ] Implement job cleanup for old jobs
-
 ---
 
-### Phase 4: Frontend - Generation Feature (Week 10)
+## Backend (`climb-backend/`)
 
-**4.1 Generation Page UI**
+### Tech Stack
 
-- [ ] Implement `/walls/$wallId/generate` route (currently stubbed)
-- [ ] Design generation form:
-  - Grade selector (slider or dropdown)
-  - Angle selector (if wall supports multiple)
-  - Tag multi-select
-  - "Include holds" mode (click to require)
-  - "Exclude holds" mode (click to exclude)
-- [ ] Design results display:
-  - Show generated climb on wall canvas
-  - Show predicted grade/confidence
-  - "Generate Another" button
-  - "Save This Climb" button
-  - "Share" button
+| Concern   | Library                               |
+| --------- | ------------------------------------- |
+| Framework | FastAPI 0.125 (async)                 |
+| Database  | SQLite 3 (raw SQL + Row factory)      |
+| Auth      | Clerk JWT via PyJWT + RSA key caching |
+| ML        | PyTorch 2.10 (CPU), scikit-learn      |
+| Server    | Uvicorn 0.38                          |
 
-**4.2 Generation Flow**
-
-- [ ] Implement API call to generation endpoint
-- [ ] Add loading state with appropriate feedback
-- [ ] Handle errors gracefully
-- [ ] Implement "Save" flow (transitions to view page)
-
-**4.3 Sharing Feature**
-
-- [ ] Implement share URL generation for saved climbs
-- [ ] Create `/climbs/{climbId}` public view page (no wall context needed?)
-- [ ] Or: `/walls/{wallId}/climbs/{climbId}` with wall context
-- [ ] Add copy-to-clipboard for share URL
-- [ ] Add social sharing buttons (optional)
-
-**4.4 Aurora Wall Selection**
-
-- [ ] Update home page wall selector to show Aurora walls prominently
-- [ ] Add wall categorization (user walls vs Aurora walls)
-- [ ] Consider wall preview thumbnails
-
----
-
-### Phase 5: Enhanced Hold Editor (Week 11)
-
-**5.1 Bounding Quadrilateral for Coordinates**
-
-- [ ] Design UI for quadrilateral selection
-  - Four corner drag handles
-  - Labels for top/bottom/left/right edges
-  - Preview of coordinate grid
-- [ ] Implement perspective transform math
+### Application Structure
 
 ```
-  Input: 4 corners in pixel space, wall dimensions in feet
-  Output: Function mapping pixel → feet coordinates
+app/
+├── main.py              # FastAPI app, router registration, startup hook
+├── config.py            # Settings via pydantic-settings (.env)
+├── database.py          # SQLite schema init and migrations
+├── auth.py              # Clerk JWT verification + FastAPI access control deps
+├── routers/
+│   ├── layouts.py
+│   ├── sizes.py
+│   ├── climbs.py
+│   └── generate.py
+├── schemas/
+│   ├── base.py          # HoldDetail, Holdset
+│   ├── layouts.py       # LayoutMetadata, LayoutDetail, LayoutCreate
+│   ├── sizes.py         # SizeMetadata, SizeCreate
+│   ├── climbs.py        # Climb, ClimbCreate, ClimbListResponse
+│   └── generate.py      # GenerateRequest, GenerateSettings, GenerateResponse
+└── services/
+    ├── container.py     # ServiceContainer dataclass (dependency injection)
+    ├── layout_service.py
+    ├── size_service.py
+    ├── climb_service.py
+    ├── generation_service.py
+    ├── user_service.py
+    └── utils/
+        ├── conversion_utils.py  # SQLite Row ↔ Pydantic schema helpers
+        └── generation_utils.py  # Grade/angle lookups + Generator class wrapper
 ```
 
-- [ ] Store quadrilateral corners in wall metadata
-- [ ] Update hold coordinate calculation to use transform
+### Database Schema
+
+SQLite file at `data/storage.db`. JSON arrays (holds, edges, tags) are serialized as strings.
+
+```sql
+CREATE TABLE users (
+    id           TEXT PRIMARY KEY,
+    email        TEXT NOT NULL,
+    display_name TEXT,
+    avatar_url   TEXT,
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE layouts (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    description   TEXT,
+    dimensions    TEXT,          -- JSON: [width_ft, height_ft]
+    image_edges   TEXT,          -- JSON: [left, right, bottom, top] in feet
+    default_angle INTEGER,
+    owner_id      TEXT,
+    visibility    TEXT DEFAULT 'public',  -- 'public' | 'private' | 'unlisted'
+    share_token   TEXT,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE sizes (
+    id         TEXT PRIMARY KEY,
+    layout_id  TEXT NOT NULL REFERENCES layouts(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    edges      TEXT NOT NULL,  -- JSON: [left, right, bottom, top] in feet
+    kickboard  BOOLEAN,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE holds (
+    id          TEXT PRIMARY KEY,
+    layout_id   TEXT,
+    hold_index  INTEGER NOT NULL,   -- unique per layout
+    x           REAL NOT NULL,      -- feet from left
+    y           REAL NOT NULL,      -- feet from bottom
+    pull_x      REAL DEFAULT 0.0,   -- normalized pull direction [-1, 1]
+    pull_y      REAL DEFAULT 0.0,
+    useability  REAL DEFAULT 0.5,   -- [0, 1]
+    tags        TEXT,               -- JSON array of tag strings
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE climbs (
+    id          TEXT PRIMARY KEY,
+    layout_id   TEXT,               -- canonical FK
+    angle       INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    holds       TEXT NOT NULL,      -- JSON Holdset: {start, finish, hand, foot}
+    tags        TEXT,               -- JSON array of tag strings
+    grade       REAL,               -- internal difficulty float
+    quality     REAL DEFAULT 2.5,   -- [0, 3]
+    ascents     INTEGER DEFAULT 0,
+    setter_name TEXT,
+    setter_id   TEXT,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE
+);
+```
+
+### API Endpoints
+
+All routes are prefixed with `/api/v1`.
+
+#### Layouts — `/api/v1/layouts`
+
+| Method   | Path                 | Auth         | Description                                      |
+| -------- | -------------------- | ------------ | ------------------------------------------------ |
+| `GET`    | `/`                  | Optional     | List public + user's own layouts                 |
+| `GET`    | `/{layout_id}`       | Access check | Get layout with holds and sizes                  |
+| `POST`   | `/`                  | Required     | Create a new layout (metadata only, no photo)    |
+| `PUT`    | `/{layout_id}/edit`  | Owner        | Update name / description / visibility           |
+| `PUT`    | `/{layout_id}/photo` | Owner        | Upload or replace the layout photo               |
+| `PUT`    | `/{layout_id}/holds` | Owner        | Replace the entire hold set                      |
+| `DELETE` | `/{layout_id}`       | Owner        | Delete layout (cascades to sizes, holds, climbs) |
+| `GET`    | `/{layout_id}/photo` | Access check | Download the layout photo                        |
+
+#### Sizes — `/api/v1/layouts/{layout_id}/sizes`
+
+| Method   | Path         | Auth         | Description                         |
+| -------- | ------------ | ------------ | ----------------------------------- |
+| `GET`    | `/`          | Access check | List all size variants for a layout |
+| `POST`   | `/`          | Required     | Add a new size variant              |
+| `DELETE` | `/{size_id}` | Required     | Delete a size variant               |
+
+#### Climbs — `/api/v1/layouts/{layout_id}/climbs`
+
+| Method   | Path          | Auth     | Description              |
+| -------- | ------------- | -------- | ------------------------ |
+| `GET`    | `/`           | Optional | List climbs with filters |
+| `POST`   | `/`           | Required | Save a single climb      |
+| `POST`   | `/batch`      | Optional | Bulk insert climbs       |
+| `DELETE` | `/{climb_id}` | Required | Delete a climb           |
 
-**5.2 Kickboard Support**
+Supported query parameters for `GET /climbs`: `angle`, `grade_scale`, `min_grade`, `max_grade`, `include_projects`, `setter_name`, `name_includes`, `holds_include[]`, `tags_include[]`, `after`, `sort_by`, `descending`, `limit`, `offset`.
 
-- [ ] Add second quadrilateral for kickboard region
-- [ ] UI to toggle kickboard mode
-- [ ] Store kickboard holds separately or with flag
-- [ ] Handle kickboard in climb generation (some climbs use kickboard, some don't)
+Grades are stored internally as floats via a `GRADE_TO_DIFF` map (e.g. `"V4"` → `8.0`, `"6b+"` → `17.5`). Supported scales: `v_grade` (V0–V17) and `font` (1a–9a+).
 
-**5.3 Migration**
+#### Generation — `/api/v1/layouts/{layout_id}/generate`
 
-- [ ] Add migration for existing walls (default quadrilateral = image bounds)
-- [ ] Tool to re-calculate hold coordinates for existing walls
+| Method | Path | Description                        |
+| ------ | ---- | ---------------------------------- |
+| `GET`  | `/`  | Generate climbs via the DDPM model |
 
----
+Query parameters: `num_climbs` (1–10), `grade`, `grade_scale`, `angle`, `timesteps`, `t_start_projection`, `x_offset`, `deterministic`, `seed`.
 
-### Phase 6: Access Control (Week 12)
+Response: `{ wall_id, climbs: Holdset[], num_generated, parameters }`.
 
-**6.1 Wall Password Protection**
+> Generation is currently **synchronous** — the model runs inline per request (~2–5 s). An async job queue is planned for a future phase.
 
-- [ ] Add `setter_password_hash` to Wall schema
-- [ ] On wall creation, optionally set password
-- [ ] Protect `PUT /walls/{id}/holds` with password
-- [ ] Protect `DELETE /walls/{id}` with password
-- [ ] UI for entering password when editing
+#### Misc
 
-**6.2 Wall Visibility**
+| Method | Path      | Description                              |
+| ------ | --------- | ---------------------------------------- |
+| `GET`  | `/health` | Health check — `{ "status": "healthy" }` |
 
-- [ ] Add `visibility` enum to Wall schema
-- [ ] Update `GET /walls` to filter by visibility
-- [ ] Add `GET /walls/{id}` logic:
-  - Public/unlisted: return wall
-  - Private: require password or return 404
-- [ ] UI for setting visibility on creation/edit
-- [ ] "Unlisted" walls accessible by direct link
+### Authentication
 
-**6.3 Password Security**
+Clerk JWTs (RS256) are verified against JWKS fetched from `{CLERK_ISSUER}/.well-known/jwks.json`, cached for 1 hour. The token subject (`sub`) is the user ID.
 
-- [ ] Use bcrypt for password hashing
-- [ ] Implement rate limiting on password attempts
-- [ ] Never return password hash in API responses
+FastAPI dependency functions in `auth.py`:
 
----
+| Dependency              | Behavior                                                              |
+| ----------------------- | --------------------------------------------------------------------- |
+| `get_current_user`      | Extracts and verifies the Bearer token; returns a user dict or `None` |
+| `require_auth`          | 401 if not authenticated                                              |
+| `sync_auth`             | Same as `require_auth` but also upserts the user into the DB          |
+| `get_accessible_layout` | 404 if not found; 403 if the caller has no access                     |
+| `require_layout_owner`  | 401 if not authenticated; 403 if not the owner                        |
 
-### Phase 7: Cleanup & Polish (Week 13)
+**Layout access rules:**
 
-**7.1 Bug Fixes**
+- `public` → anyone can read
+- `unlisted` → anyone with `?share_token=` in the request URL
+- `private` → owner only, or a valid `share_token`
 
-- [ ] Systematic testing of all features
-- [ ] Fix identified bugs
-- [ ] Handle edge cases (empty walls, no climbs, etc.)
+On first auth, the user is upserted into the `users` table (email, display_name, avatar_url synced from Clerk).
 
-**7.2 UI Polish**
+### Services Layer
 
-- [ ] Consistent design system (colors, spacing, typography)
-- [ ] Responsive design (mobile support)
-- [ ] Loading states everywhere
-- [ ] Error states everywhere
-- [ ] Empty states everywhere
-- [ ] Accessibility audit (keyboard nav, screen readers)
+Business logic lives in `services/`. Route handlers receive a `ServiceContainer` via FastAPI's dependency injection and call service functions — no raw SQL in routers.
 
-**7.3 Performance**
+**`layout_service.py`** — Layout and hold CRUD; photo storage at `data/layouts/{layout_id}`
 
-- [ ] Frontend bundle analysis and optimization
-- [ ] Backend query optimization
-- [ ] Add caching where appropriate
-- [ ] Lazy loading for large lists
+**`size_service.py`** — Size CRUD
 
-**7.4 Documentation**
+**`climb_service.py`** — Climb CRUD with rich filtering; batch insert; `Holdset` validation
 
-- [ ] API documentation (auto-generated from OpenAPI)
-- [ ] Code comments on complex logic
-- [ ] README with setup instructions
-- [ ] CONTRIBUTING guide
-- [ ] Architecture documentation
+**`generation_service.py`** — Lazy-loads the DDPM model on first call; resolves the angle from the request or layout default; dispatches to the `Generator` class in `utils/generation_utils.py`; converts raw model output to `Holdset` format
 
----
+**`user_service.py`** — `ensure_user_exists(user_id, email, name)` upsert
 
-### Phase 8: Deployment (Week 14)
+### Configuration
 
-**8.1 Backend Containerization**
-
-- [ ] Write `Dockerfile` for backend
-  - Multi-stage build for smaller image
-  - Include ML model in image or load from storage?
-- [ ] Write `docker-compose.yml` for local development
-- [ ] Test container locally
-- [ ] Push to DockerHub
-
-**8.2 Database Setup**
-
-- [ ] Choose managed database (Cloud SQL, RDS, or self-hosted)
-- [ ] Set up production database
-- [ ] Configure backups
-- [ ] Run migrations
-
-**8.3 Backend Hosting**
-
-- [ ] Set up GCP VM (or Cloud Run for easier scaling)
-- [ ] Configure networking (firewall, SSL)
-- [ ] Set up reverse proxy (nginx or Cloud Load Balancer)
-- [ ] Deploy container
-- [ ] Set up monitoring (Cloud Monitoring or self-hosted)
-- [ ] Set up logging (Cloud Logging)
-- [ ] Set up alerts
-
-**8.4 Frontend Deployment**
-
-- [ ] Configure Vercel project
-- [ ] Set up environment variables (API URL)
-- [ ] Deploy to Vercel
-- [ ] Test production build
-
-**8.5 Domain Setup**
-
-- [ ] Purchase domain
-- [ ] Configure DNS for frontend (Vercel)
-- [ ] Configure DNS for API subdomain (api.yourdomain.com)
-- [ ] Ensure HTTPS everywhere
-- [ ] Test end-to-end
-
----
-
-### Phase 9: Launch Content (Week 15)
-
-**9.1 Dev Blog Post**
-
-- [ ] Outline: problem statement, architecture overview, key decisions
-- [ ] Write draft
-- [ ] Create architecture diagrams
-- [ ] Add code snippets for interesting parts
-- [ ] Review and edit
-- [ ] Publish on Substack
-
-**9.2 ML Blog Post**
-
-- [ ] Outline: why diffusion, data representation, model architecture, results
-- [ ] Write draft
-- [ ] Include training curves, sample outputs
-- [ ] Compare to baselines
-- [ ] Discuss limitations and future work
-- [ ] Review and edit
-- [ ] Publish on Substack
-
-**9.3 Demo Content**
-
-- [ ] Create demo video showing generation flow
-- [ ] Prepare sample generated climbs for each Aurora board
-- [ ] Screenshot gallery for social media
-
----
-
-### Phase 10: Launch & Promotion (Week 16)
-
-**10.1 Soft Launch**
-
-- [ ] Share with climbing friends for feedback
-- [ ] Fix critical issues found
-- [ ] Gather testimonials
-
-**10.2 Public Launch**
-
-- [ ] Post on Reddit (r/climbing, r/climbharder, r/homewalls)
-- [ ] Post on climbing forums
-- [ ] Share on Twitter/X
-- [ ] Post on Hacker News (if technical angle is compelling)
-- [ ] Share Substack posts
-
-**10.3 Ongoing**
-
-- [ ] Monitor for issues
-- [ ] Respond to user feedback
-- [ ] Track analytics
-- [ ] Plan v2 features based on feedback
-
----
-
-## Part 3: Risk Analysis & Mitigations
-
-| Risk                                   | Impact                 | Likelihood | Mitigation                                                                               |
-| -------------------------------------- | ---------------------- | ---------- | ---------------------------------------------------------------------------------------- |
-| **Model doesn't generate good climbs** | High - core value prop | Medium     | Start with simple baseline, iterate. Have fallback to curated climbs.                    |
-| **Aurora data issues (format/legal)**  | High - blocks Phase 1  | Low-Medium | Verify data access early. Have backup plan (synthetic data, user-submitted climbs only). |
-| **Inference too slow**                 | Medium - bad UX        | Medium     | Optimize early. Use async if needed. Consider edge deployment.                           |
-| **Nobody uses it**                     | Medium - motivation    | Medium     | Launch MVP fast, get feedback early. Don't over-build before validation.                 |
-| **Scope creep**                        | Medium - delays        | High       | Strict prioritization. Mark features as "v1" vs "v2".                                    |
-| **Security issues**                    | High - reputation      | Low        | Follow security best practices. No real authentication = limited risk.                   |
-
----
-
-## Part 4: Questions I Need Answered
-
-Before you proceed, please clarify:
-
-1. **Backend stack**: What's your current backend? FastAPI? Django? Node?
-
-2. **Database**: What database are you using? PostgreSQL? MongoDB?
-
-3. **Aurora data**: Do you have this data already? What format?
-
-4. **ML experience**: What's your comfort level with PyTorch, diffusion models?
-
-5. **Timeline**: Is the 16-week estimate realistic? Any hard deadlines?
-
-6. **Resources**: Do you have GPU access for training? Budget for cloud hosting?
-
-7. **Category exclusivity**: Can a hold be both "start" AND "hand"? Or are categories mutually exclusive?
-
-8. **Existing models**: You mentioned `jobs` and `models` - is there existing generation code to review?
-
----
-
-## Appendix: Suggested File Structure
+`app/config.py` uses `pydantic-settings`, loading from `.env`:
 
 ```
-betazero/
-├── climb-api/                    # Backend
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── routes/
-│   │   │   │   ├── walls.py
-│   │   │   │   ├── climbs.py
-│   │   │   │   ├── generation.py
-│   │   │   │   └── jobs.py
-│   │   │   └── deps.py
-│   │   ├── models/              # DB models
-│   │   ├── schemas/             # Pydantic schemas
-│   │   ├── services/
-│   │   │   ├── generation/
-│   │   │   │   ├── generator.py
-│   │   │   │   └── model_loader.py
-│   │   │   └── ...
-│   │   └── main.py
-│   ├── ml/                       # ML code
-│   │   ├── data/
-│   │   │   ├── aurora_loader.py
-│   │   │   └── dataset.py
-│   │   ├── models/
-│   │   │   ├── diffusion.py
-│   │   │   └── embeddings.py
-│   │   ├── training/
-│   │   │   ├── train.py
-│   │   │   └── evaluate.py
-│   │   └── configs/
-│   ├── Dockerfile
-│   └── requirements.txt
-├── climb-frontend/               # Frontend (your current code)
-├── data/
-│   ├── raw/                     # Raw Aurora data
-│   ├── processed/               # Transformed data
-│   └── models/                  # Trained model checkpoints
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── API.md
-│   └── DEPLOYMENT.md
-└── docker-compose.yml
+CLERK_ISSUER          Clerk issuer URL (required)
+CLERK_SECRET_KEY      Clerk secret key (required)
+DATA_DIR              data/
+WALLS_DIR             data/walls/       (legacy photo storage)
+LAYOUTS_DIR           data/layouts/     (current photo storage)
+DB_PATH               data/storage.db
+DDPM_WEIGHTS_PATH     data/models/ddpm-weights.pth
+SCALER_WEIGHTS_PATH   data/models/scaler-weights.joblib
+HC_WEIGHTS_PATH       data/models/unet-hold-classifier.pth
+LIMIT                 50  (default pagination limit)
 ```
+
+---
+
+## Key Architectural Concepts
+
+### Layout vs. Size
+
+A **Layout** is a unique hold arrangement — it owns the wall photo and all hold positions. A **Size** is a physical dimension variant of that layout (e.g., the same board mounted as 8×10 or 12×12), defined by edge-crop bounds `[left, right, bottom, top]` in feet.
+
+- Photos are owned by layouts, not by sizes
+- Holds are attached to layouts; sizes filter holds by their edge bounds
+- A layout can have multiple sizes; each size can set a `kickboard` flag
+
+### Walls → Layouts Migration
+
+The original data model used a `walls` table. It has been replaced by `layouts` + `sizes`, but the old table is preserved for backward compatibility. `wall_id` and `layout_id` always hold the same value for migrated data. The legacy `walls` table and `/api/v1/walls/` endpoints will be removed in a future cleanup phase.
+
+### ML Generation
+
+The generative model is a **DDPM (Denoising Diffusion Probabilistic Model)** trained on Aurora board climb data. At generation time:
+
+1. The backend loads the layout's holds from the database
+2. The DDPM conditions on `grade` and `angle`, denoising random noise into a point cloud
+3. A hold classifier (UNet) assigns roles — start/finish/hand/foot — to points
+4. Manifold guidance snaps generated points to the nearest real hold positions
+5. The result is returned as a `Holdset` (hold indices, not coordinates)
+
+The model is lazy-loaded into memory on first use and kept resident. Weights live in `data/models/`.
+
+---
+
+## Data Flow: Key User Journeys
+
+### Create a Layout
+
+1. `/layouts/new` — 4-step wizard: Visibility → Upload photo → Crop → Details (name, dimensions, default angle, kickboard)
+2. On submit: `POST /layouts` → `PUT /layouts/{id}/photo` → `POST /layouts/{id}/sizes`
+3. Redirects to `/$layoutId/holds` for hold placement
+
+### Place Holds
+
+- Canvas editor at `/$layoutId/holds`
+- Interaction modes: `add` / `remove` / `select` / `edit`
+- On save: `PUT /layouts/{id}/holds` — replaces the entire hold array atomically
+
+### Generate Climbs
+
+- `/$layoutId/set` — user selects grade, angle, and generation settings (timesteps, etc.)
+- `GET /layouts/{id}/generate?...` — synchronous model inference, returns `Holdset[]`
+- User navigates results, then saves a chosen climb via `POST /layouts/{id}/climbs`
+- Climbs are shareable via URL-encoded hold indices (`sharing.ts`)
+
+### Browse Saved Climbs
+
+- `/$layoutId/view` — fetches climbs with optional filters (grade range, setter, tags, holds)
+- Clicking a climb visualizes it on the wall canvas
+
+---
+
+## Local Development
+
+**Backend**
+
+```bash
+cd climb-backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+# Create .env with CLERK_ISSUER and CLERK_SECRET_KEY
+uvicorn app.main:app --reload
+# Runs at http://localhost:8000
+```
+
+**Frontend**
+
+```bash
+cd climb-frontend
+npm install
+# Create .env with VITE_API_URL and VITE_CLERK_PUBLISHABLE_KEY
+npm run dev
+# Runs at http://localhost:5173
+```
+
+Or use `docker-compose up` to bring up both services together.

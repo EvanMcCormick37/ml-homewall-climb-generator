@@ -10,9 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.3",
     "@tanstack/react-router": "^1.143.4",
     "axios": "^1.13.2",
     "lucide-react": "^0.562.0",
+    "railway": "^2.0.17",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

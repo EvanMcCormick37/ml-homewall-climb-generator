@@ -7,12 +7,19 @@ from app.schemas.base import (
     HoldDetail,
     Holdset,
 )
-from app.schemas.walls import (
-    WallCreate,
-    WallDetail,
-    WallMetadata,
-    WallListResponse,
-    WallCreateResponse,
+
+from app.schemas.sizes import (
+    SizeMetadata,
+    SizeCreate,
+    SizeCreateResponse,
+)
+from app.schemas.layouts import (
+    LayoutCreate,
+    LayoutEdit,
+    LayoutDetail,
+    LayoutMetadata,
+    LayoutListResponse,
+    LayoutCreateResponse,
     SetHoldsResponse,
 )
 from app.schemas.climbs import (
@@ -29,6 +36,7 @@ from app.schemas.climbs import (
 from app.schemas.generate import (
     GradeScale,
     GenerateRequest,
+    GenerateSettings,
     GenerateResponse,
 )
 
@@ -38,13 +46,18 @@ __all__ = [
     "HoldPosition",
     "HoldDetail",
     "Holdset",
-    # Walls
-    "WallCreate",
-    "WallDetail",
-    "WallMetadata",
-    "WallListResponse",
-    "WallCreateResponse",
+    # Layouts (new)
+    "LayoutCreate",
+    "LayoutEdit",
+    "LayoutDetail",
+    "LayoutMetadata",
+    "LayoutListResponse",
+    "LayoutCreateResponse",
     "SetHoldsResponse",
+    # Sizes (new)
+    "SizeMetadata",
+    "SizeCreate",
+    "SizeCreateResponse",
     # Climbs
     "Climb",
     "ClimbCreate",
@@ -58,5 +71,6 @@ __all__ = [
     # Generation
     "GradeScale",
     "GenerateRequest",
+    "GenerateSettings",
     "GenerateResponse",
 ]

@@ -23,6 +23,7 @@ export interface Climb {
   quality: number | null;
   ascents: number;
   setter_name: string | null;
+  setter_id: string | null;
   tags: string[] | null;
   created_at: Date;
 }
@@ -31,8 +32,10 @@ export interface ClimbCreate {
   name: string;
   holdset: Holdset;
   angle: number;
+  scale: string | null;
   grade: string | null;
-  setter_name: string | null;
+  setter_name: string;
+  setter_id: string;
   tags: string[] | null;
 }
 
@@ -53,15 +56,28 @@ export interface ClimbDeleteResponse {
 
 export interface ClimbFilters {
   angle?: number;
-  grade_range?: [number, number];
-  include_projects?: boolean;
-  setter_name?: string;
-  name_includes?: string;
-  holds_include?: number[];
-  tags_include?: string[];
-  after?: string;
-  sort_by?: ClimbSortBy;
-  descending?: boolean;
+  gradeScale: string;
+  minGrade: string;
+  maxGrade: string;
+  includeProjects: boolean;
+  setterName: string;
+  nameIncludes?: string;
+  holdsInclude?: number[];
+  tagsInclude?: string[];
+  after: string;
+  sortBy: ClimbSortBy;
+  descending: boolean;
   limit?: number;
   offset?: number;
 }
+
+export const DEFAULT_CLIMB_FILTERS: ClimbFilters = {
+  gradeScale: "v_grade",
+  minGrade: "V0-",
+  maxGrade: "V16",
+  includeProjects: true,
+  setterName: "",
+  after: "",
+  sortBy: "date",
+  descending: true,
+};

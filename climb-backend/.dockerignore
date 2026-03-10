@@ -1,0 +1,33 @@
+ Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.venv
+venv
+.env
+.env.*
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Tests (optional — include if you want to run tests inside the container)
+test_assets/
+app/test
+
+#Superfluous Documentation
+*.md

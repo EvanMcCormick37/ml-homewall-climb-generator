@@ -9,133 +9,147 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignUpRouteImport } from './routes/signUp'
+import { Route as SignInRouteImport } from './routes/signIn'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as WallsIndexRouteImport } from './routes/walls/index'
-import { Route as WallsNewRouteImport } from './routes/walls/new'
-import { Route as WallsWallIdIndexRouteImport } from './routes/walls/$wallId/index'
-import { Route as WallsWallIdViewRouteImport } from './routes/walls/$wallId/view'
-import { Route as WallsWallIdHoldsRouteImport } from './routes/walls/$wallId/holds'
-import { Route as WallsWallIdGenerateRouteImport } from './routes/walls/$wallId/generate'
-import { Route as WallsWallIdCreateRouteImport } from './routes/walls/$wallId/create'
+import { Route as LayoutsNewRouteImport } from './routes/layouts/new'
+import { Route as LayoutIdViewRouteImport } from './routes/$layoutId/view'
+import { Route as LayoutIdSizesRouteImport } from './routes/$layoutId/sizes'
+import { Route as LayoutIdSetRouteImport } from './routes/$layoutId/set'
+import { Route as LayoutIdHoldsRouteImport } from './routes/$layoutId/holds'
 
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/signUp',
+  path: '/signUp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/signIn',
+  path: '/signIn',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallsIndexRoute = WallsIndexRouteImport.update({
-  id: '/walls/',
-  path: '/walls/',
+const LayoutsNewRoute = LayoutsNewRouteImport.update({
+  id: '/layouts/new',
+  path: '/layouts/new',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallsNewRoute = WallsNewRouteImport.update({
-  id: '/walls/new',
-  path: '/walls/new',
+const LayoutIdViewRoute = LayoutIdViewRouteImport.update({
+  id: '/$layoutId/view',
+  path: '/$layoutId/view',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallsWallIdIndexRoute = WallsWallIdIndexRouteImport.update({
-  id: '/walls/$wallId/',
-  path: '/walls/$wallId/',
+const LayoutIdSizesRoute = LayoutIdSizesRouteImport.update({
+  id: '/$layoutId/sizes',
+  path: '/$layoutId/sizes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallsWallIdViewRoute = WallsWallIdViewRouteImport.update({
-  id: '/walls/$wallId/view',
-  path: '/walls/$wallId/view',
+const LayoutIdSetRoute = LayoutIdSetRouteImport.update({
+  id: '/$layoutId/set',
+  path: '/$layoutId/set',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WallsWallIdHoldsRoute = WallsWallIdHoldsRouteImport.update({
-  id: '/walls/$wallId/holds',
-  path: '/walls/$wallId/holds',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WallsWallIdGenerateRoute = WallsWallIdGenerateRouteImport.update({
-  id: '/walls/$wallId/generate',
-  path: '/walls/$wallId/generate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WallsWallIdCreateRoute = WallsWallIdCreateRouteImport.update({
-  id: '/walls/$wallId/create',
-  path: '/walls/$wallId/create',
+const LayoutIdHoldsRoute = LayoutIdHoldsRouteImport.update({
+  id: '/$layoutId/holds',
+  path: '/$layoutId/holds',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/walls/new': typeof WallsNewRoute
-  '/walls': typeof WallsIndexRoute
-  '/walls/$wallId/create': typeof WallsWallIdCreateRoute
-  '/walls/$wallId/generate': typeof WallsWallIdGenerateRoute
-  '/walls/$wallId/holds': typeof WallsWallIdHoldsRoute
-  '/walls/$wallId/view': typeof WallsWallIdViewRoute
-  '/walls/$wallId': typeof WallsWallIdIndexRoute
+  '/signIn': typeof SignInRoute
+  '/signUp': typeof SignUpRoute
+  '/$layoutId/holds': typeof LayoutIdHoldsRoute
+  '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/sizes': typeof LayoutIdSizesRoute
+  '/$layoutId/view': typeof LayoutIdViewRoute
+  '/layouts/new': typeof LayoutsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/walls/new': typeof WallsNewRoute
-  '/walls': typeof WallsIndexRoute
-  '/walls/$wallId/create': typeof WallsWallIdCreateRoute
-  '/walls/$wallId/generate': typeof WallsWallIdGenerateRoute
-  '/walls/$wallId/holds': typeof WallsWallIdHoldsRoute
-  '/walls/$wallId/view': typeof WallsWallIdViewRoute
-  '/walls/$wallId': typeof WallsWallIdIndexRoute
+  '/signIn': typeof SignInRoute
+  '/signUp': typeof SignUpRoute
+  '/$layoutId/holds': typeof LayoutIdHoldsRoute
+  '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/sizes': typeof LayoutIdSizesRoute
+  '/$layoutId/view': typeof LayoutIdViewRoute
+  '/layouts/new': typeof LayoutsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/walls/new': typeof WallsNewRoute
-  '/walls/': typeof WallsIndexRoute
-  '/walls/$wallId/create': typeof WallsWallIdCreateRoute
-  '/walls/$wallId/generate': typeof WallsWallIdGenerateRoute
-  '/walls/$wallId/holds': typeof WallsWallIdHoldsRoute
-  '/walls/$wallId/view': typeof WallsWallIdViewRoute
-  '/walls/$wallId/': typeof WallsWallIdIndexRoute
+  '/signIn': typeof SignInRoute
+  '/signUp': typeof SignUpRoute
+  '/$layoutId/holds': typeof LayoutIdHoldsRoute
+  '/$layoutId/set': typeof LayoutIdSetRoute
+  '/$layoutId/sizes': typeof LayoutIdSizesRoute
+  '/$layoutId/view': typeof LayoutIdViewRoute
+  '/layouts/new': typeof LayoutsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/walls/new'
-    | '/walls'
-    | '/walls/$wallId/create'
-    | '/walls/$wallId/generate'
-    | '/walls/$wallId/holds'
-    | '/walls/$wallId/view'
-    | '/walls/$wallId'
+    | '/signIn'
+    | '/signUp'
+    | '/$layoutId/holds'
+    | '/$layoutId/set'
+    | '/$layoutId/sizes'
+    | '/$layoutId/view'
+    | '/layouts/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/walls/new'
-    | '/walls'
-    | '/walls/$wallId/create'
-    | '/walls/$wallId/generate'
-    | '/walls/$wallId/holds'
-    | '/walls/$wallId/view'
-    | '/walls/$wallId'
+    | '/signIn'
+    | '/signUp'
+    | '/$layoutId/holds'
+    | '/$layoutId/set'
+    | '/$layoutId/sizes'
+    | '/$layoutId/view'
+    | '/layouts/new'
   id:
     | '__root__'
     | '/'
-    | '/walls/new'
-    | '/walls/'
-    | '/walls/$wallId/create'
-    | '/walls/$wallId/generate'
-    | '/walls/$wallId/holds'
-    | '/walls/$wallId/view'
-    | '/walls/$wallId/'
+    | '/signIn'
+    | '/signUp'
+    | '/$layoutId/holds'
+    | '/$layoutId/set'
+    | '/$layoutId/sizes'
+    | '/$layoutId/view'
+    | '/layouts/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  WallsNewRoute: typeof WallsNewRoute
-  WallsIndexRoute: typeof WallsIndexRoute
-  WallsWallIdCreateRoute: typeof WallsWallIdCreateRoute
-  WallsWallIdGenerateRoute: typeof WallsWallIdGenerateRoute
-  WallsWallIdHoldsRoute: typeof WallsWallIdHoldsRoute
-  WallsWallIdViewRoute: typeof WallsWallIdViewRoute
-  WallsWallIdIndexRoute: typeof WallsWallIdIndexRoute
+  SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
+  LayoutIdHoldsRoute: typeof LayoutIdHoldsRoute
+  LayoutIdSetRoute: typeof LayoutIdSetRoute
+  LayoutIdSizesRoute: typeof LayoutIdSizesRoute
+  LayoutIdViewRoute: typeof LayoutIdViewRoute
+  LayoutsNewRoute: typeof LayoutsNewRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signUp': {
+      id: '/signUp'
+      path: '/signUp'
+      fullPath: '/signUp'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signIn': {
+      id: '/signIn'
+      path: '/signIn'
+      fullPath: '/signIn'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -143,53 +157,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/walls/': {
-      id: '/walls/'
-      path: '/walls'
-      fullPath: '/walls'
-      preLoaderRoute: typeof WallsIndexRouteImport
+    '/layouts/new': {
+      id: '/layouts/new'
+      path: '/layouts/new'
+      fullPath: '/layouts/new'
+      preLoaderRoute: typeof LayoutsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/walls/new': {
-      id: '/walls/new'
-      path: '/walls/new'
-      fullPath: '/walls/new'
-      preLoaderRoute: typeof WallsNewRouteImport
+    '/$layoutId/view': {
+      id: '/$layoutId/view'
+      path: '/$layoutId/view'
+      fullPath: '/$layoutId/view'
+      preLoaderRoute: typeof LayoutIdViewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/walls/$wallId/': {
-      id: '/walls/$wallId/'
-      path: '/walls/$wallId'
-      fullPath: '/walls/$wallId'
-      preLoaderRoute: typeof WallsWallIdIndexRouteImport
+    '/$layoutId/sizes': {
+      id: '/$layoutId/sizes'
+      path: '/$layoutId/sizes'
+      fullPath: '/$layoutId/sizes'
+      preLoaderRoute: typeof LayoutIdSizesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/walls/$wallId/view': {
-      id: '/walls/$wallId/view'
-      path: '/walls/$wallId/view'
-      fullPath: '/walls/$wallId/view'
-      preLoaderRoute: typeof WallsWallIdViewRouteImport
+    '/$layoutId/set': {
+      id: '/$layoutId/set'
+      path: '/$layoutId/set'
+      fullPath: '/$layoutId/set'
+      preLoaderRoute: typeof LayoutIdSetRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/walls/$wallId/holds': {
-      id: '/walls/$wallId/holds'
-      path: '/walls/$wallId/holds'
-      fullPath: '/walls/$wallId/holds'
-      preLoaderRoute: typeof WallsWallIdHoldsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/walls/$wallId/generate': {
-      id: '/walls/$wallId/generate'
-      path: '/walls/$wallId/generate'
-      fullPath: '/walls/$wallId/generate'
-      preLoaderRoute: typeof WallsWallIdGenerateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/walls/$wallId/create': {
-      id: '/walls/$wallId/create'
-      path: '/walls/$wallId/create'
-      fullPath: '/walls/$wallId/create'
-      preLoaderRoute: typeof WallsWallIdCreateRouteImport
+    '/$layoutId/holds': {
+      id: '/$layoutId/holds'
+      path: '/$layoutId/holds'
+      fullPath: '/$layoutId/holds'
+      preLoaderRoute: typeof LayoutIdHoldsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -197,13 +197,13 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  WallsNewRoute: WallsNewRoute,
-  WallsIndexRoute: WallsIndexRoute,
-  WallsWallIdCreateRoute: WallsWallIdCreateRoute,
-  WallsWallIdGenerateRoute: WallsWallIdGenerateRoute,
-  WallsWallIdHoldsRoute: WallsWallIdHoldsRoute,
-  WallsWallIdViewRoute: WallsWallIdViewRoute,
-  WallsWallIdIndexRoute: WallsWallIdIndexRoute,
+  SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
+  LayoutIdHoldsRoute: LayoutIdHoldsRoute,
+  LayoutIdSetRoute: LayoutIdSetRoute,
+  LayoutIdSizesRoute: LayoutIdSizesRoute,
+  LayoutIdViewRoute: LayoutIdViewRoute,
+  LayoutsNewRoute: LayoutsNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

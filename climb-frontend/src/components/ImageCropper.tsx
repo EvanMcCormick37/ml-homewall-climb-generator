@@ -1,5 +1,5 @@
 import { useRef, useCallback } from "react";
-import type { CropArea } from "@/hooks";
+import type { CropArea } from "@/hooks/useImageCrop";
 
 export interface ImageCropperProps {
   imageUrl: string;
@@ -41,7 +41,6 @@ export default function ImageCropper({
     if (isDragging) onEndDrag();
   }, [isDragging, onEndDrag]);
 
-  // Resize handles
   const handles = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
   const getHandleStyle = (handle: string): React.CSSProperties => {
@@ -51,7 +50,7 @@ export default function ImageCropper({
       width: size,
       height: size,
       backgroundColor: "#fff",
-      border: "2px solid #a855f7",
+      border: "2px solid #06b6d4",
       borderRadius: 2,
       cursor: `${handle}-resize`,
       zIndex: 10,
@@ -122,10 +121,10 @@ export default function ImageCropper({
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: `linear-gradient(to right, 
-            rgba(0,0,0,0.7) ${cropArea.x * 100}%, 
-            transparent ${cropArea.x * 100}%, 
-            transparent ${(cropArea.x + cropArea.width) * 100}%, 
+          background: `linear-gradient(to right,
+            rgba(0,0,0,0.7) ${cropArea.x * 100}%,
+            transparent ${cropArea.x * 100}%,
+            transparent ${(cropArea.x + cropArea.width) * 100}%,
             rgba(0,0,0,0.7) ${(cropArea.x + cropArea.width) * 100}%
           )`,
         }}
@@ -159,7 +158,7 @@ export default function ImageCropper({
           top: `${cropArea.y * 100}%`,
           width: `${cropArea.width * 100}%`,
           height: `${cropArea.height * 100}%`,
-          border: "1px dashed #a855f7",
+          border: "1px dashed #06b6d4",
           boxShadow: "0 0 0 9999px transparent",
         }}
         onMouseDown={(e) => {
@@ -170,20 +169,20 @@ export default function ImageCropper({
         {/* Grid lines */}
         <div className="absolute inset-0 pointer-events-none">
           <div
-            className="absolute w-full h-px bg-purple-400/30"
-            style={{ top: "33.33%" }}
+            className="absolute w-full h-px"
+            style={{ top: "33.33%", backgroundColor: "rgba(6,182,212,0.3)" }}
           />
           <div
-            className="absolute w-full h-px bg-purple-400/30"
-            style={{ top: "66.66%" }}
+            className="absolute w-full h-px"
+            style={{ top: "66.66%", backgroundColor: "rgba(6,182,212,0.3)" }}
           />
           <div
-            className="absolute h-full w-px bg-purple-400/30"
-            style={{ left: "33.33%" }}
+            className="absolute h-full w-px"
+            style={{ left: "33.33%", backgroundColor: "rgba(6,182,212,0.3)" }}
           />
           <div
-            className="absolute h-full w-px bg-purple-400/30"
-            style={{ left: "66.66%" }}
+            className="absolute h-full w-px"
+            style={{ left: "66.66%", backgroundColor: "rgba(6,182,212,0.3)" }}
           />
         </div>
 
@@ -202,8 +201,18 @@ export default function ImageCropper({
       </div>
 
       {/* Instructions */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-black/70 rounded text-xs text-zinc-300">
-        Drag to move • Drag corners to resize
+      <div
+        className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded text-xs"
+        style={{
+          background: "rgba(0,0,0,0.75)",
+          color: "var(--text-muted, #71717a)",
+          fontFamily: "'Space Mono', monospace",
+          fontSize: "0.65rem",
+          letterSpacing: "0.06em",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Drag to move · Drag corners to resize
       </div>
     </div>
   );

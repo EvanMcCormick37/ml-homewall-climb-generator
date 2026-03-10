@@ -10,12 +10,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Application settings."""
-    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore"
     )
+
+    # User Authentication Settings
+    CLERK_ISSUER: str = ""
+    CLERK_SECRET_KEY: str = ""
     
     # App metadata
     NAME: str = "Beta Zero API"
@@ -24,7 +28,8 @@ class Settings(BaseSettings):
     
     # Paths
     DATA_DIR: Path = Path("data")
-    WALLS_DIR: Path = DATA_DIR / "walls"
+    WALLS_DIR: Path = DATA_DIR / "walls"      # legacy: migrated wall photos live here
+    LAYOUTS_DIR: Path = DATA_DIR / "layouts"  # new: layout/size photos live here
     DB_PATH: Path = DATA_DIR / "storage.db"
     
     # DDPM model paths & hyperparams
@@ -34,9 +39,6 @@ class Settings(BaseSettings):
     
     # Pagination defaults
     LIMIT: int = 50
-
-    # Test settings
-    TEST_ASSETS_DIR: Path = Path("test_assets")
 
 
 @lru_cache

@@ -7,8 +7,6 @@ from contextlib import contextmanager
 from typing import Generator
 from app.config import settings
 
-# Database paths
-
 
 def get_db_connection() -> sqlite3.Connection:
     """Get a database connection with row factory."""
@@ -32,95 +30,120 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
         conn.close()
 
 
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    """Return True if a table exists in the database."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _column_exists(conn: sqlite3.Connection, table_name: str, column_name: str) -> bool:
+    """Return True if a column exists in a table."""
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return any(row["name"] == column_name for row in rows)
+
+
+def _add_column_if_missing(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    """Add a column to a table only if it does not already exist."""
+    if not _column_exists(conn, table, column):
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def init_db():
-    """Initialize database tables."""
+    """Initialize database tables and run any pending migrations."""
     settings.DATA_DIR.mkdir(exist_ok=True)
     settings.WALLS_DIR.mkdir(exist_ok=True)
-    
+    settings.LAYOUTS_DIR.mkdir(exist_ok=True)
+
     with get_db() as conn:
         cursor = conn.cursor()
-        
-        # Walls table - basic metadata (detailed data in JSON files)
+
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS walls (
+            CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                photo_path TEXT NOT NULL,
-                num_holds INTEGER DEFAULT 0,
-                num_climbs INTEGER DEFAULT 0,
-                num_models INTEGER DEFAULT 0,
-                dimensions TEXT,
-                angle INTEGER,
-                created_at TIMESTAMP,
-                updated_at TIMESTAMP
-            )
-        """)
-        
-        # Climbs table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS climbs (
-                id TEXT PRIMARY KEY,
-                wall_id TEXT NOT NULL,
-                angle INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                num_holds INTEGER NOT NULL,
-                holds TEXT NOT NULL,  -- serialized list of holds
-                tags TEXT,               -- serialized list of tags
-                grade REAL,
-                quality REAL DEFAULT 2.5,
-                ascents INTEGER DEFAULT 0,
-                setter_name TEXT,
+                email TEXT NOT NULL,
+                display_name TEXT,
+                avatar_url TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (wall_id) REFERENCES walls(id) ON DELETE CASCADE
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
-        # Holds table. Contains essential information on holds for every wall used in training.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS layouts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                dimensions INTEGER,
+                image_edges TEXT NOT NULL,      --4 coordinate edges of the layout image. List of 4 floats, [left, right, bottom, top]
+                default_angle INTEGER,
+                owner_id TEXT,
+                visibility TEXT DEFAULT 'public',
+                share_token TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sizes (
+                id TEXT PRIMARY KEY,
+                layout_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                edges TEXT NOT NULL,--4 edges of the layout size. List of 4 floats, [left, right, bottom, top]
+                kickboard BOOLEAN,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE
+            )
+        """)
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS holds (
                 id TEXT PRIMARY KEY,
-                wall_id TEXT NOT_NULL,
+                layout_id TEXT,
                 hold_index INTEGER NOT NULL,
                 x REAL NOT NULL,
                 y REAL NOT NULL,
                 pull_x REAL DEFAULT 0.0,
                 pull_y REAL DEFAULT 0.0,
                 useability REAL DEFAULT 0.5,
-                is_foot INTEGER DEFAULT 0,
-                tags TEXT -- serialized list of hold tags (e.g. sloper, crimp, slot, etc.)
-            )
-        """)
-        
-        # Models table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS models (
-                id TEXT PRIMARY KEY,
-                wall_id TEXT NOT NULL,
-                model_type TEXT NOT NULL,
-                features TEXT NOT NULL,  -- JSON object of feature flags
-                status TEXT DEFAULT 'untrained',
-                val_loss REAL,
-                epochs_trained INTEGER DEFAULT 0,
-                climbs_trained INTEGER DEFAULT 0,
-                moves_trained INTEGER DEFAULT 0,
+                is_foot BOOLEAN DEFAULT false,
+                tags TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                trained_at TIMESTAMP,
-                FOREIGN KEY (wall_id) REFERENCES walls(id) ON DELETE CASCADE
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Jobs table - simple queue for background tasks
+
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS jobs (
+            CREATE TABLE IF NOT EXISTS climbs (
                 id TEXT PRIMARY KEY,
-                job_type TEXT NOT NULL,
-                status TEXT DEFAULT 'PENDING',
-                progress REAL DEFAULT 0.0,
-                params TEXT,             -- JSON object of job parameters
-                result TEXT,             -- JSON object of job result
-                error TEXT,
+                layout_id TEXT,
+                angle INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                holds TEXT NOT NULL,
+                tags TEXT,
+                grade REAL,
+                quality REAL DEFAULT 2.5,
+                ascents INTEGER DEFAULT 0,
+                setter_name TEXT,
+                setter_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                started_at TIMESTAMP,
-                completed_at TIMESTAMP
+                FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE
             )
         """)
+
+        # Migrations — add new columns to existing tables without data loss
+        _add_column_if_missing(
+            conn,
+            "layouts",
+            "homography_src_corners",
+            "TEXT DEFAULT NULL",  # JSON array of 8 floats [tlx,tly, trx,try, blx,bly, brx,bry]
+        )

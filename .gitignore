@@ -1,12 +1,7 @@
-# File storage
-*holds*.json
-*wall*.json
-*climb*.json
-*-data.json
-assets/
 boardlib/
 
 # Caches
+cache
 __pycache__
 .ipynb_checkpoints
 

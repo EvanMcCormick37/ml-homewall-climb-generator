@@ -5,17 +5,7 @@
  * Keep in sync manually, or use Option 2 (openapi-typescript) for auto-generation.
  */
 
-export interface HoldDetail {
-  hold_index: number;
-  x: number;
-  y: number;
-  pull_x: number | null;
-  pull_y: number | null;
-  useability: number | null;
-  is_foot: number;
-}
-
-export type HoldMode = "add" | "remove" | "select" | "edit";
+import type { HoldDetail } from "./holds";
 
 export interface WallMetadata {
   id: string;
@@ -23,11 +13,13 @@ export interface WallMetadata {
   photo_url: string;
   num_holds: number;
   num_climbs: number;
-  num_models: number;
   dimensions: [number, number];
   angle: number | null;
   created_at: string;
   updated_at: string;
+  owner_id: string;
+  visibility: string;
+  share_token?: string;
 }
 
 export interface WallDetail {
@@ -45,22 +37,17 @@ export interface WallCreateResponse {
   name: string;
 }
 
+export type WallVisibility = "public" | "private" | "unlisted";
+
 export interface WallCreate {
   name: string;
   photo: File;
   dimensions: [number, number];
   angle?: number;
+  visibility?: WallVisibility;
 }
 
 export interface WallSetHolds {
   id: string;
   holds: HoldDetail[];
 }
-
-export interface EnabledFeatures {
-  direction: boolean;
-  useability: boolean;
-  footholds: boolean;
-}
-
-export type FeatureLabel = "direction" | "useability" | "footholds";

@@ -1,5 +1,12 @@
 import { useState, useCallback, useMemo } from "react";
-import type { HoldDetail } from "@/types";
+import type { HoldDetail, Tag } from "@/types";
+import {
+  computeHomography,
+  invertMat3,
+  applyHomography,
+  type Point2D,
+  type Mat3,
+} from "@/utils/homography";
 
 interface Dimensions {
   width: number;
@@ -8,35 +15,98 @@ interface Dimensions {
 
 export function useHolds(
   imageDimensions: Dimensions,
-  wallDimensions: Dimensions
+  wallDimensions: Dimensions,
+  imageEdges?: [number, number, number, number] | null,
+  homographySrcCorners?: number[] | null,
 ) {
   const [holds, setHolds] = useState<HoldDetail[]>([]);
   const maxHoldIndex = useMemo(
     () => (holds.length > 0 ? Math.max(...holds.map((h) => h.hold_index)) : 0),
     [holds]
   );
+
+  // ── Homography matrices (computed once when corners + dimensions are known) ──
+  // H:    pixel → feet
+  // Hinv: feet  → pixel
+  const { H, Hinv } = useMemo<{ H: Mat3 | null; Hinv: Mat3 | null }>(() => {
+    const hasCorners =
+      homographySrcCorners &&
+      homographySrcCorners.length === 8 &&
+      imageDimensions.width > 0 &&
+      imageDimensions.height > 0;
+
+    if (!hasCorners) return { H: null, Hinv: null };
+
+    const W = wallDimensions.width;
+    const Hft = wallDimensions.height;
+    const iW = imageDimensions.width;
+    const iH = imageDimensions.height;
+
+    // Source points: corner positions in pixel space
+    // Order: TL, TR, BL, BR
+    const srcPts: Point2D[] = [
+      [homographySrcCorners[0] * iW, homographySrcCorners[1] * iH],
+      [homographySrcCorners[2] * iW, homographySrcCorners[3] * iH],
+      [homographySrcCorners[4] * iW, homographySrcCorners[5] * iH],
+      [homographySrcCorners[6] * iW, homographySrcCorners[7] * iH],
+    ];
+
+    // Destination points: wall-coordinate space (ft)
+    // TL → (0, H_ft), TR → (W_ft, H_ft), BL → (0, 0), BR → (W_ft, 0)
+    const dstPts: Point2D[] = [
+      [0,   Hft],
+      [W,   Hft],
+      [0,   0  ],
+      [W,   0  ],
+    ];
+
+    try {
+      const mat = computeHomography(srcPts, dstPts);
+      return { H: mat, Hinv: invertMat3(mat) };
+    } catch {
+      return { H: null, Hinv: null };
+    }
+  }, [homographySrcCorners, imageDimensions, wallDimensions]);
+
+  // ── Affine fallback params ─────────────────────────────────────────────────
+  // Resolve image_edges, falling back to full wall dimensions
+  const [imgL, imgR, imgB, imgT] = imageEdges ?? [
+    0,
+    wallDimensions.width,
+    0,
+    wallDimensions.height,
+  ];
+
   // Convert pixel coordinates to feet
   const toFeetCoords = useCallback(
     (pixelX: number, pixelY: number) => {
-      const xFeet = (pixelX / imageDimensions.width) * wallDimensions.width;
+      if (H) {
+        const [xFeet, yFeet] = applyHomography(H, [pixelX, pixelY]);
+        return { x: xFeet, y: yFeet };
+      }
+      const xFeet = imgL + (pixelX / imageDimensions.width) * (imgR - imgL);
       const yFeet =
+        imgB +
         ((imageDimensions.height - pixelY) / imageDimensions.height) *
-        wallDimensions.height;
+          (imgT - imgB);
       return { x: xFeet, y: yFeet };
     },
-    [imageDimensions, wallDimensions]
+    [H, imageDimensions, imgL, imgR, imgB, imgT]
   );
 
   // Convert feet coordinates to pixels
   const toPixelCoords = useCallback(
     (hold: HoldDetail) => {
-      const pixelX = (hold.x / wallDimensions.width) * imageDimensions.width;
+      if (Hinv) {
+        const [px, py] = applyHomography(Hinv, [hold.x, hold.y]);
+        return { x: px, y: py };
+      }
+      const pixelX = ((hold.x - imgL) / (imgR - imgL)) * imageDimensions.width;
       const pixelY =
-        imageDimensions.height -
-        (hold.y / wallDimensions.height) * imageDimensions.height;
+        ((imgT - hold.y) / (imgT - imgB)) * imageDimensions.height;
       return { x: pixelX, y: pixelY };
     },
-    [imageDimensions, wallDimensions]
+    [Hinv, imageDimensions, imgL, imgR, imgB, imgT]
   );
 
   // Add a new hold with optional features
@@ -48,8 +118,9 @@ export function useHolds(
       pull_x?: number,
       pull_y?: number,
       useability?: number,
-      is_foot?: number
-    ) => {
+      is_foot?: boolean,
+      tags?: Tag[]
+    ): number => {
       const { x, y } = toFeetCoords(pixelX, pixelY);
       const newHold: HoldDetail = {
         x,
@@ -58,12 +129,14 @@ export function useHolds(
         pull_x: pull_x ?? null,
         pull_y: pull_y ?? null,
         useability: useability ?? null,
-        is_foot: is_foot ?? 0,
+        is_foot: is_foot ?? false,
+        tags: tags ?? [],
       };
 
       setHolds((prev) => [...prev, newHold]);
+      return newHold.hold_index;
     },
-    [holds.length, toFeetCoords]
+    [holds.length, toFeetCoords, maxHoldIndex]
   );
 
   const updateHold = useCallback(

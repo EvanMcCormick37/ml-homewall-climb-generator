@@ -1,0 +1,13 @@
+:80 {
+    encode gzip
+    
+    handle /api/* {
+        reverse_proxy climb-backend.railway.internal:8000
+    }
+
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

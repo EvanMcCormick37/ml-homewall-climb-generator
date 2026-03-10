@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { getClimbs, deleteClimb } from "@/api/climbs";
-import type { Climb, ClimbFilters } from "@/types";
+import { DEFAULT_CLIMB_FILTERS, type Climb, type ClimbFilters } from "@/types";
 
 interface UseClimbsReturn {
   climbs: Climb[];
@@ -24,7 +24,7 @@ interface UseClimbsReturn {
  */
 export function useClimbs(
   wallId: string,
-  initialFilters: ClimbFilters = {}
+  initialFilters: ClimbFilters = DEFAULT_CLIMB_FILTERS,
 ): UseClimbsReturn {
   const [climbs, setClimbs] = useState<Climb[]>([]);
   const [total, setTotal] = useState(0);
@@ -43,6 +43,9 @@ export function useClimbs(
       const response = await getClimbs(wallId, filters);
       setClimbs(response.climbs);
       setTotal(response.total);
+      if (response.total > 0) {
+        setSelectedClimb(response.climbs[0]);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to fetch climbs";
@@ -68,7 +71,7 @@ export function useClimbs(
         setSelectedClimb(null);
       }
     },
-    [wallId, selectedClimb]
+    [wallId, selectedClimb],
   );
 
   return {
