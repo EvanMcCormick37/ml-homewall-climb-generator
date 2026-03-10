@@ -224,7 +224,7 @@ def flush_backup_holds(
         holds.append(hold)
     upload_holds(layout_id, holds)
 
-def _build_hold_difficulty_dict(climbs: pd.DataFrame, to_hand_ratio = 0.8):
+def _build_hold_difficulty_dict(climbs: pd.DataFrame, to_hand_ratio = 0.25):
     holds_dict = {}
 
     for _, row in climbs.iterrows():
@@ -245,7 +245,7 @@ def _build_hold_difficulty_dict(climbs: pd.DataFrame, to_hand_ratio = 0.8):
     
     for k, v in holds_dict.items():
         diffs = v[0] if (len(v[0])>len(v[1])) else v[1]
-        is_foot = False if (len(v[0])*to_hand_ratio > len(v[1])) else True
+        is_foot = (len(v[1])*to_hand_ratio > len(v[0]))
         # Instead of using a MinMax scaler, we can follow along with boardlib's default grading scale. 10=V0, 33=V16. To convert to normalized difficulty levels within [0,1],
         # simply subtract a constant and divide by the range, then subtract from 1 to convert from difficulty (higher=harder) to useability (higher=easier).
         useability = round(1 - (np.mean(diffs)-10.0)/23, 2)
@@ -255,10 +255,10 @@ def _build_hold_difficulty_dict(climbs: pd.DataFrame, to_hand_ratio = 0.8):
 
 def add_hold_useability(
     api_layout_id: str,
-    training_wall_name: str,
     storage_db: str | Path = STORAGE_DB,
     api_base_url: str      = API_BASE_URL,
     min_ascents: int       = 0,
+    to_hand_ratio: float = 0.25,
     verbose: bool          = True,
 ):
     """
@@ -282,12 +282,6 @@ def add_hold_useability(
     if verbose:
         print(f"  {len(holds)} holds fetched.")
 
-    # ------------------------------------------------------------------
-    # 2. Load training climbs from storage.db
-    # ------------------------------------------------------------------
-    if verbose:
-        print(f"Loading climbs for wall '{training_wall_name}' from {storage_db} ...")
-
     query = "SELECT holds, grade FROM climbs WHERE layout_id = ? AND grade IS NOT NULL"
     params: list = [api_layout_id]
 
@@ -305,7 +299,7 @@ def add_hold_useability(
         print("Computing hold useability scores ...")
 
 
-    edit_holds_dict = _build_hold_difficulty_dict(climbs)
+    edit_holds_dict = _build_hold_difficulty_dict(climbs,to_hand_ratio)
 
     # ------------------------------------------------------------------
     # 3. Update useability on holds that appear in the training data

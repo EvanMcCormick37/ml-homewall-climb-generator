@@ -46,7 +46,7 @@ function HoldsEditorPage() {
   const [useabilityLocked, setUseabilityLocked] = useState(false);
   const [lockedUseability, setLockedUseability] = useState(0.5);
   const [activeHoldIndex, setActiveHoldIndex] = useState<number | null>(null);
-  const [stickyTags, setStickyTags] = useState<Tag[]>([]);
+  const [stickyTag, setStickyTag] = useState<Tag | null>(null);
 
   const imageEdges = layout.metadata.image_edges as
     | [number, number, number, number]
@@ -216,6 +216,17 @@ function HoldsEditorPage() {
       return;
     }
     if (mode === "add") {
+      // If sticky tag is active and we click on an existing hold that already has it → remove the tag
+      if (enabledFeatures.tags && stickyTag) {
+        const existingHold = findHoldAt(x, y);
+        if (existingHold && existingHold.tags.includes(stickyTag)) {
+          updateHold(existingHold.hold_index, {
+            tags: existingHold.tags.filter((t) => t !== stickyTag),
+          });
+          return;
+        }
+      }
+
       if (!enabledFeatures.direction && !enabledFeatures.useability) {
         const idx = addHold(
           x,
@@ -225,7 +236,7 @@ function HoldsEditorPage() {
           undefined,
           undefined,
           enabledFeatures.footholds && isAddFoot,
-          enabledFeatures.tags && stickyTags.length > 0 ? [...stickyTags] : [],
+          enabledFeatures.tags && stickyTag ? [stickyTag] : [],
         );
         setActiveHoldIndex(idx);
       } else {
@@ -291,7 +302,7 @@ function HoldsEditorPage() {
         enabledFeatures.direction ? params.pull_y : undefined,
         enabledFeatures.useability ? params.useability : undefined,
         enabledFeatures.footholds && isAddFoot ? true : false,
-        enabledFeatures.tags && stickyTags.length > 0 ? [...stickyTags] : [],
+        enabledFeatures.tags && stickyTag ? [stickyTag] : [],
       );
       setActiveHoldIndex(idx);
       setAddHoldState({
@@ -324,8 +335,12 @@ function HoldsEditorPage() {
           ? { useability: params.useability }
           : {}),
         ...(enabledFeatures.footholds ? { is_foot: isAddFoot } : {}),
-        ...(enabledFeatures.tags && stickyTags.length > 0
-          ? { tags: [...new Set([...existingTags, ...stickyTags])] }
+        ...(enabledFeatures.tags && stickyTag
+          ? {
+              tags: existingTags.includes(stickyTag)
+                ? existingTags.filter((t) => t !== stickyTag)
+                : [...existingTags, stickyTag],
+            }
           : {}),
       };
 
@@ -410,16 +425,14 @@ function HoldsEditorPage() {
         M: "macro",
         s: "sloper",
         S: "sloper",
-        v: "versatile",
-        V: "versatile",
+        f: "flat",
+        F: "flat",
         j: "jug",
         J: "jug",
       };
       const tag = tagMap[e.key];
       if (!tag) return;
-      setStickyTags((prev) =>
-        prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
-      );
+      setStickyTag((prev) => (prev === tag ? null : tag));
     };
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
@@ -467,6 +480,7 @@ function HoldsEditorPage() {
       ctx.stroke();
 
       if (
+        enabledFeatures.direction &&
         hold.pull_x !== null &&
         hold.pull_x !== undefined &&
         hold.pull_y !== null &&
@@ -507,12 +521,8 @@ function HoldsEditorPage() {
 
       ctx.globalAlpha = 1;
 
-      // Tag-match indicator: filled cyan dot when any stickyTag matches this hold
-      if (
-        stickyTags.length > 0 &&
-        hold.tags.length >= stickyTags.length &&
-        hold.tags.some((t) => stickyTags.includes(t))
-      ) {
+      // Tag-match indicator: filled cyan dot when the active sticky tag matches this hold
+      if (stickyTag && hold.tags.includes(stickyTag)) {
         ctx.beginPath();
         ctx.arc(x, y, circleSize * 1.5, 0, Math.PI * 2);
         ctx.fillStyle = "#06b6d4";
@@ -595,7 +605,7 @@ function HoldsEditorPage() {
     toPixelCoords,
     enabledFeatures,
     isAddFoot,
-    stickyTags,
+    stickyTag,
   ]);
 
   const dragParams = addHoldState.isDragging
@@ -961,13 +971,9 @@ function HoldsEditorPage() {
             onLockedUseabilityChange={setLockedUseability}
             activeHold={activeHold}
             onTagToggle={handleTagToggle}
-            stickyTags={stickyTags}
+            stickyTag={stickyTag}
             onStickyTagToggle={(tag) =>
-              setStickyTags((prev) =>
-                prev.includes(tag)
-                  ? prev.filter((t) => t !== tag)
-                  : [...prev, tag],
-              )
+              setStickyTag((prev) => (prev === tag ? null : tag))
             }
           />
         </div>

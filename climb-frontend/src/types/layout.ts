@@ -6,7 +6,10 @@
  * Climbs and holds are tied to a layout, not a size.
  * Photos are owned by the layout, not the size.
  */
-import type { HoldDetail } from "./wall";
+
+import type { HoldDetail } from "./holds";
+
+export type Visibility = "public" | "private" | "unlisted";
 
 export interface SizeMetadata {
   id: string;
@@ -27,7 +30,7 @@ export interface LayoutMetadata {
   default_angle: number | null;
   sizes: SizeMetadata[];
   owner_id: string;
-  visibility: "public" | "private" | "unlisted";
+  visibility: Visibility;
   share_token: string | null;
   created_at: string;
   updated_at: string;

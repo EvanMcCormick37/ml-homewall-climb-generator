@@ -24,7 +24,7 @@ function PullDirectionArrow({
   const centerX = size / 2;
   const centerY = size / 2;
   const radius = size / 2 - 8;
-  const arrowLength = radius * 0.7;
+  const arrowLength = radius * 0.5;
   const endX = centerX + pullX * arrowLength;
   const endY = centerY + pullY * arrowLength;
   const angle = Math.atan2(pullY, pullX);
@@ -90,10 +90,10 @@ const TAG_META: { key: Tag; label: string; hotkey: string; desc: string }[] = [
     desc: "A slopey hold. Wall angle affects slopers more severely than other hold types.",
   },
   {
-    key: "versatile",
-    label: "VERSATILE",
-    hotkey: "v",
-    desc: "A hold that can be taken in multiple directions, but isn't as regular as a bilateral pinch.",
+    key: "flat",
+    label: "FLAT",
+    hotkey: "f",
+    desc: "A hold with a single, straight (flat) edge (Not with regards to being incut or slopey, but flat along the surface of the wall. i.e. a flat, horizontal crimp.",
   },
   {
     key: "jug",
@@ -565,7 +565,7 @@ interface HoldFeaturesSidebarProps {
   onLockedUseabilityChange?: (value: number) => void;
   activeHold?: HoldDetail | null;
   onTagToggle?: (tag: Tag) => void;
-  stickyTags: Tag[];
+  stickyTag: Tag | null;
   onStickyTagToggle: (tag: Tag) => void;
 }
 
@@ -583,7 +583,7 @@ export function HoldFeaturesSidebar({
   onLockedUseabilityChange,
   activeHold,
   onTagToggle,
-  stickyTags,
+  stickyTag,
   onStickyTagToggle,
 }: HoldFeaturesSidebarProps) {
   const displayHold = mode === "add" && isDragging ? dragParams : selectedHold;
@@ -825,7 +825,7 @@ export function HoldFeaturesSidebar({
           <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
             {TAG_META.map(({ key, label }) => {
               const isActive = activeHold!.tags.includes(key);
-              const isSticky = stickyTags.includes(key);
+              const isSticky = stickyTag === key;
               return (
                 <button
                   key={key}
@@ -863,7 +863,7 @@ export function HoldFeaturesSidebar({
           </div>
 
           {/* Sticky indicator */}
-          {stickyTags.length > 0 && (
+          {stickyTag && (
             <div
               style={{
                 display: "flex",
@@ -887,35 +887,32 @@ export function HoldFeaturesSidebar({
               >
                 Sticky:
               </span>
-              {stickyTags.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => onStickyTagToggle(t)}
-                  title="Click to deactivate"
-                  style={{
-                    fontFamily: "'Space Mono', monospace",
-                    fontSize: "0.5rem",
-                    fontWeight: 700,
-                    color: "var(--cyan)",
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                    textDecoration: "underline",
-                    letterSpacing: "0.05em",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {t}
-                </button>
-              ))}
+              <button
+                onClick={() => onStickyTagToggle(stickyTag)}
+                title="Click to deactivate"
+                style={{
+                  fontFamily: "'Space Mono', monospace",
+                  fontSize: "0.5rem",
+                  fontWeight: 700,
+                  color: "var(--cyan)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  textDecoration: "underline",
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {stickyTag}
+              </button>
             </div>
           )}
 
           {/* Hotkey legend */}
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {TAG_META.map(({ key, hotkey }) => {
-              const isSticky = stickyTags.includes(key);
+              const isSticky = stickyTag === key;
               return (
                 <span
                   key={key}
@@ -947,7 +944,7 @@ export function HoldFeaturesSidebar({
           <h2 style={sectionHeaderStyle}>Tag Guide</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {TAG_META.map(({ key, label, hotkey, desc }) => {
-              const isSticky = stickyTags.includes(key);
+              const isSticky = stickyTag === key;
               return (
                 <div
                   key={key}
@@ -962,8 +959,7 @@ export function HoldFeaturesSidebar({
                   }}
                   onMouseEnter={(e) => {
                     if (!isSticky)
-                      e.currentTarget.style.background =
-                        "rgba(6,182,212,0.04)";
+                      e.currentTarget.style.background = "rgba(6,182,212,0.04)";
                   }}
                   onMouseLeave={(e) => {
                     if (!isSticky)
