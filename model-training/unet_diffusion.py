@@ -6,9 +6,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import sqlite3
 from torchinfo import summary
+from climb_conversion import HOLD_FEATURE_COLS
 import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 
 from climb_conversion import ClimbsFeatureScaler
 from diffusion_utils import (
@@ -63,7 +65,7 @@ class ResidualBlock1D(nn.Module):
 
 class Noiser(nn.Module):
     """Noiser class with concatenation U-Net architecture, learnable null embeddings, and zero-COM input projection."""
-    def __init__(self, hidden_dim=128, layers = 3, in_feature_dim = 16, out_feature_dim = 11, cond_dim = 4, sinusoidal = True):
+    def __init__(self, hidden_dim=128, layers=3, in_feature_dim=16, out_feature_dim=11, cond_dim=4, sinusoidal=True):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -81,7 +83,7 @@ class Noiser(nn.Module):
         )
 
         self.null_cond_emb = nn.Parameter(torch.randn(1, hidden_dim, device=self.device))
-        self.null_roles = torch.full((1, 20, 5),-1, dtype=torch.float32, device=self.device)
+        self.null_roles = torch.full((1, 20, 5), -1, dtype=torch.float32, device=self.device)
 
         self.combine_t_mlp = nn.Sequential(
             nn.Linear(hidden_dim*2,hidden_dim),
@@ -94,36 +96,44 @@ class Noiser(nn.Module):
         self.init_conv = ResidualBlock1D(in_feature_dim, hidden_dim, hidden_dim)
 
         self.down_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i+2), hidden_dim) for i in range(layers)])
-        # No concatenation of inputs for bottom block
         self.bottom_block = ResidualBlock1D(hidden_dim*(layers+1), hidden_dim*(layers), hidden_dim)
-        # Concatenate inputs for up blocks
         self.up_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i)*2, hidden_dim*(i-1), hidden_dim) for i in range(layers,1,-1)])
 
         self.top_block = ResidualBlock1D(hidden_dim*2,hidden_dim, hidden_dim)
 
         self.head = nn.Conv1d(hidden_dim, out_feature_dim, 1)
     
-    def forward(self, climbs: Tensor, roles: Tensor | None, cond: Tensor | None, t: Tensor)-> Tensor:
-        """
-        Run denoising pass. Predicts the added noise from the noisy data.
+    def forward(
+        self, 
+        climbs: Tensor, 
+        roles: Tensor | None, 
+        cond: Tensor | None, 
+        t: Tensor,
+        role_mask: Tensor | None = None,
+        cond_mask: Tensor | None = None
+    ) -> Tensor:
         
-        :param climbs: Tensor with hold-set features, including conditional features and roles. [B, S, 11]
-        :param cond: Tensor with correct hold roles, used as a conditional feature tensor. [B, S, 5]
-        :param cond: Tensor with climb conditional variables. [B, 4]
-        :param t: Tensor with timestep of diffusion. [B, 1]
-        :returns: Tensor, the predicted noise added after timestep t.
-        """
         (B, S, H) = climbs.shape
         emb_t = self.time_mlp(t)
 
+        # --- Roles Handling ---
         if roles is None:
-            roles = self.null_roles.repeat(B, 1, 1)
+            roles = self.null_roles.expand(B, -1, -1)
+        elif role_mask is not None:
+            null_r = self.null_roles.expand(B, -1, -1)
+            roles = torch.where(role_mask.view(B, 1, 1), null_r, roles)
+            
         h = torch.cat([climbs, roles], dim=2)
         
-        if cond is not None: 
-            emb_c = self.cond_mlp(cond)
+        # --- Cond Handling ---
+        if cond is None:
+            emb_c = self.null_cond_emb.expand(B, -1)
         else:
-            emb_c = self.null_cond_emb.repeat(B, 1)
+            emb_c = self.cond_mlp(cond)
+            if cond_mask is not None:
+                null_c = self.null_cond_emb.expand(B, -1)
+                emb_c = torch.where(cond_mask.view(B, 1), null_c, emb_c)
+                
         emb_c = self.combine_t_mlp(torch.cat([emb_t, emb_c], dim=1))
         emb_h = self.init_conv(h.transpose(1,2), emb_c)
         
@@ -144,7 +154,7 @@ class Noiser(nn.Module):
 
         return result
 
-#-----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 # DDPM MODEL
 #-----------------------------------------------------------------------
 class ClimbDDPM(nn.Module):
@@ -161,14 +171,23 @@ class ClimbDDPM(nn.Module):
         epsilon = 0.0004
         return  torch.cos((t+epsilon)/(1+2*epsilon)*torch.pi/2)**2
     
-    def loss(self, sample_climbs: Tensor, roles: Tensor | None, cond: Tensor | None):
-        """Perform a diffusion Training step and return the loss resulting from the model in the training run.
-        Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
+    def loss(self, sample_climbs: Tensor, roles: Tensor | None, cond: Tensor | None, dropout: tuple[float, float] = (0.0, 0.0)):
+        """Perform a diffusion Training step and return the loss."""
         B, S, H = sample_climbs.shape
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
-        noise = torch.randn((B, S, H), device = self.device)
+        noise = torch.randn((B, S, H), device=self.device)
         noisy = self.forward_diffusion(sample_climbs, t, noise)
-        pred_noise = self.model(noisy, roles, cond, t)
+        
+        # Generate per-sample boolean masks
+        role_mask = (torch.rand(B, device=self.device) < dropout[0]) if (roles is not None and dropout[0] > 0) else None
+        cond_mask = (torch.rand(B, device=self.device) < dropout[1]) if (cond is not None and dropout[1] > 0) else None
+        
+        # Forward pass with masks
+        pred_noise = self.model(noisy, roles, cond, t, role_mask=role_mask, cond_mask=cond_mask)
+        
+        if roles is not None:
+            is_real = (roles[:,:,4] == 0).float().unsqueeze(2)
+            return F.mse_loss(pred_noise * is_real, noise * is_real)
         return F.mse_loss(pred_noise, noise)
     
     def predict_clean(self, noisy, roles, cond, t):
@@ -222,27 +241,8 @@ class DDPMTrainer():
         save_on_best: bool = False,
         clip_grad_norm: bool = True,
         dropout: tuple[float,float] = (0.25, 0.25)
-    )-> tuple[nn.Module, list]:
-        """
-        Train a model (probably of type ClimbDDPM) on the dataset contained in the trainer. (If dataset is provided, train on that dataset instead)
-
-        :param epochs: Number of training epochs
-        :type epochs: int
-        :param save_path: Model weights save-path
-        :type save_path: str
-        :param batch_size: Training batch size
-        :type batch_size: int | None
-        :param num_workers: Number of workers
-        :type num_workers: int | None
-        :param dataset: Training Dataset; defaults to model.dataset
-        :type dataset: TensorDataset | None
-        :param save_on_best: boolean indicating whether to save model weights every time a minimum loss is reached.
-        :type save_on_best: bool
-        :param save_on_best: Tuple of dropout probabilities for Roles and Climbs conditional feature vectors, respectively.
-        :type save_on_best: bool
-        :return: Tuple of (best_model: nn.Module, training_data: np.array)
-        :rtype: tuple[Module, Any]
-        """
+    ) -> tuple[nn.Module, list]:
+        
         if dataset is None:
             dataset = self.dataset
         if dataset is None:
@@ -254,7 +254,7 @@ class DDPMTrainer():
 
         batches = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True)
         losses = []
-        print(f"Begining Training. {epochs} Epochs. {len(batches)} Batches. Model Params: {sum([p.numel() for p in self.model.parameters()])}")
+        print(f"Beginning Training. {epochs} Epochs. {len(batches)} Batches. Model Params: {sum([p.numel() for p in self.model.parameters()])}")
 
         with tqdm(range(epochs)) as pbar:
             pbar.set_postfix_str(f"Epoch: {0}, Batches:{len(batches)}")
@@ -262,36 +262,51 @@ class DDPMTrainer():
                 total_loss = 0
                 for x, r, c in batches:
                     x, r, c = x.to(self.device), r.to(self.device), c.to(self.device)
-                    if np.random.rand(1).item() < dropout[0]:
-                        r = None
-                    if np.random.rand(1).item() < dropout[1]:
-                        c = None
                     
                     self.optimizer.zero_grad()
-                    loss = self.model.loss(x, r, c)
+                    
+                    # Pass dropout cleanly into the loss function
+                    loss = self.model.loss(x, r, c, dropout=dropout)
+                    
                     if clip_grad_norm:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                     
                     loss.backward()
                     self.optimizer.step()
 
-                    total_loss+=loss.item()
+                    total_loss += loss.item()
+                    
                 total_loss /= len(batches)
                 improvement = (total_loss - losses[-1]) if len(losses) > 0 else 0
-                pbar.set_postfix_str(f"Epoch: {epoch}, Batch Loss: {total_loss:.2f}, Improvement: {improvement:.2f}, Min Loss: {min(losses) if len(losses) > 0 else 0}, Batches:{len(batches)}")
-                losses.append(total_loss)
-
-                if save_on_best and total_loss > min(losses) and len(losses) % 2 == 0:
+                min_loss = min(losses) if len(losses) > 0 else float('inf')
+                
+                pbar.set_postfix_str(f"Epoch: {epoch}, Batch Loss: {total_loss:.2f}, Improvement: {improvement:.2f}, Min Loss: {min_loss if min_loss != float('inf') else 0:.2f}, Batches:{len(batches)}")
+                
+                # FIXED: Save when total_loss is LESS than min(losses)
+                if save_on_best and save_path and len(losses) > 0 and total_loss < min_loss and len(losses) % 2 == 0:
                     torch.save(self.model.state_dict(), save_path)
+                    
+                losses.append(total_loss)
             self.scheduler.step()
+            
         if save_path is not None:
             torch.save(self.model.state_dict(), save_path)
+            
         return self.model, losses
-
 #-----------------------------------------------------------------------
 # GENERATION
 #-----------------------------------------------------------------------
 class ClimbDDPMGenerator():
+    # Role indices
+    ROLE_START  = 0
+    ROLE_FINISH = 1
+    ROLE_HAND   = 2
+    ROLE_FOOT   = 3
+    ROLE_NULL   = 4
+    NUM_ROLES   = 5
+    SEQ_LEN     = 20
+    NUM_FEATURES = 11  # x, y, pull_x, pull_y, useability, is_foot, sloper, pinch, macro, flat, jug
+
     def __init__(
             self,
             wall_id: str,
@@ -304,21 +319,15 @@ class ClimbDDPMGenerator():
         self.timesteps = 100
 
         with sqlite3.connect(DB_PATH) as conn:
-            holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds WHERE wall_id = ?",conn,params=(wall_id,))
+            holds = pd.read_sql_query(
+                "SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags, layout_id FROM holds WHERE layout_id = ?",
+                conn, params=(wall_id,)
+            )
             scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
-            self.holds_manifold = torch.tensor(scaled_holds[['x','y','pull_x','pull_y']].values, dtype=torch.float32)
+            self.holds_manifold = torch.tensor(scaled_holds[HOLD_FEATURE_COLS].values, device=self.device, dtype=torch.float32)
             self.holds_lookup = scaled_holds['hold_index'].values
-        
-        self.holds_lookup = np.concatenate([self.holds_lookup, np.array([-1, -1, -1, -1])])
-        
-        self.holds_manifold = torch.cat([
-            self.holds_manifold,
-            torch.tensor(
-                [[-2.0, 0.0, -2.0, 0.0],
-                [2.0, 0.0, -2.0, 0.0],
-                [-2.0, 0.0, 2.0, 0.0],
-                [2.0, 0.0, 2.0, 0.0]],dtype=torch.float32)
-            ],dim=0)
+
+        self.holds_lookup = np.concatenate([self.holds_lookup])
 
     def _build_cond_tensor(self, n, grade, diff_scale, angle):
         diff = GRADE_TO_DIFF[diff_scale][grade]
@@ -328,90 +337,125 @@ class ClimbDDPMGenerator():
             "ascents": [100]*n,
             "angle": [angle]*n
         })
-
         cond = self.scaler.transform_climb_features(df_cond)
         return torch.tensor(cond, device=self.device, dtype=torch.float32)
-    
-    def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
+
+    def _build_roles_tensor(self, n: int) -> Tensor:
         """
-            Project each generated hold to its nearest neighbor on the hold manifold.
-            
-            Args:
-                gen_climbs: (B, S, H) predicted clean holds
-                return_indices: (boolean) Whether to return the hold indices or hold feature coordinates
-            Returns:
-                projected: (B, S, H) each hold snapped to nearest manifold point
+        Build a [n, SEQ_LEN, NUM_ROLES] one-hot roles tensor for a batch of climbs.
+        Ordering per climb: start holds → shuffled hand/foot holds → finish holds → null padding.
+
+        Role counts are sampled uniformly:
+            start:  1–2
+            hand:   2–8
+            foot:   2–4
+            finish: 1–2
+        """
+        roles = torch.zeros((n, self.SEQ_LEN, self.NUM_ROLES), dtype=torch.float32, device=self.device)
+        for b in range(n):
+            idx = 0
+            n_start  = np.random.randint(1, 3)
+            n_foot   = np.random.randint(2, 5)
+            n_hand   = np.random.randint(2, 9)
+            n_finish = np.random.randint(1, 3)
+
+            for _ in range(n_start):
+                roles[b, idx, self.ROLE_START] = 1.0
+                idx += 1
+
+            middle = [self.ROLE_FOOT] * n_foot + [self.ROLE_HAND] * n_hand
+            for role in middle:
+                roles[b, idx, role] = 1.0
+                idx += 1
+
+            for _ in range(n_finish):
+                roles[b, idx, self.ROLE_FINISH] = 1.0
+                idx += 1
+
+            # Pad remainder with null role
+            roles[b, idx:, self.ROLE_NULL] = 1.0
+
+        return roles
+
+    def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor) -> Tensor:
+        """
+        Project each generated hold to its nearest neighbor on the hold manifold using
+        all 11 feature dimensions for distance. Returns full 11-dim feature vectors.
+
+        Args:
+            gen_climbs: (B, S, 11) predicted clean holds
+            offset_manifold: (M, 11) manifold with x-coordinate offset applied
+        Returns:
+            projected: (B, S, 11) each hold snapped to nearest manifold point
         """
         B, S, H = gen_climbs.shape
-        flat_climbs = gen_climbs.reshape(-1,H)
+        flat_climbs = gen_climbs.reshape(-1, H)
         dists = torch.cdist(flat_climbs, offset_manifold)
         idx = dists.argmin(dim=1)
         return self.holds_manifold[idx].reshape(B, S, -1)
-        
-    def _project_onto_indices(self, gen_climbs: Tensor, offset_manifold: Tensor) -> list[list[int]]:
-        """Project climb onto the final hold indices (and remove null holds)"""
-        
-        B, S, H = gen_climbs.shape
 
+    def _project_onto_indices(self, gen_climbs: Tensor, offset_manifold: Tensor) -> list[list[int]]:
+        """Final projection: snap to nearest manifold point and return hold indices (null holds excluded)."""
+        B, S, H = gen_climbs.shape
         climbs = []
         for gen_climb in gen_climbs:
-            flat_climb = gen_climb.reshape(-1,H)
+            flat_climb = gen_climb.reshape(-1, H)
             dists = torch.cdist(flat_climb, offset_manifold)
-            idx = dists.argmin(dim=1)
-            idx = idx.detach().numpy()
+            idx = dists.argmin(dim=1).cpu().numpy()
             holds = self.holds_lookup[idx]
             climb = list(set(holds[holds > 0].tolist()))
             climbs.append(climb)
-        
         return climbs
-    
+
     def _projection_strength(self, t: Tensor, t_start_projection: float = 0.8):
         """Calculate the weight to assign to the projected holds based on the timestep."""
-        a = (t_start_projection-t)/t_start_projection
-        strength = 1 - torch.cos(a*torch.pi/2)
+        a = (t_start_projection - t) / t_start_projection
+        strength = 1 - torch.cos(a * torch.pi / 2)
         return torch.where(t > t_start_projection, torch.zeros_like(t), strength)
-    
+
     @torch.no_grad()
     def generate(
         self,
-        n: int = 1 ,
+        n: int = 1,
         angle: int = 45,
         grade: str = 'V4',
         diff_scale: str = 'v_grade',
+        guidance_value: float = 3.0,
         deterministic: bool = False
-    )->list[list[int]]:
+    ) -> list[list[int]]:
         """
-        Generate a climb or batch of climbs with the given conditions using the standard DDPM iterative denoising process.
-        
+        Generate a batch of climbs using CFG-guided DDPM iterative denoising.
+
         :param n: Number of climbs to generate
-        :type n: int
-        :param angle: Angle of the wall
-        :type angle: int
-        :param grade: Desired difficulty (V-grade)
-        :type grade: int | None
-        :return: A Tensor containing the denoised generated climbs as hold sets.
-        :rtype: Tensor
+        :param angle: Wall angle in degrees
+        :param grade: Desired difficulty (e.g. 'V4')
+        :param diff_scale: Grade scale ('v_grade' or 'font')
+        :param guidance_value: CFG guidance scale (higher = stronger conditioning)
+        :param deterministic: If True, reuse the initial noise tensor during renoising
+        :return: List of hold-index lists, one per generated climb
         """
-        cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
-        x_t = torch.randn((n, 20, 4), device=self.device)
-        noisy = x_t.clone()
-        t_tensor = torch.ones((n,1), device=self.device)
-        
-        # Randomly offset the holds-manifold to allow for climbs to be generated at different x-coordinates around the wall.
+        cond_t  = self._build_cond_tensor(n, grade, diff_scale, angle)
+        roles_t = self._build_roles_tensor(n)
+        x_t     = torch.randn((n, self.SEQ_LEN, self.NUM_FEATURES), device=self.device)
+        noisy   = x_t.clone()
+        t_tensor = torch.ones((n, 1), device=self.device)
+
+        # Randomly offset the manifold in x so climbs aren't always wall-centred
         x_offset = np.random.randn()
         offset_manifold = self.holds_manifold.clone()
-        offset_manifold[:,0] += x_offset*0.1
+        offset_manifold[:, 0] += x_offset * 0.1
 
-        for t in range(0, self.timesteps):
-            print('.',end='')
+        for _ in range(self.timesteps):
+            print('.', end='')
 
-            gen_climbs = self.model(noisy, cond_t, t_tensor)
+            gen_climbs = self.model.predict_cfg(noisy, roles_t, cond_t, t_tensor, guidance_value)
 
             alpha_p = self._projection_strength(t_tensor)
             projected_climbs = self._project_onto_manifold(gen_climbs, offset_manifold)
-            gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
-            
-            t_tensor -= 1.0/self.timesteps
-            noisy = self.model.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
-        
+            gen_climbs = alpha_p * projected_climbs + (1 - alpha_p) * gen_climbs
+
+            t_tensor -= 1.0 / self.timesteps
+            noise = x_t if deterministic else torch.randn_like(x_t)
+            noisy = self.model.forward_diffusion(gen_climbs, t_tensor, noise)
+
         return self._project_onto_indices(gen_climbs, offset_manifold)
