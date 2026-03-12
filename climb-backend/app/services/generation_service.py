@@ -16,18 +16,16 @@ from app.services.climb_service import _holds_to_holdset
 logger = logging.getLogger(__name__)
 
 
-def _get_layout_angle(layout_id: str, default_angle: int = 45) -> int:
+def _get_layout_angle(layout_id: str, default_default_angle: int = 45) -> int:
     """
     Look up the default angle for a layout.
-    Checks the layouts table first, then falls back to the legacy walls table.
+    Checks the layouts table first, then falls back to the legacy layouts table.
     """
     with get_db() as conn:
-        # Try layouts table (angle not stored there currently — fall through)
-        # Fall back to walls table (angle is stored there for legacy entries)
         row = conn.execute(
-            "SELECT angle FROM walls WHERE id = ?", (layout_id,)
+            "SELECT default_angle FROM layouts WHERE id = ?", (layout_id,)
         ).fetchone()
-    return row["angle"] if (row and row["angle"] is not None) else default_angle
+    return row["default_angle"] if (row and row["default_angle"] is not None) else default_default_angle
 
 
 def generate_climbs(
@@ -41,7 +39,7 @@ def generate_climbs(
 
     Args:
         layout_id: Target layout ID (holds loaded from DB by the generator).
-                   For migrated walls this equals the old wall_id.
+                   For migrated layouts this equals the old layout_id.
         request: Generation parameters (grade, angle, num_climbs, etc.)
         gen_settings: DDPM hyper-parameters.
         size_id: Optional size ID. Currently used only to log context;
@@ -55,10 +53,10 @@ def generate_climbs(
         # Resolve angle: use request override, else layout's stored angle
         angle = request.angle if request.angle else _get_layout_angle(layout_id)
 
-        # The generator's internal lookup is keyed by wall_id.
-        # For migrated data, wall_id == layout_id, so this still works.
+        # The generator's internal lookup is keyed by layout_id.
+        # For migrated data, layout_id == layout_id, so this still works.
         raw_climbs = generator.generate(
-            wall_id=layout_id,
+            layout_id=layout_id,
             n=request.num_climbs,
             angle=angle,
             grade=request.grade,

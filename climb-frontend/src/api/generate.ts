@@ -31,7 +31,7 @@ export async function generateClimbs(
   }
 
   const response = await apiClient.get<GenerateResponse>(
-    `/walls/${wallId}/generate`,
+    `/layouts/${wallId}/generate`,
     { params },
   );
   return response.data;

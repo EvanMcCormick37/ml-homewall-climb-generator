@@ -296,11 +296,11 @@ GRADE_TO_DIFF = {
 }
 
 
-def _get_wall_angle(wall_id: str, default_angle: int = 45) -> int:
+def _get_wall_angle(layout_id: str, default_angle: int = 45) -> int:
     """Get the default wall angle from the database. If there is no default wall angle, return 45."""
     with get_db() as conn:
         row = conn.execute(
-            "SELECT angle FROM walls WHERE id = ?", (wall_id,)
+            "SELECT angle FROM walls WHERE id = ?", (layout_id,)
         ).fetchone()
     if row and row["angle"] is not None:
         return row["angle"]
@@ -386,23 +386,23 @@ class ClimbDDPMGenerator():
 
         try:
             with sqlite3.connect(settings.DB_PATH) as conn:
-                holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, wall_id FROM holds", conn)
-                wall_ids = list(set(holds['wall_id'].values))
+                holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, layout_id FROM holds", conn)
+                layout_ids = list(set(holds['layout_id'].values))
             
             scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
             
-            for wall_id in wall_ids:
-                df = scaled_holds[scaled_holds['wall_id']==wall_id]
-                self.holds_manifolds[wall_id] = torch.cat([torch.tensor(df[['x','y','pull_x','pull_y']].values, dtype=torch.float32), NULL_HOLD_SENTINELS], dim=0)
-                self.holds_lookup[wall_id] = df['hold_index'].values
-                self.holds_lookup[wall_id] = np.concatenate([self.holds_lookup[wall_id], np.array([-1, -1, -1, -1])])
+            for layout_id in layout_ids:
+                df = scaled_holds[scaled_holds['layout_id']==layout_id]
+                self.holds_manifolds[layout_id] = torch.cat([torch.tensor(df[['x','y','pull_x','pull_y']].values, dtype=torch.float32), NULL_HOLD_SENTINELS], dim=0)
+                self.holds_lookup[layout_id] = df['hold_index'].values
+                self.holds_lookup[layout_id] = np.concatenate([self.holds_lookup[layout_id], np.array([-1, -1, -1, -1])])
         except Exception as e:
             pass
     
-    def log_hold_means(self, wall_id: str | None = None):
+    def log_hold_means(self, layout_id: str | None = None):
         """Log the hold means for each wall."""
         for k, manifold in self.holds_manifolds.items():
-            if wall_id == None or wall_id == k:
+            if layout_id == None or layout_id == k:
                 means = torch.mean(manifold, dim=0)
                 print(f"Wall-id--{k}; Means-- x:{means[0].item()}, y:{means[1].item()}, Px:{means[2].item()}, Py:{means[3].item()} ")
 
@@ -435,9 +435,9 @@ class ClimbDDPMGenerator():
         idx = dists.argmin(dim=1)
         return offset_manifold[idx].reshape(B, S, -1)
     
-    def _get_offset_manifold(self, wall_id: str, x_offset: float | None)-> Tensor:
+    def _get_offset_manifold(self, layout_id: str, x_offset: float | None)-> Tensor:
         """Method for offsetting the current holds-manifold such that mean-x and mean-y is 0"""
-        offset_manifold = self.holds_manifolds[wall_id].clone()
+        offset_manifold = self.holds_manifolds[layout_id].clone()
         means = torch.mean(offset_manifold, dim=0).round(decimals=3)
         if x_offset is None:
             x_offset = -(means[0].item())
@@ -505,7 +505,7 @@ class ClimbDDPMGenerator():
         gen_climbs: Tensor,
         cond_t: Tensor,
         offset_manifold: Tensor,
-        wall_id: str,
+        layout_id: str,
         x_offsets: Tensor | None = None,
         y_offsets: Tensor | None = None,
     ) -> list[list[list[int]]]:
@@ -528,9 +528,9 @@ class ClimbDDPMGenerator():
         translated_climbs = gen_climbs + translation
 
         # Now do the standard index projection on the translated climbs
-        return self._project_onto_indices(translated_climbs, cond_t, offset_manifold, wall_id)
+        return self._project_onto_indices(translated_climbs, cond_t, offset_manifold, layout_id)
 
-    def _project_onto_indices(self, gen_climbs: Tensor, cond_t: Tensor, offset_manifold: Tensor, wall_id: str) -> list[list[list[int]]]:
+    def _project_onto_indices(self, gen_climbs: Tensor, cond_t: Tensor, offset_manifold: Tensor, layout_id: str) -> list[list[list[int]]]:
         """Project climb onto the final hold indices (and remove null holds)"""
         
         B, S, H = gen_climbs.shape
@@ -541,7 +541,7 @@ class ClimbDDPMGenerator():
 
         dists = torch.cdist(flat_climbs, offset_manifold)       # (B*S, H, M)
         idx = dists.argmin(dim=1)
-        holds = self.holds_lookup[wall_id][idx]
+        holds = self.holds_lookup[layout_id][idx]
         holds = holds.reshape(B, S)
         
         is_null = (holds == -1)
@@ -568,7 +568,7 @@ class ClimbDDPMGenerator():
     @torch.no_grad()
     def generate(
         self,
-        wall_id: str,
+        layout_id: str,
         n: int,
         angle: int,
         grade: str,
@@ -582,8 +582,8 @@ class ClimbDDPMGenerator():
         """
         Generate a climb or batch of climbs with the given conditions using the standard DDPM iterative denoising process.
 
-        :param wall_id: The Wall-ID on which to generate the climb.
-        :type wall_id: str
+        :param layout_id: The Wall-ID on which to generate the climb.
+        :type layout_id: str
         :param n: The number of climbs to generate.
         :type n: int
         :param angle: The current wall angle.
@@ -609,7 +609,7 @@ class ClimbDDPMGenerator():
         
         # Handle manifold offset
         auto = True if x_offset is None else False
-        offset_manifold = self._get_offset_manifold(wall_id, x_offset)
+        offset_manifold = self._get_offset_manifold(layout_id, x_offset)
 
         # CORE LOGIC
         cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
@@ -629,8 +629,8 @@ class ClimbDDPMGenerator():
             noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
         
         if auto:
-            return self._project_onto_indices_with_translation(gen_climbs, cond_t, offset_manifold, wall_id)
-        return self._project_onto_indices(gen_climbs, cond_t, offset_manifold, wall_id)
+            return self._project_onto_indices_with_translation(gen_climbs, cond_t, offset_manifold, layout_id)
+        return self._project_onto_indices(gen_climbs, cond_t, offset_manifold, layout_id)
 
 # ---------------------------------------------------------------------------
 # Global ClimbGenerator Instance For Dependency Injection

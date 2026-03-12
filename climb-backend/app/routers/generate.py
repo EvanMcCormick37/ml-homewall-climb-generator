@@ -2,7 +2,7 @@
 Router for climb generation.
 
 Endpoints:
-- POST /walls/{wall_id}/generate  — Generate climbs using the DDPM
+- POST /layouts/{wall_id}/generate  — Generate climbs using the DDPM
 """
 from fastapi import APIRouter, HTTPException, Query
 
