@@ -6,7 +6,7 @@ import type {
 } from "@/types";
 
 export async function generateClimbs(
-  wallId: string,
+  layoutId: string,
   request: GenerateRequest,
   settings?: GenerateSettings,
 ): Promise<GenerateResponse> {
@@ -25,7 +25,7 @@ export async function generateClimbs(
   }
 
   const response = await apiClient.get<GenerateResponse>(
-    `/walls/${wallId}/generate`,
+    `/layouts/${layoutId}/generate`,
     { params },
   );
   return response.data;
