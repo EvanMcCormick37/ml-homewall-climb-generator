@@ -97,9 +97,8 @@ function ModelSettingsPanel({
     onChange({ ...settings, ...patch });
   const isDefault =
     settings.timesteps === DEFAULT_GENERATE_SETTINGS.timesteps &&
-    settings.t_start_projection ===
-      DEFAULT_GENERATE_SETTINGS.t_start_projection &&
-    settings.x_offset === DEFAULT_GENERATE_SETTINGS.x_offset;
+    settings.guidance_value === DEFAULT_GENERATE_SETTINGS.guidance_value &&
+    settings.deterministic === DEFAULT_GENERATE_SETTINGS.deterministic;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -116,75 +115,21 @@ function ModelSettingsPanel({
         rightLabel="Higher Quality"
       />
       <BzRange
-        label="Projection Start"
-        desc="Projection start controls when the current layout's holds start to 'pull' on the diffusion model."
-        value={settings.t_start_projection}
-        min={0.0}
-        max={1.0}
-        step={0.05}
-        onChange={(v) => update({ t_start_projection: v })}
-        displayValue={`t=${settings.t_start_projection.toFixed(2)}`}
-        leftLabel="Later (Faster)"
-        rightLabel="Earlier"
+        label="Guidance Value"
+        desc="CFG guidance scale. Higher values produce climbs that more closely match the requested grade and style, at the cost of diversity."
+        value={settings.guidance_value}
+        min={1.0}
+        max={10.0}
+        step={0.5}
+        onChange={(v) => update({ guidance_value: v })}
+        displayValue={settings.guidance_value.toFixed(1)}
+        leftLabel="Diverse"
+        rightLabel="Conditioned"
       />
 
       <div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: "8px",
-          }}
-        >
-          <SectionLabel
-            desc="X-Offset shifts the climb's center. Auto grid-search selects the offset which results in the minimal projection distance, and is recommended for
-        quality."
-          >
-            X-Offset
-          </SectionLabel>
-          <span
-            className="bz-mono"
-            style={{ fontSize: "0.65rem", color: "var(--cyan)" }}
-          >
-            {settings.x_offset != null ? settings.x_offset.toFixed(2) : "Auto"}
-          </span>
-        </div>
-        <input
-          type="range"
-          min={-1.0}
-          max={1.0}
-          step={0.05}
-          value={settings.x_offset ?? 0}
-          onChange={(e) => update({ x_offset: parseFloat(e.target.value) })}
-          className="bz-range"
-        />
-        <button
-          onClick={() => update({ x_offset: null })}
-          style={{
-            marginTop: "8px",
-            width: "100%",
-            padding: "5px",
-            fontFamily: "'Space Mono', monospace",
-            fontSize: "0.6rem",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            border: `1px solid ${settings.x_offset == null ? "var(--cyan)" : "var(--border)"}`,
-            background:
-              settings.x_offset == null ? "var(--cyan-dim)" : "transparent",
-            color:
-              settings.x_offset == null ? "var(--cyan)" : "var(--text-muted)",
-            cursor: "pointer",
-            borderRadius: "var(--radius)",
-            transition: "all 0.15s",
-          }}
-        >
-          {settings.x_offset == null ? "Auto (recommended)" : "Reset to Auto"}
-        </button>
-      </div>
-
-      <div>
         <div style={{ marginBottom: "8px" }}>
-          <SectionLabel desc="Whether to use a consistent or random noise vector at each timestep of reverse diffusion. Deterministic produces the same climb for a given seed, layout, and model configuration.">
+          <SectionLabel desc="Whether to reuse the initial noise vector at each reverse-diffusion step. Produces the same climb for a given layout and configuration.">
             Generation Style
           </SectionLabel>
         </div>
@@ -196,40 +141,6 @@ function ModelSettingsPanel({
           value={settings.deterministic ? "det" : "non"}
           onChange={(v) => update({ deterministic: v === "det" })}
         />
-        {settings.deterministic && (
-          <div>
-            <span
-              className="bz-mono"
-              style={{
-                fontSize: "0.6rem",
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color: "var(--text-muted)",
-              }}
-            >
-              generation seed
-            </span>
-            <input
-              type="number"
-              style={{
-                marginTop: "8px",
-                width: "100%",
-                padding: "5px",
-                fontFamily: "'Space Mono', monospace",
-                fontSize: "0.6rem",
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-              }}
-              value={settings.seed ?? ""}
-              onChange={(e) => {
-                if (e.target.value != "") {
-                  const s = parseInt(e.target.value);
-                  if (!isNaN(s)) update({ seed: s });
-                }
-              }}
-            />
-          </div>
-        )}
       </div>
 
       {!isDefault && (
@@ -347,7 +258,7 @@ function GenerationPanel({
 
   const isPresetActive = (preset: GenerateSettings) =>
     generateSettings.timesteps === preset.timesteps &&
-    generateSettings.t_start_projection === preset.t_start_projection &&
+    generateSettings.guidance_value === preset.guidance_value &&
     generateSettings.deterministic === preset.deterministic;
   const isCustom =
     !isPresetActive(FAST_GENERATE_SETTINGS) &&

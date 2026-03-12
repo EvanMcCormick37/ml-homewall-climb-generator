@@ -15,11 +15,9 @@ class GradeScale(str, Enum):
     FONT = "font"
 
 class GenerateSettings(BaseModel):
-    timesteps: int = Field(100,ge=1,le=100,description = "Number of diffusion timesteps to use during generation.")
-    deterministic: bool = Field(False, description="Use initial noise upon iteration. Can be used to visualize the reverse diffusion process.")
-    t_start_projection: float = Field(1.0, description="The time to start projection onto the climbing wall holds")
-    x_offset: float | None = Field(None, description="Offset the center of the generated climb to use parts of the wall. Too large an offset will degrade the generated results.")
-    seed: int | None = Field(None, description="Random seed for deterministic climb generation.")
+    timesteps: int = Field(100, ge=1, le=100, description="Number of diffusion timesteps. Fewer = faster but lower quality.")
+    guidance_value: float = Field(3.0, ge=1.0, le=10.0, description="CFG guidance scale. Higher = stronger grade/style conditioning.")
+    deterministic: bool = Field(False, description="Reuse the initial noise vector at each step for reproducible output.")
 
 class GenerateRequest(BaseModel):
     """Request schema for generating climbs via the DDPM."""

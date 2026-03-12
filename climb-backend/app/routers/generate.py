@@ -25,10 +25,8 @@ def generate_climbs(
     grade_scale: GradeScale = Query(GradeScale.V_GRADE),
     angle: int | None = Query(None, ge=0, le=90),
     timesteps: int = Query(100, ge=1, le=100),
-    t_start_projection: float = Query(1.0, ge=0.0, le=1.0),
-    x_offset: float | None = Query(None, ge=-1.5, le=1.5),
+    guidance_value: float = Query(3.0, ge=1.0, le=10.0),
     deterministic: bool = Query(False),
-    seed: int | None = Query(None),
 ):
     """
     Generate climbs for a given wall.
@@ -51,10 +49,8 @@ def generate_climbs(
     )
     settings = GenerateSettings(
         timesteps=timesteps,
-        t_start_projection=t_start_projection,
+        guidance_value=guidance_value,
         deterministic=deterministic,
-        x_offset=x_offset,
-        seed=seed,
     )
 
     try:

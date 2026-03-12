@@ -64,10 +64,8 @@ def generate_climbs(
             grade=request.grade,
             diff_scale=request.grade_scale.value,
             timesteps=gen_settings.timesteps,
+            guidance_value=gen_settings.guidance_value,
             deterministic=gen_settings.deterministic,
-            t_start_projection=gen_settings.t_start_projection,
-            x_offset=gen_settings.x_offset,
-            seed=gen_settings.seed if gen_settings.seed else 37,
         )
     except Exception as e:
         print(f"Exception: {e}")
