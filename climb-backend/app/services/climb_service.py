@@ -12,7 +12,7 @@ from datetime import datetime
 
 from app.database import get_db
 from app.schemas import Climb, ClimbCreate, ClimbSortBy, Holdset
-from app.services.utils import GRADE_TO_DIFF, _get_wall_angle
+from app.services.utils import GRADE_TO_DIFF, _get_layout_angle
 
 
 def _grade_range(min_grade: str, max_grade: str, grade_scale: str):

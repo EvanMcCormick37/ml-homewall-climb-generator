@@ -351,16 +351,16 @@ GRADE_TO_DIFF = {
 }
 
 
-def _get_wall_angle(wall_id: str, default_angle: int = 45) -> int:
-    """Get the default wall angle from the database."""
+def _get_layout_angle(layout_id: str, default_default_angle: int = 45) -> int:
+    """
+    Look up the default angle for a layout.
+    Checks the layouts table first, then falls back to the legacy walls table.
+    """
     with get_db() as conn:
         row = conn.execute(
-            "SELECT angle FROM walls WHERE id = ?", (wall_id,)
+            "SELECT default_angle FROM layouts WHERE id = ?", (layout_id,)
         ).fetchone()
-    if row and row["angle"] is not None:
-        return row["angle"]
-    return default_angle
-
+    return row["default_angle"] if (row and row["default_angle"] is not None) else default_default_angle
 
 # ---------------------------------------------------------------------------
 # ClimbDDPMGenerator
@@ -378,22 +378,19 @@ class ClimbDDPMGenerator:
         try:
             with sqlite3.connect(settings.DB_PATH) as conn:
                 holds = pd.read_sql_query(
-                    "SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags, wall_id FROM holds",
+                    "SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags, layout_id FROM holds",
                     conn,
                 )
-                wall_ids = list(set(holds["wall_id"].values))
+                layout_ids = list(set(holds["layout_id"].values))
 
             scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
 
-            for wall_id in wall_ids:
-                df = scaled_holds[scaled_holds["wall_id"] == wall_id]
-                self.holds_manifolds[wall_id] = torch.tensor(
+            for layout_id in layout_ids:
+                df = scaled_holds[scaled_holds["layout_id"] == layout_id]
+                self.holds_manifolds[layout_id] = torch.tensor(
                     df[HOLD_FEATURE_COLS].values, dtype=torch.float32
                 )
-                hold_indices = df["hold_index"].values
-                self.holds_lookup[wall_id] = np.concatenate(
-                    [hold_indices, np.array([-1, -1, -1, -1])]
-                )
+                self.holds_lookup[layout_id] = df["hold_index"].values
         except Exception as e:
             print(f"Warning: failed to load holds manifolds: {e}")
 
@@ -440,9 +437,9 @@ class ClimbDDPMGenerator:
 
         return roles
 
-    def _get_offset_manifold(self, wall_id: str) -> Tensor:
+    def _get_offset_manifold(self, layout_id: str) -> Tensor:
         """Center the holds manifold and apply a small random x offset."""
-        offset_manifold = self.holds_manifolds[wall_id].clone()
+        offset_manifold = self.holds_manifolds[layout_id].clone()
         means = offset_manifold[:, :2].mean(dim=0)
         offset_manifold[:, :2] -= means
         return offset_manifold
@@ -466,7 +463,7 @@ class ClimbDDPMGenerator:
         gen_climbs: Tensor,
         roles_t: Tensor,
         offset_manifold: Tensor,
-        wall_id: str,
+        layout_id: str,
     ) -> list[list[list[int]]]:
         """
         Final projection: snap to nearest manifold point and return
@@ -480,7 +477,7 @@ class ClimbDDPMGenerator:
         flat = gen_climbs.reshape(-1, H)
         dists = torch.cdist(flat, offset_manifold)
         idx = dists.argmin(dim=1).cpu().numpy()
-        holds = self.holds_lookup[wall_id][idx].reshape(B, S)
+        holds = self.holds_lookup[layout_id][idx].reshape(B, S)
 
         # A position is null if the role is NULL or it mapped to a sentinel
         is_null = (role_indices == ROLE_NULL) | (holds == -1)
@@ -506,7 +503,7 @@ class ClimbDDPMGenerator:
     @torch.no_grad()
     def generate(
         self,
-        wall_id: str,
+        layout_id: str,
         n: int,
         angle: int,
         grade: str,
@@ -518,7 +515,7 @@ class ClimbDDPMGenerator:
         """
         Generate climbs using CFG-guided DDPM iterative denoising.
 
-        :param wall_id: Target wall/layout ID.
+        :param layout_id: Target layout/layout ID.
         :param n: Number of climbs to generate.
         :param angle: Wall angle in degrees.
         :param grade: Desired grade string (e.g. 'V4', '6b+').
@@ -528,7 +525,7 @@ class ClimbDDPMGenerator:
         :param deterministic: If True, reuse the initial noise each step.
         :return: List of climbs, each a list of [hold_index, role] pairs.
         """
-        offset_manifold = self._get_offset_manifold(wall_id)
+        offset_manifold = self._get_offset_manifold(layout_id)
         cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
         roles_t = self._build_roles_tensor(n)
 
@@ -547,7 +544,7 @@ class ClimbDDPMGenerator:
             noise = x_t if deterministic else torch.randn_like(x_t)
             noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, noise)
 
-        return self._project_onto_indices(gen_climbs, roles_t, offset_manifold, wall_id)
+        return self._project_onto_indices(gen_climbs, roles_t, offset_manifold, layout_id)
 
 
 # ---------------------------------------------------------------------------

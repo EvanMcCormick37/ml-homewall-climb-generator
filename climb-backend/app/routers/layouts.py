@@ -1,7 +1,7 @@
 """
 Router for layout-related endpoints.
 
-A layout is a unique hold arrangement (replacing the old /walls concept).
+A layout is a unique hold arrangement.
 """
 from fastapi import APIRouter, Form, File, UploadFile, HTTPException, Depends, Query
 from fastapi.responses import FileResponse

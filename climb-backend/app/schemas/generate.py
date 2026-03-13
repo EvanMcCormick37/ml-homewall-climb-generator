@@ -2,7 +2,7 @@
 Pydantic schemas for climb generation requests and responses.
 
 Replaces the old model CRUD schemas — the backend now uses a single
-pre-trained DDPM that generates for any wall.
+pre-trained DDPM that generates for any layout.
 """
 from pydantic import BaseModel, Field
 from app.schemas.base import Holdset
@@ -24,11 +24,11 @@ class GenerateRequest(BaseModel):
     num_climbs: int = Field(..., ge=1, le=10, description="Number of climbs to generate")
     grade: str = Field("V4", description="Target difficulty grade (e.g. 'V4', '6b+')")
     grade_scale: GradeScale = Field(GradeScale.V_GRADE, description="Grading system to use")
-    angle: int | None = Field(None, ge=0, le=90, description="Wall angle override (defaults to wall's stored angle)")
+    angle: int | None = Field(None, ge=0, le=90, description="Wall angle override (defaults to layout's stored angle)")
 
 class GenerateResponse(BaseModel):
     """Response containing generated climbs."""
-    wall_id: str
+    layout_id: str
     climbs: list[Holdset]
     num_generated: int
     parameters: GenerateRequest

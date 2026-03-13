@@ -2,7 +2,7 @@
 Router for climb generation.
 
 Endpoints:
-- POST /walls/{wall_id}/generate  — Generate climbs using the DDPM
+- POST /layouts/{layout_id}/generate  — Generate climbs using the DDPM
 """
 from fastapi import APIRouter, HTTPException, Query
 
@@ -16,7 +16,7 @@ router = APIRouter()
     "",
     response_model=GenerateResponse,
     summary="Generate climbs",
-    description="Generate climbs for a wall using the pre-trained DDPM model.",
+    description="Generate climbs for a layout using the pre-trained DDPM model.",
 )
 def generate_climbs(
     layout_id: str,
@@ -29,16 +29,16 @@ def generate_climbs(
     deterministic: bool = Query(False),
 ):
     """
-    Generate climbs for a given wall.
+    Generate climbs for a given layout.
 
     The model is a single pre-trained DDPM capable of generating for any
-    wall. Holds are loaded from the database based on `wall_id`.
+    layout. Holds are loaded from the database based on `layout_id`.
 
     Parameters:
     - **num_climbs**: How many climbs to generate (1–50)
     - **grade**: Target difficulty (e.g. 'V4', '6b+')
     - **grade_scale**: Grading system ('v_grade' or 'font')
-    - **angle**: Wall angle override (defaults to the wall's stored angle)
+    - **angle**: Wall angle override (defaults to the layout's stored angle)
     - **deterministic**: Fixed noise for reproducible output
     """
     request = GenerateRequest(
@@ -61,7 +61,7 @@ def generate_climbs(
         raise HTTPException(status_code=500, detail=f"Generation failed: {e}")
 
     return GenerateResponse(
-        wall_id=layout_id,
+        layout_id=layout_id,
         climbs=generated,
         num_generated=len(generated),
         parameters=request,
