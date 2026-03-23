@@ -224,7 +224,7 @@ class ClimbsFeatureArray:
             x_r = torch.cat([x, r],dim=2)
             return TensorDataset(x_r, c)
         return TensorDataset(x, r, c)
-    def get_features(self, dim=2, limit: int | None = None, augment_reflections=True, _zero_com = True, combine_roles = True):
+    def get_features(self, dim=2, limit: int | None = None, augment_reflections=True, combine_roles = True):
         """
         Build the training dataset.
 

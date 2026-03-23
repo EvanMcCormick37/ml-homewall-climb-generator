@@ -362,11 +362,6 @@ class UNetHoldClassifierLogits(nn.Module):
 # ---------------------------------------------------------------------------
 # ClimbDDPMGenerator
 # ---------------------------------------------------------------------------
-NULL_HOLD_SENTINELS = torch.tensor(
-    [[-2.0, 0.0, -2.0, 0.0],
-    [2.0, 0.0, -2.0, 0.0],
-    [-2.0, 0.0, 2.0, 0.0],
-    [2.0, 0.0, 2.0, 0.0]], dtype=torch.float32)
 
 class ClimbDDPMGenerator():
     def __init__(
