@@ -81,7 +81,6 @@ class Noiser(nn.Module):
         )
 
         self.null_cond_emb = nn.Parameter(torch.randn(1, hidden_dim, device=self.device))
-        self.null_roles = torch.full((1, 20, 5),-1, dtype=torch.float32, device=self.device)
 
         self.combine_t_mlp = nn.Sequential(
             nn.Linear(hidden_dim*2,hidden_dim),
@@ -103,43 +102,38 @@ class Noiser(nn.Module):
 
         self.head = nn.Conv1d(hidden_dim, out_feature_dim, 1)
     
-    def forward(self, climbs: Tensor, roles: Tensor | None, cond: Tensor | None, t: Tensor)-> Tensor:
+    def forward(self, climbs: Tensor, cond: Tensor | None, t: Tensor)-> Tensor:
         """
         Run denoising pass. Predicts the added noise from the noisy data.
         
-        :param climbs: Tensor with hold-set features, including conditional features and roles. [B, S, 11]
-        :param cond: Tensor with correct hold roles, used as a conditional feature tensor. [B, S, 5]
+        :param climbs: Tensor with hold-set features, including conditional features and hold roles. [B, S, H]
         :param cond: Tensor with climb conditional variables. [B, 4]
         :param t: Tensor with timestep of diffusion. [B, 1]
         :returns: Tensor, the predicted noise added after timestep t.
         """
         (B, S, H) = climbs.shape
         emb_t = self.time_mlp(t)
-
-        if roles is None:
-            roles = self.null_roles.repeat(B, 1, 1)
-        h = torch.cat([climbs, roles], dim=2)
         
         if cond is not None: 
             emb_c = self.cond_mlp(cond)
         else:
             emb_c = self.null_cond_emb.repeat(B, 1)
         emb_c = self.combine_t_mlp(torch.cat([emb_t, emb_c], dim=1))
-        emb_h = self.init_conv(h.transpose(1,2), emb_c)
+        emb_h = self.init_conv(climbs.transpose(1,2), emb_c)
         
-        residuals = []
+        skip_conns = []
         for layer in self.down_blocks:
-            residuals.append(emb_h)
+            skip_conns.append(emb_h)
             emb_h = layer(emb_h, emb_c)
         
         emb_h = self.bottom_block(emb_h, emb_c)
         
         for layer in self.up_blocks:
-            residual = residuals.pop()
-            emb_h = layer(torch.cat([emb_h, residual], dim=1), emb_c)
+            skip_conn = skip_conns.pop()
+            emb_h = layer(torch.cat([emb_h, skip_conn], dim=1), emb_c)
         
-        residual = residuals.pop()
-        emb_h = self.top_block(torch.cat([emb_h, residual], dim=1), emb_c)
+        skip_conn = skip_conns.pop()
+        emb_h = self.top_block(torch.cat([emb_h, skip_conn], dim=1), emb_c)
         result = self.head(emb_h).transpose(1,2)
 
         return result
@@ -161,38 +155,60 @@ class ClimbDDPM(nn.Module):
         epsilon = 0.0004
         return  torch.cos((t+epsilon)/(1+2*epsilon)*torch.pi/2)**2
     
-    def loss(self, sample_climbs: Tensor, roles: Tensor | None, cond: Tensor | None):
+    def _composite_alpha_bar(self, t: Tensor, n_features: int) -> Tensor:
+        """Get a composite alpha schedule which preserves the last feature column (the "is_null" flag) until t=0.8.
+        This allows the Climb DDPM Generator to perform projection on only non-null holds, beginning at t=0.8"""
+        
+        a_features = self._cos_alpha_bar(t)
+        a_null = self._cos_alpha_bar(torch.clamp((t-0.8) / 0.2, 0.0, 1.0))
+
+        a_full = a_features.expand(-1, -1, n_features-1)
+        
+        return torch.cat([a_full,a_null],dim=2)
+    
+    def loss(self, sample_climbs: Tensor, cond: Tensor | None):
         """Perform a diffusion Training step and return the loss resulting from the model in the training run.
         Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
         B, S, H = sample_climbs.shape
+        
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
         noise = torch.randn((B, S, H), device = self.device)
+        
         noisy = self.forward_diffusion(sample_climbs, t, noise)
-        pred_noise = self.model(noisy, roles, cond, t)
-        return F.mse_loss(pred_noise, noise)
+        pred_noise = self.model(noisy, cond, t)
+
+        # Mask loss for is_null noise predictions at t < 0.8 (as we have already completely denoised is_null tokens at this point, so the model can't 'see' noise any more)
+        null_loss_mask = (t > 0.8).float()
+        
+        loss = F.mse_loss(pred_noise, noise, reduction = 'none')
+        loss[:,:,-1] *= null_loss_mask
+        
+        return loss.mean()
     
-    def predict_clean(self, noisy, roles, cond, t):
+    def predict_clean(self, noisy, cond, t):
         """Return predicted clean data."""
         a = self._cos_alpha_bar(t)
-        prediction = self.model(noisy, roles, cond, t)
+        prediction = self.model(noisy, cond, t)
         clean = (noisy - torch.sqrt(1-a)*prediction)/torch.sqrt(a)
         return clean
     
-    def predict_cfg(self, noisy, roles, cond, t, guidance_value=1.0):
+    def predict_cfg(self, noisy, cond, t, guidance_value=1.0):
         a = self._cos_alpha_bar(t)
-        cf_pred = self.model(noisy, None, None, t)
-        pred = self.model(noisy, roles, cond, t)
+        cf_pred = self.model(noisy, None, t)
+        pred = self.model(noisy, cond, t)
         cfg = cf_pred+(pred-cf_pred)*guidance_value
         clean = (noisy - torch.sqrt(1-a)*cfg)/torch.sqrt(a)
         return clean
     
     def forward_diffusion(self, clean: Tensor, t: Tensor, noise: Tensor)-> Tensor:
         """Perform forward diffusion to add noise to clean data based on noise adding schedule."""
-        a = self._cos_alpha_bar(t)
+        (B, S, H) = clean.shape
+
+        a = self._composite_alpha_bar(t, H)
         return torch.sqrt(a) * clean + torch.sqrt(1-a) * noise
     
-    def forward(self, noisy, roles, cond, t):
-        return self.predict_clean(noisy, roles, cond, t)
+    def forward(self, noisy, cond, t):
+        return self.predict_clean(noisy, cond, t)
 
 #-----------------------------------------------------------------------
 # TRAINING
@@ -221,7 +237,6 @@ class DDPMTrainer():
         dataset: TensorDataset | None = None,
         save_on_best: bool = False,
         clip_grad_norm: bool = True,
-        dropout: tuple[float,float] = (0.25, 0.25)
     )-> tuple[nn.Module, list]:
         """
         Train a model (probably of type ClimbDDPM) on the dataset contained in the trainer. (If dataset is provided, train on that dataset instead)
@@ -238,8 +253,8 @@ class DDPMTrainer():
         :type dataset: TensorDataset | None
         :param save_on_best: boolean indicating whether to save model weights every time a minimum loss is reached.
         :type save_on_best: bool
-        :param save_on_best: Tuple of dropout probabilities for Roles and Climbs conditional feature vectors, respectively.
-        :type save_on_best: bool
+        :param dropout: Dropout probability for conditional features vector
+        :type dropout: float
         :return: Tuple of (best_model: nn.Module, training_data: np.array)
         :rtype: tuple[Module, Any]
         """
@@ -260,15 +275,11 @@ class DDPMTrainer():
             pbar.set_postfix_str(f"Epoch: {0}, Batches:{len(batches)}")
             for epoch in pbar:
                 total_loss = 0
-                for x, r, c in batches:
-                    x, r, c = x.to(self.device), r.to(self.device), c.to(self.device)
-                    if np.random.rand(1).item() < dropout[0]:
-                        r = None
-                    if np.random.rand(1).item() < dropout[1]:
-                        c = None
-                    
+                for x, c in batches:
+                    x, c = x.to(self.device), c.to(self.device)
+
                     self.optimizer.zero_grad()
-                    loss = self.model.loss(x, r, c)
+                    loss = self.model.loss(x, c) + self.model.loss(x, None)
                     if clip_grad_norm:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                     
@@ -281,7 +292,7 @@ class DDPMTrainer():
                 pbar.set_postfix_str(f"Epoch: {epoch}, Batch Loss: {total_loss:.2f}, Improvement: {improvement:.2f}, Min Loss: {min(losses) if len(losses) > 0 else 0}, Batches:{len(batches)}")
                 losses.append(total_loss)
 
-                if save_on_best and total_loss > min(losses) and len(losses) % 2 == 0:
+                if save_on_best and total_loss < min(losses) and len(losses) % 2 == 0:
                     torch.save(self.model.state_dict(), save_path)
             self.scheduler.step()
         if save_path is not None:

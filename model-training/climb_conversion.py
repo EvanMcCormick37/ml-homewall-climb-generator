@@ -11,10 +11,10 @@ import joblib
 from diffusion_utils import SCALER_WEIGHTS_PATH, DB_PATH
 
 # --- Constants ---
-STYLE_TAGS = ["sloper", "pinch", "macro", "flat", "jug"]
+STYLE_TAGS = ["pinch","flat"]
 SCALED_FEATURES = ['x', 'y', 'pull_x', 'pull_y']
-BINARY_FEATURES = ['is_foot'] + STYLE_TAGS  # 6 binary features → mapped to [-1, 1]
-HOLD_FEATURE_COLS = SCALED_FEATURES + ['useability'] + BINARY_FEATURES
+BINARY_FEATURES = ['is_foot'] + STYLE_TAGS
+HOLD_FEATURE_COLS = SCALED_FEATURES + BINARY_FEATURES
 NUM_HOLD_FEATURES = len(HOLD_FEATURE_COLS)
 NUM_ROLES = 5
 COND_FEATURES = ['grade', 'quality', 'ascents', 'angle']
@@ -86,21 +86,21 @@ class ClimbsFeatureArray:
         return arr
 
     def _hold_features(self, h_data):
-        """Extract the full 11-dim hold feature vector (2D).
-        Order: [x, y, pull_x, pull_y, useability, is_foot, sloper, pinch, macro, flat, jug, foothold]
+        """Extract the full 7-dim hold feature vector (2D).
+        Order: [x, y, pull_x, pull_y, is_foot, pinch, flat]
         """
         return [h_data[col] for col in HOLD_FEATURE_COLS]
 
     def _hold_features_3d(self, h_data, angle):
         """Extract hold features with 3D angle projection on y/pull_y.
         Spatial dims become: [x, y_proj, z_proj, pull_x, pull_y_proj, pull_z_proj]
-        followed by [useability, is_foot, ...style_tags].
+        followed by [is_foot, ...style_tags].
         Returns a 14-dim vector (6 spatial + 8 non-spatial).
         """
         y_proj, z_proj = self.apply_wall_angle(h_data['y'], angle)
         py_proj, pz_proj = self.apply_wall_angle(h_data['pull_y'], angle)
         spatial = [h_data['x'], y_proj, z_proj, h_data['pull_x'], py_proj, pz_proj]
-        non_spatial = [h_data[col] for col in HOLD_FEATURE_COLS[4:]]  # useability + binary features
+        non_spatial = [h_data[col] for col in HOLD_FEATURE_COLS[4:]]  # binary features
         return spatial + non_spatial
 
     # --- Core Extraction Logic ---
@@ -199,7 +199,7 @@ class ClimbsFeatureArray:
 
         return x_out, roles_out, cond_out
 
-    def _augment_and_tensorize(self, x_list, roles_list, cond_list, augment=True, dim=2) -> TensorDataset:
+    def _augment_and_tensorize(self, x_list, roles_list, cond_list, augment=True, dim=2, combine_roles=True) -> TensorDataset:
         """
         Reflection augmentation (flip x and pull_x) and conversion to numpy arrays.
         """
@@ -220,8 +220,11 @@ class ClimbsFeatureArray:
         r = torch.from_numpy(r_arr)
         c = torch.from_numpy(c_arr)
 
+        if combine_roles:
+            x_r = torch.cat([x, r],dim=2)
+            return TensorDataset(x_r, c)
         return TensorDataset(x, r, c)
-    def get_features(self, dim=2, limit: int | None = None, augment_reflections=True, _zero_com = True):
+    def get_features(self, dim=2, limit: int | None = None, augment_reflections=True, _zero_com = True, combine_roles = True):
         """
         Build the training dataset.
 
@@ -234,7 +237,7 @@ class ClimbsFeatureArray:
         x, r, c = self._extract_sequences(dim, limit)
         
         # 2. Augment, Tensorize and combine into TensorDataset.
-        return self._augment_and_tensorize(x, r, c, augment=augment_reflections, dim=dim)
+        return self._augment_and_tensorize(x, r, c, augment=augment_reflections, dim=dim, combine_roles=combine_roles)
 
 
 class ClimbsFeatureScaler:
@@ -264,9 +267,8 @@ class ClimbsFeatureScaler:
         
         Climbs: log-transform quality/ascents, then MinMaxScale [grade, quality, ascents, angle] to [-1,1].
         Holds:  MinMaxScale [x, y, pull_x, pull_y] to [-1,1].
-                Keep useability raw.
-                Parse style tags from JSON → binary columns → mapped to [-1, 1].
-                Map is_foot from {0,1} → {-1, 1}.
+                Multiply Pull_y and Pull_x by useability.
+                Parse style tags from JSON → binary columns.
         """
         # --- Climbs ---
         scaled_climbs = climbs_to_fit.copy()
@@ -307,13 +309,14 @@ class ClimbsFeatureScaler:
             dfh[tag] = dfh['tags'].apply(
                 lambda t: 1.0 if isinstance(t, str) and tag in json.loads(t) else 0.0
             )
+
+        dfh['pull_x'] *= dfh['useability']
+        dfh['pull_y'] *= dfh['useability']
         
-        # Map all binary features from {0, 1} → {-1, 1}
         for col in BINARY_FEATURES:
-            dfh[col] = dfh[col].astype(float) * 2 - 1
+            dfh[col] = dfh[col].astype(float)
         
-        # Drop the raw tags JSON column (no longer needed)
-        dfh = dfh.drop(columns=['tags'])
+        dfh = dfh.drop(columns=['useability','tags'])
         
         return dfh
     
