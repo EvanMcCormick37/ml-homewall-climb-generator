@@ -50,7 +50,7 @@ class ResidualBlock1D(nn.Module):
 
 class Noiser(nn.Module):
     """Noiser class with concatenation U-Net architecture, learnable null embeddings, and zero-COM input projection."""
-    def __init__(self, hidden_dim=128, layers = 3, in_feature_dim = 12, out_feature_dim = 12, cond_dim = 4, sinusoidal = True):
+    def __init__(self, hidden_dim=256, layers = 3, in_feature_dim = 12, out_feature_dim = 12, cond_dim = 4, sinusoidal = True):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
