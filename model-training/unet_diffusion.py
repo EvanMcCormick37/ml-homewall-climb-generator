@@ -266,7 +266,7 @@ class DDPMTrainer():
                     x, c = x.to(self.device), c.to(self.device)
 
                     self.optimizer.zero_grad()
-                    loss = self.model.loss(x, c) + self.model.loss(x, None)
+                    loss = self.model.loss(x, c) + self.model.loss(x, None) * 0.25
                     if clip_grad_norm:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                     
