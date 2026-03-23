@@ -11,7 +11,7 @@ import joblib
 from diffusion_utils import SCALER_WEIGHTS_PATH, DB_PATH
 
 # --- Constants ---
-STYLE_TAGS = ["pinch","flat"]
+STYLE_TAGS = ["pinch", "flat"]
 SCALED_FEATURES = ['x', 'y', 'pull_x', 'pull_y']
 BINARY_FEATURES = ['is_foot'] + STYLE_TAGS
 HOLD_FEATURE_COLS = SCALED_FEATURES + BINARY_FEATURES

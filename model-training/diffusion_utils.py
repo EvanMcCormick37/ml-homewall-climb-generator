@@ -11,9 +11,8 @@ import numpy as np
 # CONSTANTS
 #-----------------------------------------------------------------------
 DB_PATH = "data/storage.db"
-SCALER_WEIGHTS_PATH = 'data/weights/climbs-feature-scaler.joblib'
-DDPM_WEIGHTS_PATH = 'data/weights/simple-diffusion-large.pth'
-HC_WEIGHTS_PATH = 'data/weights/lstm-hold-classifier.pth'
+SCALER_WEIGHTS_PATH = 'data/weights/scaler-weights.joblib'
+DDPM_WEIGHTS_PATH = 'data/weights/ddpm-weights.pth'
 
 GRADE_TO_DIFF = {
     "font": {
