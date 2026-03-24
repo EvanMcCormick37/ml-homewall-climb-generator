@@ -163,23 +163,6 @@ class ClimbDDPM(nn.Module):
         pred_noise = self.model(noisy, cond, t)
         
         return F.mse_loss(pred_noise, noise)
-    
-    def test_clean_preds(self, sample_climbs: Tensor, cond: Tensor | None):
-        """Perform a diffusion Training step and return the loss resulting from the model in the training run.
-        Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
-        B, S, H = sample_climbs.shape
-        
-        t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
-        noise = torch.randn((B, S, H), device = self.device)
-
-        # Don't add noise to the is_null flag when t <= 0.8, as the a value for is_null is 0 (this guarantees that the true value of is_null is known by t=0.8)
-        null_mask = (t > 0.8).float()
-
-        noise[:,:,-1] *= null_mask
-        # print(torch.round(noise,decimals=2))
-        noisy = self.forward_diffusion(sample_climbs, t, noise)
-        
-        return self.predict_clean(noisy, cond, t)
         
     def predict_clean(self, noisy, cond, t, epsilon=.0004):
         """Return predicted clean data."""
