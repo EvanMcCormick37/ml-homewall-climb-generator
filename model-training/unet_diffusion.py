@@ -80,13 +80,9 @@ class Noiser(nn.Module):
         self.init_conv = ResidualBlock1D(in_feature_dim, hidden_dim, hidden_dim)
 
         self.down_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i+2), hidden_dim) for i in range(layers)])
-        # No concatenation of inputs for bottom block
-        self.bottom_block = ResidualBlock1D(hidden_dim*(layers+1), hidden_dim*(layers), hidden_dim)
-        # Concatenate inputs for up blocks
-        self.up_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i)*2, hidden_dim*(i-1), hidden_dim) for i in range(layers,1,-1)])
 
-        self.top_block = ResidualBlock1D(hidden_dim*2,hidden_dim, hidden_dim)
-
+        # Residuals for up blocks
+        self.up_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i), hidden_dim) for i in range(layers,0,-1)])
         self.head = nn.Conv1d(hidden_dim, out_feature_dim, 1)
     
     def forward(self, climbs: Tensor, cond: Tensor | None, t: Tensor)-> Tensor:
@@ -105,6 +101,7 @@ class Noiser(nn.Module):
             emb_c = self.cond_mlp(cond)
         else:
             emb_c = self.null_cond_emb.repeat(B, 1)
+        
         emb_c = self.combine_t_mlp(torch.cat([emb_t, emb_c], dim=1))
         emb_h = self.init_conv(climbs.transpose(1,2), emb_c)
         
@@ -112,15 +109,11 @@ class Noiser(nn.Module):
         for layer in self.down_blocks:
             skip_conns.append(emb_h)
             emb_h = layer(emb_h, emb_c)
-        
-        emb_h = self.bottom_block(emb_h, emb_c)
-        
+                
         for layer in self.up_blocks:
             skip_conn = skip_conns.pop()
-            emb_h = layer(torch.cat([emb_h, skip_conn], dim=1), emb_c)
+            emb_h = skip_conn + layer(emb_h, emb_c)
         
-        skip_conn = skip_conns.pop()
-        emb_h = self.top_block(torch.cat([emb_h, skip_conn], dim=1), emb_c)
         result = self.head(emb_h).transpose(1,2)
 
         return result
@@ -160,23 +153,39 @@ class ClimbDDPM(nn.Module):
         
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
         noise = torch.randn((B, S, H), device = self.device)
-        
-        noisy = self.forward_diffusion(sample_climbs, t, noise)
-        pred_noise = self.model(noisy, cond, t)
 
-        # Predict no noise for is_null noise predictions at t < 0.8 (as we have already completely denoised is_null tokens at this point, so the model can't 'see' noise any more)
+        # Don't add noise to the is_null flag when t <= 0.8, as the a value for is_null is 0 (this guarantees that the true value of is_null is known by t=0.8)
         null_mask = (t > 0.8).float()
 
         noise[:,:,-1] *= null_mask
+        # print(torch.round(noise,decimals=2))
+        noisy = self.forward_diffusion(sample_climbs, t, noise)
+        pred_noise = self.model(noisy, cond, t)
         
-        loss = F.mse_loss(pred_noise, noise)
-        
-        return loss.mean()
+        return F.mse_loss(pred_noise, noise)
     
+    def test_clean_preds(self, sample_climbs: Tensor, cond: Tensor | None):
+        """Perform a diffusion Training step and return the loss resulting from the model in the training run.
+        Currently returns tuple (loss, real_hold_loss, null_hold_loss)"""
+        B, S, H = sample_climbs.shape
+        
+        t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
+        noise = torch.randn((B, S, H), device = self.device)
+
+        # Don't add noise to the is_null flag when t <= 0.8, as the a value for is_null is 0 (this guarantees that the true value of is_null is known by t=0.8)
+        null_mask = (t > 0.8).float()
+
+        noise[:,:,-1] *= null_mask
+        # print(torch.round(noise,decimals=2))
+        noisy = self.forward_diffusion(sample_climbs, t, noise)
+        
+        return self.predict_clean(noisy, cond, t)
+        
     def predict_clean(self, noisy, cond, t, epsilon=.0004):
         """Return predicted clean data."""
         (B, S, H) = noisy.shape
         a = self._composite_alpha_bar(t, H)
+        # print(torch.round(a,decimals=2))
         prediction = self.model(noisy, cond, t)
         clean = (noisy - torch.sqrt(1-a)*prediction)/(torch.sqrt(a)+epsilon)
         return clean
@@ -195,6 +204,7 @@ class ClimbDDPM(nn.Module):
         (B, S, H) = clean.shape
 
         a = self._composite_alpha_bar(t, H)
+        # print(torch.round(a,decimals=2))
         return torch.sqrt(a) * clean + torch.sqrt(1-a) * noise
     
     def forward(self, noisy, cond, t):
@@ -292,37 +302,25 @@ class DDPMTrainer():
 # ---------------------------------------------------------------------------
 FEATURE_WEIGHTS = [1.0,1.0,1.0,1.0,0.5,0.5,0.5]
 
-class ClimbDDPMGenerator():
-    def __init__(
-            self,
-            scaler: ClimbsFeatureScaler,
-            ddpm: ClimbDDPM,
-            feature_weights =  torch.tensor(FEATURE_WEIGHTS)
-        ):
+class ProjectedDiffusionGenerator():
+    """Class for handling climb projection logic. Simplifies ClimbDDPMGenerator logic by extracting Projected diffusion state+functions."""
+    def __init__(self, scaler: ClimbsFeatureScaler, feature_weights = torch.tensor(FEATURE_WEIGHTS)):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.scaler = scaler
-        self.ddpm = ddpm
-        self._cond_cache = {}
         self.holds_manifolds = {}
         self.holds_lookup = {}
-        self.deterministic_noise_generator = torch.Generator(device=self.device)
         self.feature_weights = feature_weights
-        print(self.feature_weights.shape)
-
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, layout_id FROM holds", conn)
-                layout_ids = list(set(holds['layout_id'].values))
-            
-            scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
-            
-            for layout_id in layout_ids:
-                df = scaled_holds[scaled_holds['layout_id']==layout_id]
-                self.holds_manifolds[layout_id] = torch.tensor(df[['x','y','pull_x','pull_y']].values, dtype=torch.float32)
-                self.holds_lookup[layout_id] = df['hold_index'].values
-                self.holds_lookup[layout_id] = self.holds_lookup[layout_id]
-        except Exception as e:
-            pass
+        with sqlite3.connect(DB_PATH) as conn:
+            holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, layout_id FROM holds", conn)
+            layout_ids = list(set(holds['layout_id'].values))
+        
+        scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
+        
+        for layout_id in layout_ids:
+            df = scaled_holds[scaled_holds['layout_id']==layout_id]
+            self.holds_manifolds[layout_id] = torch.tensor(df[['x','y','pull_x','pull_y']].values, dtype=torch.float32)
+            self.holds_lookup[layout_id] = df['hold_index'].values
+            self.holds_lookup[layout_id] = self.holds_lookup[layout_id]
     
     def log_hold_means(self, layout_id: str | None = None):
         """Log the hold means for each wall."""
@@ -330,19 +328,6 @@ class ClimbDDPMGenerator():
             if layout_id == None or layout_id == k:
                 means = torch.mean(manifold, dim=0)
                 print(f"Wall-id--{k}; Means-- x:{means[0].item()}, y:{means[1].item()}, Px:{means[2].item()}, Py:{means[3].item()} ")
-
-    def _build_cond_tensor(self, n, grade, diff_scale, angle):
-        cache_key = (grade, diff_scale, angle)
-        if cache_key not in self._cond_cache:
-            diff = GRADE_TO_DIFF[diff_scale][grade]
-            row = np.array([[diff, 3.0, 1000, float(angle)]])
-            row[:, 1] = np.log(1 - (row[:, 1] - 3))     # quality
-            row[:, 2] = np.log(row[:, 2])               # ascents
-            scaled = self.scaler.cond_features_scaler.transform(row)
-            self._cond_cache[cache_key] = scaled[0]
-        base = self._cond_cache[cache_key]
-        tiled = np.tile(base, (n,1))
-        return torch.tensor(tiled, device=self.device, dtype=torch.float32)
     
     def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
         """
@@ -489,6 +474,33 @@ class ClimbDDPMGenerator():
         a = (t_start_projection-t)/t_start_projection
         strength = 1 - torch.cos(a*torch.pi/2)
         return torch.where(t > t_start_projection, torch.zeros_like(t), strength).unsqueeze(2)
+
+class ClimbDDPMGenerator():
+    """"""
+    def __init__(
+            self,
+            scaler: ClimbsFeatureScaler,
+            ddpm: ClimbDDPM,
+        ):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.scaler = scaler
+        self.projector = ProjectedDiffusionGenerator(scaler)
+        self.ddpm = ddpm
+        self._cond_cache = {}
+        self.deterministic_noise_generator = torch.Generator(device=self.device)
+    
+    def _build_cond_tensor(self, n, grade, diff_scale, angle):
+        cache_key = (grade, diff_scale, angle)
+        if cache_key not in self._cond_cache:
+            diff = GRADE_TO_DIFF[diff_scale][grade]
+            row = np.array([[diff, 3.0, 1000, float(angle)]])
+            row[:, 1] = np.log(1 - (row[:, 1] - 3))     # quality
+            row[:, 2] = np.log(row[:, 2])               # ascents
+            scaled = self.scaler.cond_features_scaler.transform(row)
+            self._cond_cache[cache_key] = scaled[0]
+        base = self._cond_cache[cache_key]
+        tiled = np.tile(base, (n,1))
+        return torch.tensor(tiled, device=self.device, dtype=torch.float32)
     
     @torch.no_grad()
     def generate(
@@ -534,11 +546,11 @@ class ClimbDDPMGenerator():
         
         # Handle manifold offset
         auto = True if x_offset is None else False
-        offset_manifold = self._get_offset_manifold(layout_id, x_offset)
+        offset_manifold = self.projector._get_offset_manifold(layout_id, x_offset)
 
         # CORE LOGIC
         cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
-        x_t = torch.randn((n, 20, 4), device=self.device, generator=self.deterministic_noise_generator) if deterministic else torch.randn((n, 20, 4), device=self.device)
+        x_t = torch.randn((n, 20, 11), device=self.device, generator=self.deterministic_noise_generator) if deterministic else torch.randn((n, 20, 11), device=self.device)
         noisy = x_t.clone()
         t_tensor = torch.ones((n,1), device=self.device)
         
@@ -546,13 +558,13 @@ class ClimbDDPMGenerator():
             gen_climbs = self.ddpm(noisy, cond_t, t_tensor)
 
             if t_tensor[0].item() < t_start_projection: # This block might be problematic. If not projecting, don't enter it at all.
-                alpha_p = self._projection_strength(t_tensor, t_start_projection)
-                projected_climbs = self._project_onto_manifold(gen_climbs, offset_manifold)
+                alpha_p = self.projector._projection_strength(t_tensor, t_start_projection)
+                projected_climbs = self.projector._project_onto_manifold(gen_climbs, offset_manifold)
                 gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
             
             t_tensor -= 1.0/timesteps
             noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
         
         if auto:
-            return self._project_onto_indices_with_translation(gen_climbs, offset_manifold, layout_id)
-        return self._project_onto_indices(gen_climbs, offset_manifold, layout_id)
+            return self.projector._project_onto_indices_with_translation(gen_climbs, offset_manifold, layout_id)
+        return self.projector._project_onto_indices(gen_climbs, offset_manifold, layout_id)
