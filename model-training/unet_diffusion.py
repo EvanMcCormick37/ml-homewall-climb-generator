@@ -164,27 +164,30 @@ class ClimbDDPM(nn.Module):
         noisy = self.forward_diffusion(sample_climbs, t, noise)
         pred_noise = self.model(noisy, cond, t)
 
-        # Mask loss for is_null noise predictions at t < 0.8 (as we have already completely denoised is_null tokens at this point, so the model can't 'see' noise any more)
-        null_loss_mask = (t > 0.8).float()
+        # Predict no noise for is_null noise predictions at t < 0.8 (as we have already completely denoised is_null tokens at this point, so the model can't 'see' noise any more)
+        null_mask = (t > 0.8).float()
+
+        noise[:,:,-1] *= null_mask
         
-        loss = F.mse_loss(pred_noise, noise, reduction = 'none')
-        loss[:,:,-1] *= null_loss_mask
+        loss = F.mse_loss(pred_noise, noise)
         
         return loss.mean()
     
-    def predict_clean(self, noisy, cond, t):
+    def predict_clean(self, noisy, cond, t, epsilon=.0004):
         """Return predicted clean data."""
-        a = self._cos_alpha_bar(t)
+        (B, S, H) = noisy.shape
+        a = self._composite_alpha_bar(t, H)
         prediction = self.model(noisy, cond, t)
-        clean = (noisy - torch.sqrt(1-a)*prediction)/torch.sqrt(a)
+        clean = (noisy - torch.sqrt(1-a)*prediction)/(torch.sqrt(a)+epsilon)
         return clean
     
-    def predict_cfg(self, noisy, cond, t, guidance_value=1.0):
-        a = self._cos_alpha_bar(t)
+    def predict_cfg(self, noisy, cond, t, guidance_value=1.0, epsilon=.0004):
+        (B, S, H) = noisy.shape
+        a = self._composite_alpha_bar(t, H)
         cf_pred = self.model(noisy, None, t)
         pred = self.model(noisy, cond, t)
         cfg = cf_pred+(pred-cf_pred)*guidance_value
-        clean = (noisy - torch.sqrt(1-a)*cfg)/torch.sqrt(a)
+        clean = (noisy - torch.sqrt(1-a)*cfg)/(torch.sqrt(a)+epsilon)
         return clean
     
     def forward_diffusion(self, clean: Tensor, t: Tensor, noise: Tensor)-> Tensor:
@@ -240,8 +243,6 @@ class DDPMTrainer():
         :type dataset: TensorDataset | None
         :param save_on_best: boolean indicating whether to save model weights every time a minimum loss is reached.
         :type save_on_best: bool
-        :param dropout: Dropout probability for conditional features vector
-        :type dropout: float
         :return: Tuple of (best_model: nn.Module, training_data: np.array)
         :rtype: tuple[Module, Any]
         """

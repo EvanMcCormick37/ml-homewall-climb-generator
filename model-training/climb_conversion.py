@@ -244,21 +244,21 @@ class ClimbsFeatureScaler:
     def __init__(self, weights_path: str | None = None):
         self.set_weights = False
         self.cond_features_scaler = MinMaxScaler(feature_range=(-1, 1))
-        self.hold_position_scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.hold_scaler = MinMaxScaler(feature_range=(-1, 1))
         if weights_path and os.path.exists(weights_path):
             self.load_weights(weights_path)
 
     def save_weights(self, path: str):
         state = {
             'cond_scaler': self.cond_features_scaler,
-            'hold_position_scaler': self.hold_position_scaler,
+            'hold_scaler': self.hold_scaler,
         }
         joblib.dump(state, path)
     
     def load_weights(self, path: str):
         state = joblib.load(path)
         self.cond_features_scaler = state['cond_scaler']
-        self.hold_position_scaler = state['hold_position_scaler']
+        self.hold_scaler = state['hold_scaler']
         self.set_weights = True
         
     def transform(self, climbs_to_fit: pd.DataFrame, holds_to_fit: pd.DataFrame):
@@ -284,9 +284,9 @@ class ClimbsFeatureScaler:
         scaled_holds = self._apply_hold_transforms(scaled_holds)
         
         if self.set_weights:
-            scaled_holds[SCALED_FEATURES] = self.hold_position_scaler.transform(scaled_holds[SCALED_FEATURES])
+            scaled_holds[SCALED_FEATURES] = self.hold_scaler.transform(scaled_holds[SCALED_FEATURES])
         else:
-            scaled_holds[SCALED_FEATURES] = self.hold_position_scaler.fit_transform(scaled_holds[SCALED_FEATURES])
+            scaled_holds[SCALED_FEATURES] = self.hold_scaler.fit_transform(scaled_holds[SCALED_FEATURES])
             self.set_weights = True
         
         return scaled_climbs, scaled_holds
@@ -328,7 +328,7 @@ class ClimbsFeatureScaler:
             dfc[COND_FEATURES] = self.cond_features_scaler.transform(dfc[COND_FEATURES])
         else:
             dfc = self.cond_features_scaler.transform(dfc[COND_FEATURES])
-            dfc = dfc.T
+            dfc = dfc
         return dfc
     
     def transform_hold_features(self, holds_to_transform: pd.DataFrame, to_df: bool = False):
@@ -339,9 +339,9 @@ class ClimbsFeatureScaler:
         """
         dfh = holds_to_transform.copy()
         dfh = self._apply_hold_transforms(dfh)
-        dfh[SCALED_FEATURES] = self.hold_position_scaler.transform(dfh[SCALED_FEATURES])
+        dfh[SCALED_FEATURES] = self.hold_scaler.transform(dfh[SCALED_FEATURES])
         
         if to_df:
             return dfh
         else:
-            return dfh[HOLD_FEATURE_COLS].values.T
+            return dfh[HOLD_FEATURE_COLS].values
