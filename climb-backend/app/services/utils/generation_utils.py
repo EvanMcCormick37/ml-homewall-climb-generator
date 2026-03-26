@@ -389,7 +389,8 @@ GRADE_TO_DIFF = {
 # ---------------------------------------------------------------------------
 # ClimbDDPMGenerator
 # ---------------------------------------------------------------------------
-FEATURE_WEIGHTS = [1.0,1.0,1.0,1.0,1.0,0.1,0.1]
+FEATURE_WEIGHTS = [1.0,1.0,0.5,0.5,2.0,0.1,0.1]
+FOOT_FEATURE_WEIGHTS = [1.0, 1.0, 0.05, 0.05, 0.05, 0.05, 0.05]
 NUM_ROLES = 5
 NUM_FEATURES = 7
 
@@ -407,7 +408,8 @@ class ClimbDDPMGenerator():
         self.holds_manifolds = {}
         self.holds_lookup = {}
         self.deterministic_noise_generator = torch.Generator(device=self.device)
-        self.feature_weights = torch.tensor(FEATURE_WEIGHTS)
+        self.hand_feature_weights = torch.tensor(FEATURE_WEIGHTS)
+        self.foot_feature_weights = torch.tensor(FOOT_FEATURE_WEIGHTS)
 
         try:
             with sqlite3.connect(settings.DB_PATH) as conn:
@@ -477,20 +479,43 @@ class ClimbDDPMGenerator():
             
             Args:
                 gen_climbs: (B, S, H) predicted clean holds
-                return_indices: (boolean) Whether to return the hold indices or hold feature coordinates
+                offset_manifold: (M, NUM_FEATURES) manifold of available holds to snap to
             Returns:
                 projected: (B, S, H) each hold snapped to nearest manifold point
         """
         B, S, H = gen_climbs.shape
-        flat_climbs = gen_climbs.reshape(-1,H)
-        null_mask = (flat_climbs[:,-1] < 0.95)
-        dists = torch.cdist(
-            flat_climbs[:,:NUM_FEATURES]*self.feature_weights.unsqueeze(0),
-            offset_manifold*self.feature_weights.unsqueeze(0))
+        flat_climbs = gen_climbs.reshape(-1, H)
+        null_mask = (flat_climbs[:, -1] < 0.95)
+        
+        # Create a boolean mask instead of a float for easier tensor splitting
+        is_hand_mask = (flat_climbs[:, -2] < 0.85)
+        is_foot_mask = ~is_hand_mask
+        
+        # Extract features to compare
+        features = flat_climbs[:, :NUM_FEATURES]
+        
+        # Initialize an empty tensor to store the argmin indices
+        idx = torch.empty(flat_climbs.shape[0], dtype=torch.long, device=flat_climbs.device)
+        
+        # --- 1. Project Handholds ---
+        if is_hand_mask.any():
+            hand_dists = torch.cdist(
+                features[is_hand_mask] * self.hand_feature_weights.unsqueeze(0),
+                offset_manifold * self.hand_feature_weights.unsqueeze(0)
+            )
+            idx[is_hand_mask] = hand_dists.argmin(dim=1)
+            
+        # --- 2. Project Footholds ---
+        if is_foot_mask.any():
+            foot_dists = torch.cdist(
+                features[is_foot_mask] * self.foot_feature_weights.unsqueeze(0),
+                offset_manifold * self.foot_feature_weights.unsqueeze(0)
+            )
+            idx[is_foot_mask] = foot_dists.argmin(dim=1)
 
-        idx = dists.argmin(dim=1)
         projected_features = offset_manifold[idx] * null_mask.unsqueeze(1)
-        return torch.cat([projected_features.reshape(B, S, -1), gen_climbs[:,:,NUM_FEATURES:]],dim=2)
+        
+        return torch.cat([projected_features.reshape(B, S, -1), gen_climbs[:, :, NUM_FEATURES:]], dim=2)
     
     def _project_onto_indices(self, gen_climbs: Tensor, offset_manifold: Tensor, layout_id: str) -> list[list[list[int]]]:
         """Project climb onto the final hold indices and assign integer role values (and remove null holds and duplicate holds)"""
