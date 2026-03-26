@@ -47,7 +47,6 @@ class SinusoidalPositionEmbeddings(nn.Module):
         embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
         return embeddings
 
-
 class ResidualBlock1D(nn.Module):
     def __init__(self, in_channels, out_channels, cond_dim, padding=1):
         super().__init__()
@@ -107,13 +106,9 @@ class Noiser(nn.Module):
         self.init_conv = ResidualBlock1D(in_feature_dim, hidden_dim, hidden_dim)
 
         self.down_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i+2), hidden_dim) for i in range(layers)])
-        # No concatenation of inputs for bottom block
-        self.bottom_block = ResidualBlock1D(hidden_dim*(layers+1), hidden_dim*(layers), hidden_dim)
-        # Concatenate inputs for up blocks
-        self.up_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i)*2, hidden_dim*(i-1), hidden_dim) for i in range(layers,1,-1)])
 
-        self.top_block = ResidualBlock1D(hidden_dim*2,hidden_dim, hidden_dim)
-
+        # Residuals for up blocks
+        self.up_blocks = nn.ModuleList([ResidualBlock1D(hidden_dim*(i+1), hidden_dim*(i), hidden_dim) for i in range(layers,0,-1)])
         self.head = nn.Conv1d(hidden_dim, out_feature_dim, 1)
     
     def forward(self, climbs: Tensor, cond: Tensor | None, t: Tensor)-> Tensor:
@@ -132,6 +127,7 @@ class Noiser(nn.Module):
             emb_c = self.cond_mlp(cond)
         else:
             emb_c = self.null_cond_emb.repeat(B, 1)
+        
         emb_c = self.combine_t_mlp(torch.cat([emb_t, emb_c], dim=1))
         emb_h = self.init_conv(climbs.transpose(1,2), emb_c)
         
@@ -139,19 +135,14 @@ class Noiser(nn.Module):
         for layer in self.down_blocks:
             skip_conns.append(emb_h)
             emb_h = layer(emb_h, emb_c)
-        
-        emb_h = self.bottom_block(emb_h, emb_c)
-        
+                
         for layer in self.up_blocks:
             skip_conn = skip_conns.pop()
-            emb_h = layer(torch.cat([emb_h, skip_conn], dim=1), emb_c)
+            emb_h = skip_conn + layer(emb_h, emb_c)
         
-        skip_conn = skip_conns.pop()
-        emb_h = self.top_block(torch.cat([emb_h, skip_conn], dim=1), emb_c)
         result = self.head(emb_h).transpose(1,2)
 
         return result
-
 
 #-----------------------------------------------------------------------
 # DDPM MODEL
@@ -188,31 +179,33 @@ class ClimbDDPM(nn.Module):
         
         t = torch.round(torch.rand(B, 1, device=self.device), decimals=2)
         noise = torch.randn((B, S, H), device = self.device)
-        
+
+        # Don't add noise to the is_null flag when t <= 0.8, as the a value for is_null is 0 (this guarantees that the true value of is_null is known by t=0.8)
+        null_mask = (t > 0.8).float()
+
+        noise[:,:,-1] *= null_mask
+        # print(torch.round(noise,decimals=2))
         noisy = self.forward_diffusion(sample_climbs, t, noise)
         pred_noise = self.model(noisy, cond, t)
-
-        # Mask loss for is_null noise predictions at t < 0.8 (as we have already completely denoised is_null tokens at this point, so the model can't 'see' noise any more)
-        null_loss_mask = (t > 0.8).float()
         
-        loss = F.mse_loss(pred_noise, noise, reduction = 'none')
-        loss[:,:,-1] *= null_loss_mask
+        return F.mse_loss(pred_noise, noise)
         
-        return loss.mean()
-    
-    def predict_clean(self, noisy, cond, t):
+    def predict_clean(self, noisy, cond, t, epsilon=.0004):
         """Return predicted clean data."""
-        a = self._cos_alpha_bar(t)
+        (B, S, H) = noisy.shape
+        a = self._composite_alpha_bar(t, H)
+        # print(torch.round(a,decimals=2))
         prediction = self.model(noisy, cond, t)
-        clean = (noisy - torch.sqrt(1-a)*prediction)/torch.sqrt(a)
+        clean = (noisy - torch.sqrt(1-a)*prediction)/(torch.sqrt(a)+epsilon)
         return clean
     
-    def predict_cfg(self, noisy, cond, t, guidance_value=1.0):
-        a = self._cos_alpha_bar(t)
+    def predict_cfg(self, noisy, cond, t, guidance_value=1.0, epsilon=.0004):
+        (B, S, H) = noisy.shape
+        a = self._composite_alpha_bar(t, H)
         cf_pred = self.model(noisy, None, t)
         pred = self.model(noisy, cond, t)
         cfg = cf_pred+(pred-cf_pred)*guidance_value
-        clean = (noisy - torch.sqrt(1-a)*cfg)/torch.sqrt(a)
+        clean = (noisy - torch.sqrt(1-a)*cfg)/(torch.sqrt(a)+epsilon)
         return clean
     
     def forward_diffusion(self, clean: Tensor, t: Tensor, noise: Tensor)-> Tensor:
@@ -220,6 +213,7 @@ class ClimbDDPM(nn.Module):
         (B, S, H) = clean.shape
 
         a = self._composite_alpha_bar(t, H)
+        # print(torch.round(a,decimals=2))
         return torch.sqrt(a) * clean + torch.sqrt(1-a) * noise
     
     def forward(self, noisy, cond, t):
@@ -237,24 +231,24 @@ NUM_ROLES = 5
 COND_FEATURES = ['grade', 'quality', 'ascents', 'angle']
 
 class ClimbsFeatureScaler:
-    def __init__(self, weights_path: str | None = None):
+    def __init__(self, weights_path: str | Path | None = None):
         self.set_weights = False
         self.cond_features_scaler = MinMaxScaler(feature_range=(-1, 1))
-        self.hold_position_scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.hold_scaler = MinMaxScaler(feature_range=(-1, 1))
         if weights_path and os.path.exists(weights_path):
             self.load_weights(weights_path)
 
-    def save_weights(self, path: str):
+    def save_weights(self, path: str | Path):
         state = {
             'cond_scaler': self.cond_features_scaler,
-            'hold_position_scaler': self.hold_position_scaler,
+            'hold_scaler': self.hold_scaler,
         }
         joblib.dump(state, path)
     
-    def load_weights(self, path: str):
+    def load_weights(self, path: str | Path):
         state = joblib.load(path)
         self.cond_features_scaler = state['cond_scaler']
-        self.hold_position_scaler = state['hold_position_scaler']
+        self.hold_scaler = state['hold_scaler']
         self.set_weights = True
         
     def transform(self, climbs_to_fit: pd.DataFrame, holds_to_fit: pd.DataFrame):
@@ -280,9 +274,9 @@ class ClimbsFeatureScaler:
         scaled_holds = self._apply_hold_transforms(scaled_holds)
         
         if self.set_weights:
-            scaled_holds[SCALED_FEATURES] = self.hold_position_scaler.transform(scaled_holds[SCALED_FEATURES])
+            scaled_holds[SCALED_FEATURES] = self.hold_scaler.transform(scaled_holds[SCALED_FEATURES])
         else:
-            scaled_holds[SCALED_FEATURES] = self.hold_position_scaler.fit_transform(scaled_holds[SCALED_FEATURES])
+            scaled_holds[SCALED_FEATURES] = self.hold_scaler.fit_transform(scaled_holds[SCALED_FEATURES])
             self.set_weights = True
         
         return scaled_climbs, scaled_holds
@@ -324,7 +318,7 @@ class ClimbsFeatureScaler:
             dfc[COND_FEATURES] = self.cond_features_scaler.transform(dfc[COND_FEATURES])
         else:
             dfc = self.cond_features_scaler.transform(dfc[COND_FEATURES])
-            dfc = dfc.T
+            dfc = dfc
         return dfc
     
     def transform_hold_features(self, holds_to_transform: pd.DataFrame, to_df: bool = False):
@@ -335,12 +329,12 @@ class ClimbsFeatureScaler:
         """
         dfh = holds_to_transform.copy()
         dfh = self._apply_hold_transforms(dfh)
-        dfh[SCALED_FEATURES] = self.hold_position_scaler.transform(dfh[SCALED_FEATURES])
+        dfh[SCALED_FEATURES] = self.hold_scaler.transform(dfh[SCALED_FEATURES])
         
         if to_df:
             return dfh
         else:
-            return dfh[HOLD_FEATURE_COLS].values.T
+            return dfh[HOLD_FEATURE_COLS].values
 
 
 
@@ -395,7 +389,10 @@ GRADE_TO_DIFF = {
 # ---------------------------------------------------------------------------
 # ClimbDDPMGenerator
 # ---------------------------------------------------------------------------
-FEATURE_WEIGHTS = [1.0,1.0,1.0,1.0,0.5,0.5,0.5]
+FEATURE_WEIGHTS = [1.0,1.0,1.0,1.0,1.0,0.1,0.1]
+NUM_ROLES = 5
+NUM_FEATURES = 7
+
 
 class ClimbDDPMGenerator():
     def __init__(
@@ -421,7 +418,7 @@ class ClimbDDPMGenerator():
             
             for layout_id in layout_ids:
                 df = scaled_holds[scaled_holds['layout_id']==layout_id]
-                self.holds_manifolds[layout_id] = torch.tensor(df[['x','y','pull_x','pull_y']].values, dtype=torch.float32)
+                self.holds_manifolds[layout_id] = torch.tensor(df[['x','y','pull_x','pull_y','is_foot','pinch','flat']].values, dtype=torch.float32)
                 self.holds_lookup[layout_id] = df['hold_index'].values
         except Exception as e:
             pass
@@ -431,18 +428,49 @@ class ClimbDDPMGenerator():
         for k, manifold in self.holds_manifolds.items():
             if layout_id == None or layout_id == k:
                 means = torch.mean(manifold, dim=0)
-                print(f"Wall-id--{k}; Means-- x:{means[0].item()}, y:{means[1].item()}, Px:{means[2].item()}, Py:{means[3].item()} ")
+                print(f"Wall-id--{k}; Means-- x:{means[0].item()}, y:{means[1].item()}")
 
     def _build_cond_tensor(self, n, diff, angle):
         cache_key = (diff, angle)
         if cache_key not in self._cond_cache:
             row = np.array([[diff, 3.0, 1000, float(angle)]])
             scaled = self.scaler.transform_climb_features(pd.DataFrame(row, columns=['grade','quality','ascents','angle']))
-            self._cond_cache[cache_key] = scaled[0]
+            self._cond_cache[cache_key] = scaled
         base = self._cond_cache[cache_key]
         tiled = np.tile(base, (n,1))
         return torch.tensor(tiled, device=self.device, dtype=torch.float32)
     
+    def _get_offset_manifold(self, layout_id: str, x_offset: float | None)-> Tensor:
+        """Method for offsetting the current holds-manifold such that mean-x and mean-y is 0"""
+        offset_manifold = self.holds_manifolds[layout_id].clone()
+        means = torch.mean(offset_manifold, dim=0)
+
+        if x_offset is None:
+            x_offset = torch.clamp(torch.randn(size=(1,), generator=self.deterministic_noise_generator),-1.0,1.0).item()/2
+        
+        _range = (torch.max(offset_manifold[:,0])-torch.min(offset_manifold[0])).item()
+        x_offset *= _range/2
+        print(x_offset, _range/2)
+
+        x_offset +=means[0].item()
+        y_offset = means[1].item()
+        
+        offset_manifold[:,0] -= x_offset
+        offset_manifold[:,1] -= y_offset
+        means = torch.mean(offset_manifold, dim=0)
+
+        return offset_manifold
+    
+    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.8):
+        """Calculate the weight to assign to the projected holds based on the timestep."""
+        assert t_start_projection <= 0.8
+        a = (t_start_projection-t)/t_start_projection
+        if t_start_projection > 0.5:
+            strength = 1 + torch.cos((a+0.5)*torch.pi)
+        else:
+            strength = 1 - torch.cos(a*torch.pi/2)
+        return torch.where(t > t_start_projection, torch.zeros_like(t), strength).unsqueeze(2)
+
     def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
         """
             Project each generated hold to its nearest neighbor on the hold manifold.
@@ -455,25 +483,41 @@ class ClimbDDPMGenerator():
         """
         B, S, H = gen_climbs.shape
         flat_climbs = gen_climbs.reshape(-1,H)
-        dists = torch.cdist(flat_climbs[:,:,:NUM_FEATURES]*self.feature_weights, offset_manifold*self.feature_weights)
+        null_mask = (flat_climbs[:,-1] < 0.95)
+        dists = torch.cdist(
+            flat_climbs[:,:NUM_FEATURES]*self.feature_weights.unsqueeze(0),
+            offset_manifold*self.feature_weights.unsqueeze(0))
 
         idx = dists.argmin(dim=1)
-        return torch.cat([offset_manifold[idx].reshape(B, S, -1),gen_climbs[:,:,NUM_FEATURES:]],dim=2)
+        projected_features = offset_manifold[idx] * null_mask.unsqueeze(1)
+        return torch.cat([projected_features.reshape(B, S, -1), gen_climbs[:,:,NUM_FEATURES:]],dim=2)
     
-    def _get_offset_manifold(self, layout_id: str, x_offset: float | None)-> Tensor:
-        """Method for offsetting the current holds-manifold such that mean-x and mean-y is 0"""
-        offset_manifold = self.holds_manifolds[layout_id].clone()
-        means = torch.mean(offset_manifold, dim=0).round(decimals=3)
-        if x_offset is None:
-            x_offset = -(means[0].item())
-        y_offset = -(means[1].item())
+    def _project_onto_indices(self, gen_climbs: Tensor, offset_manifold: Tensor, layout_id: str) -> list[list[list[int]]]:
+        """Project climb onto the final hold indices and assign integer role values (and remove null holds and duplicate holds)"""
+        B, S, H = gen_climbs.shape
+
+        roles = torch.argmax(gen_climbs[:,:,(NUM_FEATURES):], dim=2).detach().numpy()
+
+        flat_climbs = gen_climbs.reshape(-1,H)
+
+        dists = torch.cdist(flat_climbs[:,:(NUM_FEATURES)]*self.feature_weights.unsqueeze(0), offset_manifold*self.feature_weights.unsqueeze(0))              # (B*S, M)
         
-        offset_manifold[:,0] += x_offset
-        offset_manifold[:,1] += y_offset
-        means = torch.mean(offset_manifold, dim=0)
+        idx = dists.argmin(dim=1)
+        holds = self.holds_lookup[layout_id][idx]
+        holds = holds.reshape(B, S)
+        
+        climbs = np.stack([holds, roles], axis=2)
+        
+        deduped_climbs = []
+        for c in climbs:
+            valid_mask = c[:, 1] != 4
+            c_valid = c[valid_mask]
+            c_sorted = c_valid[c_valid[:, 1].argsort()]
+            _, unique_indices = np.unique(c_sorted[:, 0], return_index=True)
+            deduped_climbs.append(c_sorted[unique_indices].tolist())
 
-        return offset_manifold
-
+        return deduped_climbs
+    
     def _find_optimal_translation(
         self,
         gen_climbs: Tensor,           # (B, S, H)
@@ -511,7 +555,7 @@ class ClimbDDPMGenerator():
         flat = translated.reshape(G * B, S, H)
 
         # Nearest-neighbour distances to manifold: (G*B, S, M) -> (G*B, S)
-        dists = torch.cdist(flat[:,:,:(NUM_FEATURES)]*self.feature_weights, offset_manifold*self.feature_weights)              # (G*B, S, M)
+        dists = torch.cdist(flat[:,:, :(NUM_FEATURES)]*self.feature_weights.unsqueeze(0), offset_manifold*self.feature_weights.unsqueeze(0))              # (G*B, S, M)
         nn_dists = dists.min(dim=2).values                      # (G*B, S)
         batch_dist = nn_dists.reshape(G, B, S)                  # (G, B, S)
         batch_dist = null_mask.unsqueeze(0) * batch_dist
@@ -542,7 +586,6 @@ class ClimbDDPMGenerator():
         best_dx, best_dy = self._find_optimal_translation(
             gen_climbs, offset_manifold, x_offsets, y_offsets
         )
-        print(f"Best Dx:{best_dx}, Best Dy: {best_dy}")
 
         # Apply per-climb optimal translation  (B, S, H)
         B, S, H = gen_climbs.shape
@@ -553,41 +596,6 @@ class ClimbDDPMGenerator():
 
         # Now do the standard index projection on the translated climbs
         return self._project_onto_indices(translated_climbs, offset_manifold, layout_id)
-
-    def _project_onto_indices(self, gen_climbs: Tensor, offset_manifold: Tensor, layout_id: str) -> list[list[list[int]]]:
-        """Project climb onto the final hold indices (and remove null holds)"""
-        B, S, H = gen_climbs.shape
-
-        roles = torch.argmax(gen_climbs[:,:,(NUM_FEATURES):], dim=2).detach().numpy()
-
-        flat_climbs = gen_climbs.reshape(-1,H)                  # (B*S, H)
-
-        dists = torch.cdist(flat_climbs[:,:,:(NUM_FEATURES)]*self.feature_weights, offset_manifold*self.feature_weights)              # (B*S, H, M)
-        
-        idx = dists.argmin(dim=1)
-        holds = self.holds_lookup[layout_id][idx]
-        holds = holds.reshape(B, S)
-        
-        is_null = (holds == -1)
-        roles[is_null] = 4
-        
-        climbs = np.stack([holds, roles], axis=2)
-        
-        deduped_climbs = []
-        for c in climbs:
-            valid_mask = c[:, 1] != 4
-            c_valid = c[valid_mask]
-            c_sorted = c_valid[c_valid[:, 1].argsort()]
-            _, unique_indices = np.unique(c_sorted[:, 0], return_index=True)
-            deduped_climbs.append(c_sorted[unique_indices].tolist())
-
-        return deduped_climbs
-    
-    def _projection_strength(self, t: Tensor, t_start_projection: float = 0.8):
-        """Calculate the weight to assign to the projected holds based on the timestep."""
-        a = (t_start_projection-t)/t_start_projection
-        strength = 1 - torch.cos(a*torch.pi/2)
-        return torch.where(t > t_start_projection, torch.zeros_like(t), strength).unsqueeze(2)
     
     @torch.no_grad()
     def generate(
@@ -605,32 +613,32 @@ class ClimbDDPMGenerator():
         seed: int,
     )->list[list[list[int]]]:
         """
-        Generate a climb or batch of climbs with the given conditions using the standard DDPM iterative denoising process.
+            Generate a climb or batch of climbs with the given conditions using the standard DDPM iterative denoising process.
 
-        :param layout_id: The layout id on which to generate the climb.
-        :type layout_id: str
-        :param n: The number of climbs to generate.
-        :type n: int
-        :param angle: The current wall angle.
-        :type angle: int
-        :param grade: The desired grade.
-        :type grade: str
-        :param diff_scale: The desired difficulty scale (V-scale or Font).
-        :type diff_scale: str
-        :param timesteps: Model setting: Number of diffusion timesteps to run. Higher results in better quality (Should be a divisor of 100 to retain markovian properties)
-        :type timesteps: int
-        :param deterministic: Whether to use the original noise vector in successive diffusion steps, or use a new noise vector each time.
-        :type deterministic: bool
-        :param t_start_projection: Point in the generation process to begin the projection steps. Earlier is better but more expensive.
-        :type t_start_projection: float
-        :param x_offset: Offset the climb on the X-axis.
-        :type x_offset: float | None
-        :param guidance_value: The guidance value to use for CFG generation.
-        :type guidance_value: float
-        :param seed: The random integer used to seed deterministic climb generation
-        :type seed: int
-        :return: A set of generated climbs according to the specified 
-        :rtype: list[list[list[int]]]
+            :param layout_id: The layout id on which to generate the climb.
+            :type layout_id: str
+            :param n: The number of climbs to generate.
+            :type n: int
+            :param angle: The current wall angle.
+            :type angle: int
+            :param grade: The desired grade.
+            :type grade: str
+            :param diff_scale: The desired difficulty scale (V-scale or Font).
+            :type diff_scale: str
+            :param timesteps: Model setting: Number of diffusion timesteps to run. Higher results in better quality (Should be a divisor of 100 to retain markovian properties)
+            :type timesteps: int
+            :param deterministic: Whether to use the original noise vector in successive diffusion steps, or use a new noise vector each time.
+            :type deterministic: bool
+            :param t_start_projection: Point in the generation process to begin the projection steps. Earlier is better but more expensive.
+            :type t_start_projection: float
+            :param x_offset: Offset the climb on the X-axis.
+            :type x_offset: float | None
+            :param guidance_value: The guidance value to use for CFG generation.
+            :type guidance_value: float
+            :param seed: The random integer used to seed deterministic climb generation
+            :type seed: int
+            :return: A set of generated climbs according to the specified 
+            :rtype: list[list[list[int]]]
         """
         # Seed Noise Generator
         if deterministic:
@@ -641,13 +649,14 @@ class ClimbDDPMGenerator():
         offset_manifold = self._get_offset_manifold(layout_id, x_offset)
 
         # CORE LOGIC
-        cond_t = self._build_cond_tensor(n, grade, diff_scale, angle)
+        diff = GRADE_TO_DIFF[diff_scale][grade]
+        cond_t = self._build_cond_tensor(n, diff, angle)
         x_t = torch.randn((n, 20, NUM_ROLES+NUM_FEATURES), device=self.device, generator=self.deterministic_noise_generator) if deterministic else torch.randn((n, 20, NUM_ROLES+NUM_FEATURES), device=self.device)
         noisy = x_t.clone()
         t_tensor = torch.ones((n,1), device=self.device)
         
         for _ in range(0, timesteps):
-            gen_climbs = self.ddpm(noisy, cond_t, t_tensor)
+            gen_climbs = self.ddpm.predict_cfg(noisy, cond_t, t_tensor, guidance_value)
 
             if t_tensor[0].item() < t_start_projection:
                 alpha_p = self._projection_strength(t_tensor, t_start_projection)
@@ -655,11 +664,12 @@ class ClimbDDPMGenerator():
                 gen_climbs = alpha_p*(projected_climbs) + (1-alpha_p)*(gen_climbs)
             
             t_tensor -= 1.0/timesteps
-            noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, x_t if deterministic else torch.randn_like(x_t))
-        
+            noisy = self.ddpm.forward_diffusion(gen_climbs, t_tensor, noisy if deterministic else torch.randn_like(noisy))
+                
         if auto:
             return self._project_onto_indices_with_translation(gen_climbs, offset_manifold, layout_id)
         return self._project_onto_indices(gen_climbs, offset_manifold, layout_id)
+
 
 # ---------------------------------------------------------------------------
 # Global ClimbGenerator Instance For Dependency Injection

@@ -25,21 +25,14 @@ def generate_climbs(
     grade_scale: GradeScale = Query(GradeScale.V_GRADE),
     angle: int | None = Query(None, ge=0, le=90),
     timesteps: int = Query(100, ge=1, le=100),
+    t_start_projection: float = Query(0.8, le=0.8, ge=0.0),
+    x_offset: float | None = Query(None),
     guidance_value: float = Query(3.0, ge=1.0, le=10.0),
     deterministic: bool = Query(False),
+    seed: int = Query(37)
 ):
     """
     Generate climbs for a given layout.
-
-    The model is a single pre-trained DDPM capable of generating for any
-    layout. Holds are loaded from the database based on `layout_id`.
-
-    Parameters:
-    - **num_climbs**: How many climbs to generate (1–50)
-    - **grade**: Target difficulty (e.g. 'V4', '6b+')
-    - **grade_scale**: Grading system ('v_grade' or 'font')
-    - **angle**: Wall angle override (defaults to the layout's stored angle)
-    - **deterministic**: Fixed noise for reproducible output
     """
     request = GenerateRequest(
         num_climbs=num_climbs,
@@ -51,6 +44,9 @@ def generate_climbs(
         timesteps=timesteps,
         guidance_value=guidance_value,
         deterministic=deterministic,
+        x_offset=x_offset,
+        t_start_projection=t_start_projection,
+        seed=seed
     )
 
     try:

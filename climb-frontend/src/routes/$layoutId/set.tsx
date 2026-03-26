@@ -98,7 +98,11 @@ function ModelSettingsPanel({
   const isDefault =
     settings.timesteps === DEFAULT_GENERATE_SETTINGS.timesteps &&
     settings.guidance_value === DEFAULT_GENERATE_SETTINGS.guidance_value &&
-    settings.deterministic === DEFAULT_GENERATE_SETTINGS.deterministic;
+    settings.x_offset === DEFAULT_GENERATE_SETTINGS.x_offset &&
+    settings.t_start_projection ===
+      DEFAULT_GENERATE_SETTINGS.t_start_projection &&
+    settings.deterministic === DEFAULT_GENERATE_SETTINGS.deterministic &&
+    settings.seed === DEFAULT_GENERATE_SETTINGS.seed;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -116,7 +120,7 @@ function ModelSettingsPanel({
       />
       <BzRange
         label="Guidance Value"
-        desc="CFG guidance scale. Higher values produce climbs that more closely match the requested grade and style, at the cost of diversity."
+        desc="Guidance value for CFG. A higher guidance value will emphasize climb features which correspond to the selected wall angle and grade. Too large a value may degrade the generated climb's quality."
         value={settings.guidance_value}
         min={1.0}
         max={10.0}
@@ -127,9 +131,54 @@ function ModelSettingsPanel({
         rightLabel="Conditioned"
       />
 
+      <BzRange
+        label="Projection Start Time"
+        desc="Fraction of the diffusion process at which layout-projection begins. Higher values begin projecting onto the wall's holds earlier in the generative process."
+        value={settings.t_start_projection}
+        min={0.0}
+        max={0.8}
+        step={0.05}
+        onChange={(v) => update({ t_start_projection: v })}
+        displayValue={settings.t_start_projection.toFixed(2)}
+        leftLabel="Later"
+        rightLabel="Earlier"
+      />
+
       <div>
         <div style={{ marginBottom: "8px" }}>
-          <SectionLabel desc="Whether to reuse the initial noise vector at each reverse-diffusion step. Produces the same climb for a given layout and configuration.">
+          <SectionLabel desc="Pin the generated climb to a specific horizontal position on the wall. 'Auto' chooses the optimal X-offset automatically.">
+            X Offset
+          </SectionLabel>
+        </div>
+        <TogglePair
+          options={[
+            { value: "auto", label: "Auto" },
+            { value: "manual", label: "Manual" },
+          ]}
+          value={settings.x_offset == null ? "auto" : "manual"}
+          onChange={(v) => update({ x_offset: v === "auto" ? null : 0.0 })}
+        />
+        {settings.x_offset != null && (
+          <div style={{ marginTop: "12px" }}>
+            <BzRange
+              label=""
+              desc=""
+              value={settings.x_offset}
+              min={-1.5}
+              max={1.5}
+              step={0.1}
+              onChange={(v) => update({ x_offset: v })}
+              displayValue={settings.x_offset.toFixed(1)}
+              leftLabel="Left"
+              rightLabel="Right"
+            />
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ marginBottom: "8px" }}>
+          <SectionLabel desc="Whether to reuse the initial noise vector at each diffusion step. Produces the same climb for a given Generate Settings configuration.">
             Generation Style
           </SectionLabel>
         </div>
@@ -141,6 +190,32 @@ function ModelSettingsPanel({
           value={settings.deterministic ? "det" : "non"}
           onChange={(v) => update({ deterministic: v === "det" })}
         />
+        {settings.deterministic && (
+          <div style={{ marginTop: "12px" }}>
+            <SectionLabel desc="Seed value used for the initial noise vector.">
+              Seed
+            </SectionLabel>
+            <input
+              type="number"
+              value={settings.seed}
+              onChange={(e) =>
+                update({ seed: parseInt(e.target.value, 10) || 0 })
+              }
+              style={{
+                marginTop: "8px",
+                width: "100%",
+                background: "var(--surface)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+                padding: "7px 10px",
+                fontSize: "0.75rem",
+                fontFamily: "'Space Mono', monospace",
+                outline: "none",
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {!isDefault && (
@@ -259,7 +334,10 @@ function GenerationPanel({
   const isPresetActive = (preset: GenerateSettings) =>
     generateSettings.timesteps === preset.timesteps &&
     generateSettings.guidance_value === preset.guidance_value &&
-    generateSettings.deterministic === preset.deterministic;
+    generateSettings.x_offset === preset.x_offset &&
+    generateSettings.t_start_projection === preset.t_start_projection &&
+    generateSettings.deterministic === preset.deterministic &&
+    generateSettings.seed === preset.seed;
   const isCustom =
     !isPresetActive(FAST_GENERATE_SETTINGS) &&
     !isPresetActive(DEFAULT_GENERATE_SETTINGS) &&
@@ -1314,7 +1392,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
       const named: NamedHoldset[] = response.climbs.map((holdset) => ({
         name: generateClimbName(),
         grade: generate_grade,
-        angle: request.angle?.toString() ?? "45",
+        angle: request.angle?.toString() ?? "40",
         holdset,
       }));
       setGeneratedClimbs((prev) => [...named, ...prev]);
@@ -1435,9 +1513,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
         selectedClimb,
         user?.fullName ?? null,
         displaySettings,
-        layout.metadata.image_edges as
-          | [number, number, number, number]
-          | null,
+        layout.metadata.image_edges as [number, number, number, number] | null,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1503,7 +1579,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
     const blankClimb: NamedHoldset = {
       name: generateClimbName(),
       grade: grade ?? "V?",
-      angle: (angle ?? 45).toString(),
+      angle: (angle ?? 40).toString(),
       holdset: blankHoldset,
     };
     setGeneratedClimbs((prev) => [blankClimb, ...prev]);

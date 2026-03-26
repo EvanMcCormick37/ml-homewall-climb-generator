@@ -9,30 +9,16 @@ Manages:
 import logging
 
 from app.schemas import Holdset, GenerateRequest, GenerateSettings
-from app.database import get_db
 from app.services.utils import generator
 from app.services.climb_service import _holds_to_holdset, _get_layout_angle
 
 logger = logging.getLogger(__name__)
 
 
-def _get_layout_angle(layout_id: str, default_default_angle: int = 45) -> int:
-    """
-    Look up the default angle for a layout.
-    Checks the layouts table first, then falls back to the legacy layouts table.
-    """
-    with get_db() as conn:
-        row = conn.execute(
-            "SELECT default_angle FROM layouts WHERE id = ?", (layout_id,)
-        ).fetchone()
-    return row["default_angle"] if (row and row["default_angle"] is not None) else default_default_angle
-
-
 def generate_climbs(
     layout_id: str,
     request: GenerateRequest,
     gen_settings: GenerateSettings,
-    size_id: str | None = None,
 ) -> list[Holdset]:
     """
     Generate climbs for a layout using the DDPM.
@@ -62,8 +48,11 @@ def generate_climbs(
             grade=request.grade,
             diff_scale=request.grade_scale.value,
             timesteps=gen_settings.timesteps,
+            deterministic = gen_settings.deterministic,
+            t_start_projection=gen_settings.t_start_projection,
+            x_offset=gen_settings.x_offset,
             guidance_value=gen_settings.guidance_value,
-            deterministic=gen_settings.deterministic,
+            seed=gen_settings.seed,
         )
     except Exception as e:
         print(f"Exception: {e}")

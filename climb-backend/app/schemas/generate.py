@@ -17,7 +17,10 @@ class GradeScale(str, Enum):
 class GenerateSettings(BaseModel):
     timesteps: int = Field(100, ge=1, le=100, description="Number of diffusion timesteps. Fewer = faster but lower quality.")
     guidance_value: float = Field(3.0, ge=1.0, le=10.0, description="CFG guidance scale. Higher = stronger grade/style conditioning.")
+    x_offset: float | None = Field(None, ge=-1.5, le=1.5, description= "X-Offset to set the climb using.")
+    t_start_projection: float = Field(0.8, ge=0.0, le=0.8, description = "The time at which to start the projection process.")
     deterministic: bool = Field(False, description="Reuse the initial noise vector at each step for reproducible output.")
+    seed: int = Field(37, description="Seed value for deterministic generation.")
 
 class GenerateRequest(BaseModel):
     """Request schema for generating climbs via the DDPM."""

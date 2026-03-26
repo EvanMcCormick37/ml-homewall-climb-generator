@@ -17,25 +17,37 @@ export interface GenerateRequest {
 export interface GenerateSettings {
   timesteps: number;
   guidance_value: number;
+  x_offset: number | null;
+  t_start_projection: number;
   deterministic: boolean;
+  seed: number;
 }
 
 export const DEFAULT_GENERATE_SETTINGS: GenerateSettings = {
   timesteps: 50,
   guidance_value: 3.0,
+  x_offset: null,
+  t_start_projection: 0.8,
   deterministic: false,
+  seed: 37,
 };
 
 export const FAST_GENERATE_SETTINGS: GenerateSettings = {
   timesteps: 20,
   guidance_value: 2.0,
+  x_offset: null,
+  t_start_projection: 0.8,
   deterministic: false,
+  seed: 37,
 };
 
 export const SLOW_GENERATE_SETTINGS: GenerateSettings = {
   timesteps: 100,
   guidance_value: 5.0,
+  x_offset: null,
+  t_start_projection: 0.8,
   deterministic: false,
+  seed: 37,
 };
 
 export interface GenerateResponse {

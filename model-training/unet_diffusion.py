@@ -269,7 +269,7 @@ class DDPMTrainer():
 
                     total_loss+=loss.item()
                 total_loss /= len(batches)
-                improvement = (total_loss - losses[-1]) if len(losses) > 0 else 0
+                improvement = (losses[-1] - total_loss) if len(losses) > 0 else 0
                 pbar.set_postfix_str(f"Epoch: {epoch}, Batch Loss: {total_loss:.2f}, Improvement: {improvement:.2f}, Min Loss: {min(losses) if len(losses) > 0 else 0}, Batches:{len(batches)}")
                 losses.append(total_loss)
 

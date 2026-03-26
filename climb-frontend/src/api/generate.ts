@@ -21,7 +21,12 @@ export async function generateClimbs(
   if (settings) {
     params.timesteps = settings.timesteps.toString();
     params.guidance_value = settings.guidance_value.toString();
+    params.t_start_projection = settings.t_start_projection.toString();
     params.deterministic = settings.deterministic.toString();
+    params.seed = settings.seed.toString();
+    if (settings.x_offset != null) {
+      params.x_offset = settings.x_offset.toString();
+    }
   }
 
   const response = await apiClient.get<GenerateResponse>(

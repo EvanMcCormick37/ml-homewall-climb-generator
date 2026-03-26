@@ -2,6 +2,7 @@ from datetime import datetime
 import json
 import uuid
 from app.schemas import SizeMetadata, LayoutMetadata, HoldDetail
+from app.database import get_db
 
 def _row_to_size_metadata(row) -> SizeMetadata:
     return SizeMetadata(
@@ -73,3 +74,15 @@ def _row_to_hold_detail(row) -> HoldDetail:
         is_foot=row["is_foot"],
         tags=json.loads(row["tags"]) if row["tags"] else []
     )
+
+def _get_layout_angle(layout_id: str, default_default_angle: int = 40) -> int:
+    """
+    Look up the default angle for a layout.
+    Checks the layouts table first, then falls back to the legacy layouts table.
+    """
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT default_angle FROM layouts WHERE id = ?", (layout_id,)
+        ).fetchone()
+    return row["default_angle"] if (row and row["default_angle"] is not None) else default_default_angle
+
