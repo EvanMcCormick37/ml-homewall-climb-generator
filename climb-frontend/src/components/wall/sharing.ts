@@ -1,4 +1,4 @@
-import { getLayoutPhotoUrl } from "@/api/layouts";
+import { fetchLayoutPhoto } from "@/api/layouts";
 import type { HoldDetail } from "@/types";
 import {
   HOLD_STROKE_COLOR,
@@ -62,13 +62,14 @@ export async function renderExportImage(
   displaySettings: DisplaySettings,
   imageEdges?: [number, number, number, number] | null,
 ): Promise<Blob> {
+  const objectUrl = await fetchLayoutPhoto(wallId);
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new window.Image();
-    el.crossOrigin = "anonymous";
     el.onload = () => resolve(el);
     el.onerror = reject;
-    el.src = getLayoutPhotoUrl(wallId);
+    el.src = objectUrl;
   });
+  URL.revokeObjectURL(objectUrl);
 
   const imgW = img.width,
     imgH = img.height;

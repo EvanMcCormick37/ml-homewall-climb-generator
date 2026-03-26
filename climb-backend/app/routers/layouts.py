@@ -210,7 +210,7 @@ def get_layout_photo(
     assert photo_path is not None
 
     ext = photo_path.suffix
-    media_type = "image/jpeg" if ext == ".jpg" else "image/png"
+    media_type = "image/jpeg" if ext == ".jpg" or ext == ".jpeg" else "image/png"
     return FileResponse(
         photo_path,
         media_type=media_type,

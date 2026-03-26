@@ -153,8 +153,9 @@ async def get_accessible_layout(
     if not layout:
         raise HTTPException(status_code=404, detail="Layout not found")
 
-    if layout["visibility"] == "public":
+    if layout["visibility"] == "public" or layout["visibility"] == "unlisted":
         return layout
+    print(user)
     if user and layout["owner_id"] == user["user_id"]:
         return layout
     if layout["share_token"] and share_token == layout["share_token"]:

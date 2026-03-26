@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { getLayoutPhotoUrl } from "@/api/layouts";
+import { fetchLayoutPhoto } from "@/api/layouts";
 import type { HoldDetail, Holdset, SizeMetadata } from "@/types";
 import {
   computeHomography,
@@ -125,8 +125,8 @@ export function WallCanvas({
 
   // Load image
   useEffect(() => {
+    let objectUrl: string | null = null;
     const img = new window.Image();
-    img.crossOrigin = "anonymous";
     img.onload = () => {
       setImage(img);
       onImageLoad({ width: img.width, height: img.height });
@@ -141,7 +141,8 @@ export function WallCanvas({
         });
       }
     };
-    img.src = getLayoutPhotoUrl(wallId);
+    fetchLayoutPhoto(wallId).then((url) => { objectUrl = url; img.src = url; });
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [wallId, onImageLoad]);
 
   const toPixelCoords = useCallback(

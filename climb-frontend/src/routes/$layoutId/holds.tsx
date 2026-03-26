@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect } from "react";
-import { getLayout, setLayoutHolds, getLayoutPhotoUrl } from "@/api/layouts";
+import { getLayout, setLayoutHolds, fetchLayoutPhoto } from "@/api/layouts";
 import { useHolds } from "@/hooks/useHolds";
 import { HoldFeaturesSidebar, EnabledFeaturesMenu } from "@/components";
 import { Eraser, Hand, Settings, Plus, Edit } from "lucide-react";
@@ -689,8 +689,8 @@ function HoldsEditorPage() {
 
   // Load image
   useEffect(() => {
+    let objectUrl: string | null = null;
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.onload = () => {
       setImage(img);
       setImageDimensions({ width: img.width, height: img.height });
@@ -705,7 +705,8 @@ function HoldsEditorPage() {
         });
       }
     };
-    img.src = getLayoutPhotoUrl(layoutId);
+    fetchLayoutPhoto(layoutId).then((url) => { objectUrl = url; img.src = url; });
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [layoutId, setViewTransform]);
 
   // Load holds

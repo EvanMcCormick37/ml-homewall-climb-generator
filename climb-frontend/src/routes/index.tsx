@@ -1,14 +1,27 @@
 import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useLayouts } from "@/hooks/useLayouts";
-import { getLayoutPhotoUrl } from "@/api/layouts";
+import { fetchLayoutPhoto } from "@/api/layouts";
 import { WakingScreen } from "@/components";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TITLE_STYLES } from "@/styles";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
 });
+
+function LayoutPhotoImg({
+  layoutId,
+  ...imgProps
+}: { layoutId: string } & React.ImgHTMLAttributes<HTMLImageElement>) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let url: string | null = null;
+    fetchLayoutPhoto(layoutId).then((u) => { url = u; setSrc(u); });
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [layoutId]);
+  return src ? <img src={src} {...imgProps} /> : null;
+}
 
 const LINKS = [
   { label: "About Me", href: "https://www.evmojo.dev" },
@@ -427,7 +440,6 @@ function HomePage() {
 
                 {layouts.map((layout) => {
                   const hasPhoto = layout.sizes.length > 0;
-                  const photoUrl = hasPhoto ? getLayoutPhotoUrl(layout.id) : null;
                   const dims = layout.dimensions[0] && layout.dimensions[1]
                     ? `${layout.dimensions[0]} ft × ${layout.dimensions[1]} ft${layout.default_angle != null ? ` · ${layout.default_angle}°` : ""}`
                     : null;
@@ -452,9 +464,9 @@ function HomePage() {
                         background: "#1c1c1e",
                       }}
                     >
-                      {photoUrl && (
-                        <img
-                          src={photoUrl}
+                      {hasPhoto && (
+                        <LayoutPhotoImg
+                          layoutId={layout.id}
                           alt={layout.name}
                           className="bz-card-img"
                           style={{

@@ -126,8 +126,12 @@ export async function setLayoutHolds(
 }
 
 /**
- * Get the photo URL for a layout.
+ * Fetch the photo for a layout through the authenticated API client.
+ * Returns a blob object URL. Caller must revoke it with URL.revokeObjectURL() when done.
  */
-export function getLayoutPhotoUrl(layoutId: string): string {
-  return `${BASE_URL}/layouts/${layoutId}/photo`;
+export async function fetchLayoutPhoto(layoutId: string): Promise<string> {
+  const response = await apiClient.get<Blob>(`/layouts/${layoutId}/photo`, {
+    responseType: "blob",
+  });
+  return URL.createObjectURL(response.data);
 }

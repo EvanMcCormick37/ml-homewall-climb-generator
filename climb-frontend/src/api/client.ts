@@ -14,11 +14,21 @@ export function setAuthTokenProvider(fn: () => Promise<string | null>) {
 }
 
 apiClient.interceptors.request.use(async (config) => {
+  let token: string | null = null;
+
   if (getTokenFn) {
-    const token = await getTokenFn();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    token = await getTokenFn();
+  }
+
+  // Fallback: use Clerk's global instance for requests (e.g. route loaders) that
+  // fire before React has rendered AuthInit and registered getTokenFn.
+  if (!token) {
+    const w = window as { Clerk?: { session?: { getToken: () => Promise<string | null> } } };
+    token = (await w.Clerk?.session?.getToken()) ?? null;
+  }
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });

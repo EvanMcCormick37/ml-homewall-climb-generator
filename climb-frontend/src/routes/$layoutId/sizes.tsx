@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
-import { getLayout, getLayoutPhotoUrl, updateLayout } from "@/api/layouts";
+import { getLayout, fetchLayoutPhoto, updateLayout } from "@/api/layouts";
 import { createSize, deleteSize } from "@/api/sizes";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { GLOBAL_STYLES } from "@/styles";
@@ -554,7 +554,12 @@ function SizesPage() {
     }
   }, [layoutId, imageEdges]);
 
-  const photoUrl = getLayoutPhotoUrl(layoutId);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let url: string | null = null;
+    fetchLayoutPhoto(layoutId).then((u) => { url = u; setPhotoUrl(u); });
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [layoutId]);
 
   const handleEdgeInput = useCallback((index: 0 | 1 | 2 | 3, value: string) => {
     const num = parseFloat(value);

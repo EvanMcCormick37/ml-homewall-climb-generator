@@ -1,16 +1,11 @@
 // __root.tsx
 import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { Outlet, createRootRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
 import { setAuthTokenProvider } from "@/api/client";
 
 function AuthInit() {
   const { getToken } = useAuth();
-
-  useEffect(() => {
-    setAuthTokenProvider(() => getToken());
-  }, [getToken]);
-
+  setAuthTokenProvider(() => getToken());
   return null;
 }
 
