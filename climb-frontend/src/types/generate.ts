@@ -24,28 +24,28 @@ export interface GenerateSettings {
 }
 
 export const DEFAULT_GENERATE_SETTINGS: GenerateSettings = {
-  timesteps: 50,
+  timesteps: 100,
   guidance_value: 3.0,
   x_offset: null,
-  t_start_projection: 0.8,
+  t_start_projection: 0.2,
   deterministic: false,
   seed: 37,
 };
 
 export const FAST_GENERATE_SETTINGS: GenerateSettings = {
-  timesteps: 20,
+  timesteps: 50,
   guidance_value: 2.0,
   x_offset: null,
-  t_start_projection: 0.8,
+  t_start_projection: 0.1,
   deterministic: false,
   seed: 37,
 };
 
 export const SLOW_GENERATE_SETTINGS: GenerateSettings = {
-  timesteps: 100,
-  guidance_value: 5.0,
+  timesteps: 200,
+  guidance_value: 4.0,
   x_offset: null,
-  t_start_projection: 0.8,
+  t_start_projection: 0.3,
   deterministic: false,
   seed: 37,
 };

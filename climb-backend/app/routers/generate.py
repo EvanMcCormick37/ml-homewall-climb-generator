@@ -24,7 +24,7 @@ def generate_climbs(
     grade: str = Query("V4"),
     grade_scale: GradeScale = Query(GradeScale.V_GRADE),
     angle: int | None = Query(None, ge=0, le=90),
-    timesteps: int = Query(100, ge=1, le=100),
+    timesteps: int = Query(100, ge=1, le=200),
     t_start_projection: float = Query(0.8, le=0.8, ge=0.0),
     x_offset: float | None = Query(None),
     guidance_value: float = Query(3.0, ge=1.0, le=10.0),

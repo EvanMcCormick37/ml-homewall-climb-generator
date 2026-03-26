@@ -389,8 +389,8 @@ GRADE_TO_DIFF = {
 # ---------------------------------------------------------------------------
 # ClimbDDPMGenerator
 # ---------------------------------------------------------------------------
-FEATURE_WEIGHTS = [1.0,1.0,0.5,0.5,2.0,0.1,0.1]
-FOOT_FEATURE_WEIGHTS = [1.0, 1.0, 0.05, 0.05, 0.05, 0.05, 0.05]
+FEATURE_WEIGHTS = [1.0,1.0,0.8,0.8,2.0,0.1,0.1]
+FOOT_FEATURE_WEIGHTS = [1.0, 1.0, 0.05, 0.05, 1.0, 0.05, 0.05]
 NUM_ROLES = 5
 NUM_FEATURES = 7
 
@@ -473,6 +473,48 @@ class ClimbDDPMGenerator():
             strength = 1 - torch.cos(a*torch.pi/2)
         return torch.where(t > t_start_projection, torch.zeros_like(t), strength).unsqueeze(2)
 
+    def _get_nearest_manifold_neighbors(self, flat_climbs: Tensor, offset_manifold: Tensor) -> tuple[Tensor, Tensor]:
+        """
+        Finds the nearest manifold distances and indices for hands and feet separately.
+        
+        Args:
+            flat_climbs: (N, H) flattened predicted holds (N can be B*S or G*B*S)
+            offset_manifold: (M, NUM_FEATURES) manifold of available holds
+        Returns:
+            min_dists: (N,) tensor of nearest neighbor distances
+            idx: (N,) tensor of nearest neighbor indices
+        """
+        is_hand_mask = (flat_climbs[:, -2] < 0.85)
+        is_foot_mask = ~is_hand_mask
+        
+        features = flat_climbs[:, :NUM_FEATURES]
+        
+        N = flat_climbs.shape[0]
+        idx = torch.empty(N, dtype=torch.long, device=flat_climbs.device)
+        min_dists = torch.empty(N, dtype=torch.float32, device=flat_climbs.device)
+        
+        # --- Project Handholds ---
+        if is_hand_mask.any():
+            hand_dists = torch.cdist(
+                features[is_hand_mask] * self.hand_feature_weights.unsqueeze(0),
+                offset_manifold * self.hand_feature_weights.unsqueeze(0)
+            )
+            vals, indices = hand_dists.min(dim=1)
+            idx[is_hand_mask] = indices
+            min_dists[is_hand_mask] = vals
+            
+        # --- Project Footholds ---
+        if is_foot_mask.any():
+            foot_dists = torch.cdist(
+                features[is_foot_mask] * self.foot_feature_weights.unsqueeze(0),
+                offset_manifold * self.foot_feature_weights.unsqueeze(0)
+            )
+            vals, indices = foot_dists.min(dim=1)
+            idx[is_foot_mask] = indices
+            min_dists[is_foot_mask] = vals
+            
+        return min_dists, idx
+    
     def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor)-> Tensor:
         """
             Project each generated hold to its nearest neighbor on the hold manifold.
@@ -487,31 +529,7 @@ class ClimbDDPMGenerator():
         flat_climbs = gen_climbs.reshape(-1, H)
         null_mask = (flat_climbs[:, -1] < 0.95)
         
-        # Create a boolean mask instead of a float for easier tensor splitting
-        is_hand_mask = (flat_climbs[:, -2] < 0.85)
-        is_foot_mask = ~is_hand_mask
-        
-        # Extract features to compare
-        features = flat_climbs[:, :NUM_FEATURES]
-        
-        # Initialize an empty tensor to store the argmin indices
-        idx = torch.empty(flat_climbs.shape[0], dtype=torch.long, device=flat_climbs.device)
-        
-        # --- 1. Project Handholds ---
-        if is_hand_mask.any():
-            hand_dists = torch.cdist(
-                features[is_hand_mask] * self.hand_feature_weights.unsqueeze(0),
-                offset_manifold * self.hand_feature_weights.unsqueeze(0)
-            )
-            idx[is_hand_mask] = hand_dists.argmin(dim=1)
-            
-        # --- 2. Project Footholds ---
-        if is_foot_mask.any():
-            foot_dists = torch.cdist(
-                features[is_foot_mask] * self.foot_feature_weights.unsqueeze(0),
-                offset_manifold * self.foot_feature_weights.unsqueeze(0)
-            )
-            idx[is_foot_mask] = foot_dists.argmin(dim=1)
+        _, idx = self._get_nearest_manifold_neighbors(flat_climbs, offset_manifold)
 
         projected_features = offset_manifold[idx] * null_mask.unsqueeze(1)
         
@@ -521,15 +539,24 @@ class ClimbDDPMGenerator():
         """Project climb onto the final hold indices and assign integer role values (and remove null holds and duplicate holds)"""
         B, S, H = gen_climbs.shape
 
-        roles = torch.argmax(gen_climbs[:,:,(NUM_FEATURES):], dim=2).detach().numpy()
+        # Safely convert roles to numpy array
+        roles = torch.argmax(gen_climbs[:, :, NUM_FEATURES:], dim=2).detach().cpu().numpy()
 
-        flat_climbs = gen_climbs.reshape(-1,H)
-
-        dists = torch.cdist(flat_climbs[:,:(NUM_FEATURES)]*self.feature_weights.unsqueeze(0), offset_manifold*self.feature_weights.unsqueeze(0))              # (B*S, M)
+        flat_climbs = gen_climbs.reshape(-1, H)
         
-        idx = dists.argmin(dim=1)
+        _, idx = self._get_nearest_manifold_neighbors(flat_climbs, offset_manifold)
+
+        # Lookup holds based on the computed indices
+        # Moving idx to CPU is usually safer if holds_lookup is a numpy array or a python list
+        if not isinstance(self.holds_lookup[layout_id], torch.Tensor):
+            idx = idx.cpu().numpy()
+            
         holds = self.holds_lookup[layout_id][idx]
         holds = holds.reshape(B, S)
+        
+        # Ensure holds is a numpy array before stacking with roles
+        if isinstance(holds, torch.Tensor):
+            holds = holds.detach().cpu().numpy()
         
         climbs = np.stack([holds, roles], axis=2)
         
@@ -553,38 +580,37 @@ class ClimbDDPMGenerator():
         """
         Find the (dx, dy) translation per batch item that minimises total
         nearest-neighbour projection distance onto the hold manifold.
-
-        Returns:
-            best_dx: (B,)  optimal x translation for each climb
-            best_dy: (B,)  optimal y translation for each climb
         """
         B, S, H = gen_climbs.shape
         
-        # Create a null mask so that the null-hold positions don't contribute to the distance metric.
-        null_mask = (gen_climbs[:,:,-1] < 0.95 ).float()
+        null_mask = (gen_climbs[:, :, -1] < 0.95).float()
         Nx = x_offsets.shape[0]
         Ny = y_offsets.shape[0]
 
-        # Build a (Nx*Ny, H) manifold shift table — only x/y cols (0 and 2) move
-        # Shape: (Nx, Ny, H)
+        # Build a (Nx, Ny, H) manifold shift table
         shifts = torch.zeros(Nx, Ny, H, device=gen_climbs.device)
-        shifts[:, :, 0] = x_offsets.unsqueeze(1)   # broadcast over Ny
-        shifts[:, :, 1] = y_offsets.unsqueeze(0)   # broadcast over Nx
+        shifts[:, :, 0] = x_offsets.unsqueeze(1)   
+        shifts[:, :, 1] = y_offsets.unsqueeze(0)   
+        
         G = Nx * Ny
-        shifts = shifts.reshape(G, H)         # (G, H)  G = grid size
+        shifts = shifts.reshape(G, H)         
 
-        # Translate climbs: (B, S, H) + (G, H) -> (G, B, S, H)
-        translated = gen_climbs.unsqueeze(0) + shifts.unsqueeze(1).unsqueeze(2)
+        # Translate climbs: (1, B, S, H) + (G, 1, 1, H) -> (G, B, S, H)
+        translated = gen_climbs.unsqueeze(0) + shifts.view(G, 1, 1, H)
 
-        # Flatten holds dim for cdist: (G*B, S, H)
-        flat = translated.reshape(G * B, S, H)
+        # 1. Flatten all the way down to 2D for our helper: (G*B*S, H)
+        flat_translated = translated.reshape(-1, H)
 
-        # Nearest-neighbour distances to manifold: (G*B, S, M) -> (G*B, S)
-        dists = torch.cdist(flat[:,:, :(NUM_FEATURES)]*self.feature_weights.unsqueeze(0), offset_manifold*self.feature_weights.unsqueeze(0))              # (G*B, S, M)
-        nn_dists = dists.min(dim=2).values                      # (G*B, S)
-        batch_dist = nn_dists.reshape(G, B, S)                  # (G, B, S)
-        batch_dist = null_mask.unsqueeze(0) * batch_dist
+        # 2. Call the upgraded helper function (we only care about the distances here)
+        min_dists, _ = self._get_nearest_manifold_neighbors(flat_translated, offset_manifold)
 
+        # 3. Reshape distances back to the 3D grid layout: (G, B, S)
+        batch_dist = min_dists.reshape(G, B, S)
+        
+        # Apply the null mask (broadcast from B, S to G, B, S)
+        batch_dist = batch_dist * null_mask.unsqueeze(0)
+
+        # Sum distances across the sequence dimension
         total_dist = batch_dist.sum(dim=2)                      # (G, B)
 
         # Best grid point per batch item

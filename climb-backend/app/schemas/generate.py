@@ -15,7 +15,7 @@ class GradeScale(str, Enum):
     FONT = "font"
 
 class GenerateSettings(BaseModel):
-    timesteps: int = Field(100, ge=1, le=100, description="Number of diffusion timesteps. Fewer = faster but lower quality.")
+    timesteps: int = Field(100, ge=1, le=200, description="Number of diffusion timesteps. Fewer = faster but lower quality.")
     guidance_value: float = Field(3.0, ge=1.0, le=10.0, description="CFG guidance scale. Higher = stronger grade/style conditioning.")
     x_offset: float | None = Field(None, ge=-1.5, le=1.5, description= "X-Offset to set the climb using.")
     t_start_projection: float = Field(0.8, ge=0.0, le=0.8, description = "The time at which to start the projection process.")

@@ -127,8 +127,8 @@ function ModelSettingsPanel({
         step={0.5}
         onChange={(v) => update({ guidance_value: v })}
         displayValue={settings.guidance_value.toFixed(1)}
-        leftLabel="Diverse"
-        rightLabel="Conditioned"
+        leftLabel="General"
+        rightLabel="Specific"
       />
 
       <BzRange
