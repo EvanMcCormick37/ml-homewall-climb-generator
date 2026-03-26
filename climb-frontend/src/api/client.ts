@@ -39,9 +39,10 @@ export function is502(err: unknown): boolean {
       response?: { status?: number };
       message?: string;
     };
-    if (axiosErr.response?.status === 502) return true;
+    const status = axiosErr.response?.status;
+    if (status === 502 || status === 503) return true;
     // Fallback: check message string
-    if (axiosErr.message && /502/.test(axiosErr.message)) return true;
+    if (axiosErr.message && /50[23]/.test(axiosErr.message)) return true;
   }
   return false;
 }

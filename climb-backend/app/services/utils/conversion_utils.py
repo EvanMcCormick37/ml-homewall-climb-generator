@@ -54,9 +54,9 @@ def _hold_detail_to_row(layout_id: str, hold: HoldDetail) -> tuple:
         hold.hold_index,
         hold.x,
         hold.y,
-        hold.pull_x,
-        hold.pull_y,
-        hold.useability,
+        hold.pull_x or 0.0,
+        hold.pull_y or -1.0,
+        hold.useability or 1.0,
         hold.is_foot,
         json.dumps(hold.tags or []),
     )

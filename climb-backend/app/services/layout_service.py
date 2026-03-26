@@ -21,7 +21,7 @@ from app.schemas import (
     HoldDetail,
 )
 from app.config import settings
-from app.services.utils import _parse_sizes, _row_to_hold_detail, _hold_detail_to_row, _row_to_layout_metadata
+from app.services.utils import _parse_sizes, _row_to_hold_detail, _hold_detail_to_row, _row_to_layout_metadata, generator
 
 # ---------------------------------------------------------------------------
 # Layout queries
@@ -196,6 +196,9 @@ def create_layout(
                 now,
             ),
         )
+
+    generator.update_hold_manifolds()
+    
     return layout_id
 
 
@@ -213,6 +216,8 @@ def delete_layout(layout_id: str) -> bool:
     layout_dir = settings.LAYOUTS_DIR / layout_id
     if layout_dir.exists():
         shutil.rmtree(layout_dir)
+    
+    generator.update_hold_manifolds()
 
     return True
 
@@ -276,6 +281,8 @@ def put_layout(layout_id: str, layout_data: LayoutEdit) -> str:
     # 7. Execute the dynamic query
     with get_db() as conn: #
         conn.execute(query, tuple(params))
+    
+    generator.update_hold_manifolds()
         
     return layout_id
 
@@ -298,6 +305,9 @@ def set_holds(layout_id: str, holds: list[HoldDetail]) -> bool:
             "UPDATE layouts SET updated_at = ? WHERE id = ?",
             (datetime.now(), layout_id),
         )
+    
+    generator.update_hold_manifolds()
+
     return True
 
 def upload_layout_photo(layout_id: str, photo: UploadFile) -> bool:

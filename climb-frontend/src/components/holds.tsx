@@ -111,29 +111,18 @@ interface EnabledFeaturesMenuProps {
   onClose: () => void;
 }
 
+const FEATURES: { key: FeatureLabel; label: string; desc: string }[] = [
+  { key: "direction", label: "Pull Direction", desc: "The optimal pull vector for the hold" },
+  { key: "useability", label: "Useability", desc: "How easy a hold is to use." },
+  { key: "footholds", label: "Foot Holds", desc: "" },
+  { key: "tags", label: "Tags", desc: "Specific tags for hold types with deviant features" },
+];
+
 export function EnabledFeaturesMenu({
   enabledFeatures,
   onToggle,
   onClose,
 }: EnabledFeaturesMenuProps) {
-  const FEATURES: { key: FeatureLabel; label: string; desc: string }[] = [
-    {
-      key: "direction",
-      label: "Pull Direction",
-      desc: "The optimal pull vector for the hold",
-    },
-    {
-      key: "useability",
-      label: "Useability",
-      desc: "How easy a hold is to use.",
-    },
-    { key: "footholds", label: "Foot Holds", desc: "" },
-    {
-      key: "tags",
-      label: "Tags",
-      desc: "Specific tags for hold types with deviant features",
-    },
-  ];
 
   return (
     <div
@@ -604,9 +593,11 @@ export function HoldFeaturesSidebar({
     onUseabilityLockChange &&
     onLockedUseabilityChange;
 
+  const showEditUseability = mode === "edit" && isDragging && enabledFeatures.useability;
+
   const showTags = enabledFeatures.tags && activeHold != null;
   const showUseability =
-    showLockControls || (!showLockControls && hasUseability);
+    showLockControls || showEditUseability || (!showLockControls && hasUseability);
   const hasContent =
     displayHold || showUseability || showTags || enabledFeatures.tags;
 
@@ -634,7 +625,9 @@ export function HoldFeaturesSidebar({
     margin: "0 0 10px 0",
   };
 
-  const useability = hasUseability ? displayHold!.useability! : 0.5;
+  const useability = showEditUseability
+    ? (dragParams.useability ?? 0.5)
+    : hasUseability ? displayHold!.useability! : 0.5;
   const displayColor = getColor(
     useabilityLocked ? lockedUseability : useability,
   );

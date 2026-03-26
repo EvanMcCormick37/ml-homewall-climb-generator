@@ -227,7 +227,6 @@ SCALED_FEATURES = ['x', 'y', 'pull_x', 'pull_y']
 BINARY_FEATURES = ['is_foot'] + STYLE_TAGS
 HOLD_FEATURE_COLS = SCALED_FEATURES + BINARY_FEATURES
 NUM_HOLD_FEATURES = len(HOLD_FEATURE_COLS)
-NUM_ROLES = 5
 COND_FEATURES = ['grade', 'quality', 'ascents', 'angle']
 
 class ClimbsFeatureScaler:
@@ -389,17 +388,21 @@ GRADE_TO_DIFF = {
 # ---------------------------------------------------------------------------
 # ClimbDDPMGenerator
 # ---------------------------------------------------------------------------
-FEATURE_WEIGHTS = [1.0,1.0,0.8,0.8,2.0,0.1,0.1]
-FOOT_FEATURE_WEIGHTS = [1.0, 1.0, 0.05, 0.05, 1.0, 0.05, 0.05]
-NUM_ROLES = 5
-NUM_FEATURES = 7
-
 
 class ClimbDDPMGenerator():
+    HAND_FEATURE_WEIGHTS = torch.tensor([1.0,1.0,0.8,0.8,2.0,0.1,0.1])
+    FOOT_FEATURE_WEIGHTS = torch.tensor([1.0, 1.0, 0.05, 0.05, 1.0, 0.05, 0.05])
+    NUM_ROLES = 5
+    NUM_FEATURES = 7
+    START_ROLE = 0
+    FINISH_ROLE = 1
+    HAND_ROLE = 2
+    FOOT_ROLE = 3
+
     def __init__(
             self,
-            scaler: ClimbsFeatureScaler,
-            ddpm: ClimbDDPM,
+            scaler: 'ClimbsFeatureScaler',
+            ddpm: 'ClimbDDPM',
         ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.scaler = scaler
@@ -408,22 +411,35 @@ class ClimbDDPMGenerator():
         self.holds_manifolds = {}
         self.holds_lookup = {}
         self.deterministic_noise_generator = torch.Generator(device=self.device)
-        self.hand_feature_weights = torch.tensor(FEATURE_WEIGHTS)
-        self.foot_feature_weights = torch.tensor(FOOT_FEATURE_WEIGHTS)
 
-        try:
-            with sqlite3.connect(settings.DB_PATH) as conn:
-                holds = pd.read_sql_query("SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags, layout_id FROM holds", conn)
-                layout_ids = list(set(holds['layout_id'].values))
-            
-            scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
-            
-            for layout_id in layout_ids:
-                df = scaled_holds[scaled_holds['layout_id']==layout_id]
-                self.holds_manifolds[layout_id] = torch.tensor(df[['x','y','pull_x','pull_y','is_foot','pinch','flat']].values, dtype=torch.float32)
-                self.holds_lookup[layout_id] = df['hold_index'].values
-        except Exception as e:
-            pass
+        # Populate the manifolds immediately upon instantiation
+        self.update_hold_manifolds()
+    
+    def update_hold_manifolds(self):
+        """
+        Fetches the latest holds from the database, scales features, 
+        and rebuilds the manifold and lookup dictionaries.
+        """
+        with sqlite3.connect(settings.DB_PATH) as conn:
+            holds = pd.read_sql_query(
+                "SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags, layout_id FROM holds", 
+                conn
+            )
+            layout_ids = holds['layout_id'].unique()
+        
+        scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
+        
+        # Clear existing data in case layouts were removed from the DB
+        self.holds_manifolds.clear()
+        self.holds_lookup.clear()
+        
+        for layout_id in layout_ids:
+            df = scaled_holds[scaled_holds['layout_id'] == layout_id]
+            self.holds_manifolds[layout_id] = torch.tensor(
+                df[['x', 'y', 'pull_x', 'pull_y', 'is_foot', 'pinch', 'flat']].values, 
+                dtype=torch.float32
+            )
+            self.holds_lookup[layout_id] = df['hold_index'].values
     
     def log_hold_means(self, layout_id: str | None = None):
         """Log the hold means for each wall."""
@@ -459,7 +475,6 @@ class ClimbDDPMGenerator():
         
         offset_manifold[:,0] -= x_offset
         offset_manifold[:,1] -= y_offset
-        means = torch.mean(offset_manifold, dim=0)
 
         return offset_manifold
     
@@ -479,7 +494,7 @@ class ClimbDDPMGenerator():
         
         Args:
             flat_climbs: (N, H) flattened predicted holds (N can be B*S or G*B*S)
-            offset_manifold: (M, NUM_FEATURES) manifold of available holds
+            offset_manifold: (M, self.NUM_FEATURES) manifold of available holds
         Returns:
             min_dists: (N,) tensor of nearest neighbor distances
             idx: (N,) tensor of nearest neighbor indices
@@ -487,7 +502,7 @@ class ClimbDDPMGenerator():
         is_hand_mask = (flat_climbs[:, -2] < 0.85)
         is_foot_mask = ~is_hand_mask
         
-        features = flat_climbs[:, :NUM_FEATURES]
+        features = flat_climbs[:, :self.NUM_FEATURES]
         
         N = flat_climbs.shape[0]
         idx = torch.empty(N, dtype=torch.long, device=flat_climbs.device)
@@ -496,8 +511,8 @@ class ClimbDDPMGenerator():
         # --- Project Handholds ---
         if is_hand_mask.any():
             hand_dists = torch.cdist(
-                features[is_hand_mask] * self.hand_feature_weights.unsqueeze(0),
-                offset_manifold * self.hand_feature_weights.unsqueeze(0)
+                features[is_hand_mask] * self.HAND_FEATURE_WEIGHTS.unsqueeze(0),
+                offset_manifold * self.HAND_FEATURE_WEIGHTS.unsqueeze(0)
             )
             vals, indices = hand_dists.min(dim=1)
             idx[is_hand_mask] = indices
@@ -506,8 +521,8 @@ class ClimbDDPMGenerator():
         # --- Project Footholds ---
         if is_foot_mask.any():
             foot_dists = torch.cdist(
-                features[is_foot_mask] * self.foot_feature_weights.unsqueeze(0),
-                offset_manifold * self.foot_feature_weights.unsqueeze(0)
+                features[is_foot_mask] * self.FOOT_FEATURE_WEIGHTS.unsqueeze(0),
+                offset_manifold * self.FOOT_FEATURE_WEIGHTS.unsqueeze(0)
             )
             vals, indices = foot_dists.min(dim=1)
             idx[is_foot_mask] = indices
@@ -521,7 +536,7 @@ class ClimbDDPMGenerator():
             
             Args:
                 gen_climbs: (B, S, H) predicted clean holds
-                offset_manifold: (M, NUM_FEATURES) manifold of available holds to snap to
+                offset_manifold: (M, self.NUM_FEATURES) manifold of available holds to snap to
             Returns:
                 projected: (B, S, H) each hold snapped to nearest manifold point
         """
@@ -533,18 +548,20 @@ class ClimbDDPMGenerator():
 
         projected_features = offset_manifold[idx] * null_mask.unsqueeze(1)
         
-        return torch.cat([projected_features.reshape(B, S, -1), gen_climbs[:, :, NUM_FEATURES:]], dim=2)
+        return torch.cat([projected_features.reshape(B, S, -1), gen_climbs[:, :, self.NUM_FEATURES:]], dim=2)
     
     def _project_onto_indices(self, gen_climbs: Tensor, offset_manifold: Tensor, layout_id: str) -> list[list[list[int]]]:
         """Project climb onto the final hold indices and assign integer role values (and remove null holds and duplicate holds)"""
         B, S, H = gen_climbs.shape
 
         # Safely convert roles to numpy array
-        roles = torch.argmax(gen_climbs[:, :, NUM_FEATURES:], dim=2).detach().cpu().numpy()
+        roles = torch.argmax(gen_climbs[:, :, self.NUM_FEATURES:], dim=2).detach().cpu().numpy()
 
         flat_climbs = gen_climbs.reshape(-1, H)
         
         _, idx = self._get_nearest_manifold_neighbors(flat_climbs, offset_manifold)
+
+        y_vals = offset_manifold[idx, 1].detach().cpu().numpy().reshape(B, S)
 
         # Lookup holds based on the computed indices
         # Moving idx to CPU is usually safer if holds_lookup is a numpy array or a python list
@@ -560,13 +577,35 @@ class ClimbDDPMGenerator():
         
         climbs = np.stack([holds, roles], axis=2)
         
+        # Stack holds, roles, AND y_vals together (shape: B, S, 3)
+        climbs = np.stack([holds, roles, y_vals], axis=2)
+        
         deduped_climbs = []
         for c in climbs:
             valid_mask = c[:, 1] != 4
             c_valid = c[valid_mask]
+
             c_sorted = c_valid[c_valid[:, 1].argsort()]
             _, unique_indices = np.unique(c_sorted[:, 0], return_index=True)
-            deduped_climbs.append(c_sorted[unique_indices].tolist())
+            c_deduped = c_sorted[unique_indices]
+
+            # --- Enforce Finish Hold (Highest y-value) ---
+            if not np.any(c_deduped[:, 1] == self.FINISH_ROLE):
+                # c_deduped[:, 2] is the y_val column
+                max_y_idx = np.argmax(c_deduped[:, 2])
+                c_deduped[max_y_idx, 1] = self.FINISH_ROLE
+            
+            # --- Enforce Start Hold (Lowest y-value handhold) ---
+            if not np.any(c_deduped[:, 1] == self.START_ROLE):
+                # Add "is_foot" as a float, to ensure that the lowest-value idx is of a handhold, without fucking up the index.
+                min_y_idx = np.argmin(c_deduped[:, 2]+(c_deduped[:,1] == self.FOOT_ROLE).astype(np.float32))
+                # Ensure we don't overwrite the finish hold if it's a 1-hold climb (edge case)
+                if min_y_idx != np.argmax(c_deduped[:, 2]) or len(c_deduped) == 1:
+                    c_deduped[min_y_idx, 1] = self.START_ROLE
+
+            # Drop the y_val column so we return exactly what your downstream code expects: [hold_index, role]
+            final_climb = c_deduped[:, :2].astype(int).tolist()
+            deduped_climbs.append(final_climb)
 
         return deduped_climbs
     
@@ -702,7 +741,7 @@ class ClimbDDPMGenerator():
         # CORE LOGIC
         diff = GRADE_TO_DIFF[diff_scale][grade]
         cond_t = self._build_cond_tensor(n, diff, angle)
-        x_t = torch.randn((n, 20, NUM_ROLES+NUM_FEATURES), device=self.device, generator=self.deterministic_noise_generator) if deterministic else torch.randn((n, 20, NUM_ROLES+NUM_FEATURES), device=self.device)
+        x_t = torch.randn((n, 20, self.NUM_ROLES+self.NUM_FEATURES), device=self.device, generator=self.deterministic_noise_generator) if deterministic else torch.randn((n, 20, self.NUM_ROLES+self.NUM_FEATURES), device=self.device)
         noisy = x_t.clone()
         t_tensor = torch.ones((n,1), device=self.device)
         

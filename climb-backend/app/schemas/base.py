@@ -15,8 +15,8 @@ HoldPosition = Annotated[list[PositiveInt],Field(
 class HoldDetail(BaseModel):
     """Base hold schema."""
     hold_index: int = Field(...,ge=0)
-    x: float = Field(..., ge=0)
-    y: float = Field(..., ge=0)
+    x: float = Field(...)
+    y: float = Field(...)
     pull_x: float | None = Field(None, ge=-1, le=1)
     pull_y: float | None = Field(None, ge=-1, le=1)
     useability: float | None = Field(None, ge=0, le=1)
