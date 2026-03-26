@@ -78,28 +78,10 @@ const TAG_META: { key: Tag; label: string; hotkey: string; desc: string }[] = [
     desc: "A bilateral pinch (can be held two ways). Align the pull vector perpendicular to the dominant edge of the pinch (If perfectly symetric, choose the upwards-facing edge. If perfectly vertical, choose the edge facing away from the center. If right in the center, choose the left side. /-;}-/).",
   },
   {
-    key: "macro",
-    label: "MACRO",
-    hotkey: "m",
-    desc: "A very large hold. BetaZero treats holds as points, so very large holds can confuse it if not labelled as macros.",
-  },
-  {
-    key: "sloper",
-    label: "SLOPER",
-    hotkey: "s",
-    desc: "A slopey hold. Wall angle affects slopers more severely than other hold types.",
-  },
-  {
     key: "flat",
     label: "FLAT",
     hotkey: "f",
     desc: "A hold with a single, straight (flat) edge (Not with regards to being incut or slopey, but flat along the surface of the wall. i.e. a flat, horizontal crimp.",
-  },
-  {
-    key: "jug",
-    label: "JUG",
-    hotkey: "j",
-    desc: "A true jug with severe incut that can be used in a multitude of pull directions (and for dynos).",
   },
 ];
 

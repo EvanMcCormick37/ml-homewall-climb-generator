@@ -1,4 +1,4 @@
-export type Tag = "pinch" | "macro" | "sloper" | "flat" | "jug";
+export type Tag = "pinch" | "flat";
 
 export interface HoldDetail {
   hold_index: number;
