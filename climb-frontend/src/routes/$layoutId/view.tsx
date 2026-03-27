@@ -1073,8 +1073,8 @@ function MainViewPage({
   layout: LayoutDetail;
   navigate: ReturnType<typeof useNavigate>;
 }) {
-  const wallId = layout.metadata.id;
-  const wallDimensions = {
+  const layoutId = layout.metadata.id;
+  const layoutDimensions = {
     width: layout.metadata.dimensions[0],
     height: layout.metadata.dimensions[1],
   };
@@ -1105,7 +1105,7 @@ function MainViewPage({
     selectedClimb,
     setSelectedClimb,
     removeClimb,
-  } = useClimbs(wallId);
+  } = useClimbs(layoutId);
 
   const [climbToDelete, setClimbToDelete] = useState<Climb | null>(null);
 
@@ -1264,7 +1264,7 @@ function MainViewPage({
             onClick={() =>
               navigate({
                 to: "/$layoutId/set",
-                params: { layoutId: wallId },
+                params: { layoutId },
               })
             }
           >
@@ -1583,9 +1583,9 @@ function MainViewPage({
           {/* Canvas */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <WallCanvas
-              wallId={wallId}
+              layoutId={layoutId}
               holds={layout.holds ?? []}
-              wallDimensions={wallDimensions}
+              wallDimensions={layoutDimensions}
               selectedHoldset={selectedHoldset}
               imageDimensions={imageDimensions}
               onImageLoad={handleImageLoad}

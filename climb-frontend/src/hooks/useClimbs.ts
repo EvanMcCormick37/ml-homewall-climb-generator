@@ -18,12 +18,12 @@ interface UseClimbsReturn {
 /**
  * Custom hook for managing climbs for a wall.
  *
- * @param wallId - The wall ID to fetch climbs for
+ * @param layoutId - The wall ID to fetch climbs for
  * @param initialFilters - Optional initial filter settings
  * @returns Climb state, filtering, and CRUD operations
  */
 export function useClimbs(
-  wallId: string,
+  layoutId: string,
   initialFilters: ClimbFilters = DEFAULT_CLIMB_FILTERS,
 ): UseClimbsReturn {
   const [climbs, setClimbs] = useState<Climb[]>([]);
@@ -34,13 +34,13 @@ export function useClimbs(
   const [selectedClimb, setSelectedClimb] = useState<Climb | null>(null);
 
   const fetchClimbs = useCallback(async () => {
-    if (!wallId) return;
+    if (!layoutId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await getClimbs(wallId, filters);
+      const response = await getClimbs(layoutId, filters);
       setClimbs(response.climbs);
       setTotal(response.total);
       if (response.total > 0) {
@@ -54,7 +54,7 @@ export function useClimbs(
     } finally {
       setLoading(false);
     }
-  }, [wallId, filters]);
+  }, [layoutId, filters]);
 
   useEffect(() => {
     fetchClimbs();
@@ -62,7 +62,7 @@ export function useClimbs(
 
   const removeClimb = useCallback(
     async (climbId: string): Promise<void> => {
-      await deleteClimb(wallId, climbId);
+      await deleteClimb(layoutId, climbId);
       // Update local state
       setClimbs((prev) => prev.filter((c) => c.id !== climbId));
       setTotal((prev) => prev - 1);
@@ -71,7 +71,7 @@ export function useClimbs(
         setSelectedClimb(null);
       }
     },
-    [wallId, selectedClimb],
+    [layoutId, selectedClimb],
   );
 
   return {

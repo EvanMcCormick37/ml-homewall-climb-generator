@@ -17,7 +17,7 @@ import {
 // ─── WallCanvas ──────────────────────────────────────────────────────────────
 
 export interface WallCanvasProps {
-  wallId: string;
+  layoutId: string;
   holds: HoldDetail[];
   wallDimensions: { width: number; height: number };
   selectedHoldset: Holdset | null;
@@ -46,7 +46,7 @@ export interface WallCanvasProps {
 }
 
 export function WallCanvas({
-  wallId,
+  layoutId,
   holds,
   wallDimensions,
   selectedHoldset,
@@ -141,9 +141,9 @@ export function WallCanvas({
         });
       }
     };
-    fetchLayoutPhoto(wallId).then((url) => { objectUrl = url; img.src = url; });
+    fetchLayoutPhoto(layoutId).then((url) => { objectUrl = url; img.src = url; });
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [wallId, onImageLoad]);
+  }, [layoutId, onImageLoad]);
 
   const toPixelCoords = useCallback(
     (hold: HoldDetail) => {

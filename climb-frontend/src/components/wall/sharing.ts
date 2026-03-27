@@ -46,23 +46,23 @@ export function decodeClimbFromParam(param: string): NamedHoldset | null {
   }
 }
 
-export function buildShareUrl(wallId: string, entry: NamedHoldset): string {
-  return `${window.location.origin}/${wallId}/set?climb=${encodeClimbToParam(entry)}`;
+export function buildShareUrl(layoutId: string, entry: NamedHoldset): string {
+  return `${window.location.origin}/${layoutId}/set?climb=${encodeClimbToParam(entry)}`;
 }
 
 // ─── Export image renderer ───────────────────────────────────────────────────
 
 export async function renderExportImage(
-  wallId: string,
-  wallName: string,
+  layoutId: string,
+  layoutName: string,
   holds: HoldDetail[],
-  wallDimensions: { width: number; height: number },
+  layoutDimensions: { width: number; height: number },
   climb: NamedHoldset,
   setterName: string | null,
   displaySettings: DisplaySettings,
   imageEdges?: [number, number, number, number] | null,
 ): Promise<Blob> {
-  const objectUrl = await fetchLayoutPhoto(wallId);
+  const objectUrl = await fetchLayoutPhoto(layoutId);
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new window.Image();
     el.onload = () => resolve(el);
@@ -112,7 +112,7 @@ export async function renderExportImage(
   ctx.fillStyle = "#71717a";
   ctx.font = `${Math.round(topBannerH * 0.4)}px sans-serif`;
   ctx.textAlign = "right";
-  ctx.fillText(wallName, imgW - Math.round(imgW * 0.02), topBannerH / 2);
+  ctx.fillText(layoutName, imgW - Math.round(imgW * 0.02), topBannerH / 2);
 
   // Reset alignment before drawing the image
   ctx.textAlign = "left";
@@ -133,9 +133,9 @@ export async function renderExportImage(
 
   const [imgEdgeL, imgEdgeR, imgEdgeB, imgEdgeT] = imageEdges ?? [
     0,
-    wallDimensions.width,
+    layoutDimensions.width,
     0,
-    wallDimensions.height,
+    layoutDimensions.height,
   ];
 
   holds.forEach((hold) => {

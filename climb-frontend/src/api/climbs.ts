@@ -9,10 +9,10 @@ import {
 } from "@/types";
 
 /**
- * Fetch climbs for a wall with optional filters
+ * Fetch climbs for a layout with optional filters
  */
 export async function getClimbs(
-  wallId: string,
+  layoutId: string,
   filters: ClimbFilters = DEFAULT_CLIMB_FILTERS,
 ): Promise<ClimbListResponse> {
   const params = new URLSearchParams();
@@ -54,7 +54,7 @@ export async function getClimbs(
   }
 
   const queryString = params.toString();
-  const url = `/walls/${wallId}/climbs${queryString ? `?${queryString}` : ""}`;
+  const url = `/layouts/${layoutId}/climbs${queryString ? `?${queryString}` : ""}`;
 
   const response = await apiClient.get<ClimbListResponse>(url);
   return response.data;
@@ -64,7 +64,7 @@ export async function getClimbs(
  * Create a new climb
  */
 export async function createClimb(
-  wallId: string,
+  layoutId: string,
   data: ClimbCreate,
 ): Promise<ClimbCreateResponse> {
   // Validate holds before sending
@@ -82,7 +82,7 @@ export async function createClimb(
   }
 
   const response = await apiClient.post<ClimbCreateResponse>(
-    `/walls/${wallId}/climbs`,
+    `/layouts/${layoutId}/climbs`,
     data,
   );
 
@@ -93,11 +93,11 @@ export async function createClimb(
  * Delete a climb
  */
 export async function deleteClimb(
-  wallId: string,
+  layoutId: string,
   climbId: string,
 ): Promise<ClimbDeleteResponse> {
   const response = await apiClient.delete<ClimbDeleteResponse>(
-    `/walls/${wallId}/climbs/${climbId}`,
+    `/layouts/${layoutId}/climbs/${climbId}`,
   );
   return response.data;
 }

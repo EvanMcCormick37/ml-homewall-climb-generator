@@ -2439,7 +2439,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
           {/* Canvas */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <WallCanvas
-              wallId={layoutId}
+              layoutId={layoutId}
               holds={layout.holds ?? []}
               wallDimensions={layoutDimensions}
               selectedHoldset={selectedHoldset}
