@@ -96,7 +96,7 @@ export function useHolds(
 
   // Convert feet coordinates to pixels
   const toPixelCoords = useCallback(
-    (hold: HoldDetail) => {
+    (hold: Pick<HoldDetail, "x" | "y">) => {
       if (Hinv) {
         const [px, py] = applyHomography(Hinv, [hold.x, hold.y]);
         return { x: px, y: py };

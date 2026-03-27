@@ -772,7 +772,7 @@ function SizesPage() {
               }}
             >
               <img
-                src={photoUrl}
+                src={photoUrl ?? undefined}
                 alt={initialLayout.metadata.name}
                 style={{
                   display: "block",
