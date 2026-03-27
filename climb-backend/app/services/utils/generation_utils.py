@@ -10,6 +10,7 @@ Contains:
 """
 import math
 import numpy as np
+from contextlib import contextmanager
 import pandas as pd
 import sqlite3
 import joblib
@@ -787,4 +788,37 @@ def reset_generator():
     generator.log_hold_means()
     return generator
 
-generator = reset_generator()
+
+class GeneratorPool:
+    """Pool of ClimbDDPMGenerator instances for concurrent generation.
+
+    Each slot owns its own model copy so concurrent requests never share
+    mutable PyTorch state.  Uses a blocking Queue: callers wait if all
+    instances are busy rather than racing on shared state.
+    """
+
+    def __init__(self, size: int):
+        from queue import Queue
+        self._pool: Queue[ClimbDDPMGenerator] = Queue(maxsize=size)
+        for _ in range(size):
+            self._pool.put(reset_generator())
+
+    @contextmanager
+    def acquire(self):
+        gen = self._pool.get(block=True)
+        try:
+            yield gen
+        finally:
+            self._pool.put(gen)
+
+    def update_all_hold_manifolds(self):
+        """Refresh hold manifolds on every pooled generator instance."""
+        items = []
+        while not self._pool.empty():
+            items.append(self._pool.get_nowait())
+        for gen in items:
+            gen.update_hold_manifolds()
+            self._pool.put(gen)
+
+
+generator_pool = GeneratorPool(size=settings.GENERATOR_POOL_SIZE)

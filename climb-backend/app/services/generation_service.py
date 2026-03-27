@@ -9,7 +9,7 @@ Manages:
 import logging
 
 from app.schemas import Holdset, GenerateRequest, GenerateSettings
-from app.services.utils import generator
+from app.services.utils import generator_pool
 from app.services.climb_service import _holds_to_holdset, _get_layout_angle
 
 logger = logging.getLogger(__name__)
@@ -39,21 +39,20 @@ def generate_climbs(
         # Resolve angle: use request override, else layout's stored angle
         angle = request.angle if request.angle else _get_layout_angle(layout_id)
 
-        # The generator's internal lookup is keyed by layout_id.
-        # For migrated data, layout_id == layout_id, so this still works.
-        raw_climbs = generator.generate(
-            layout_id=layout_id,
-            n=request.num_climbs,
-            angle=angle,
-            grade=request.grade,
-            diff_scale=request.grade_scale.value,
-            timesteps=gen_settings.timesteps,
-            deterministic = gen_settings.deterministic,
-            t_start_projection=gen_settings.t_start_projection,
-            x_offset=gen_settings.x_offset,
-            guidance_value=gen_settings.guidance_value,
-            seed=gen_settings.seed,
-        )
+        with generator_pool.acquire() as gen:
+            raw_climbs = gen.generate(
+                layout_id=layout_id,
+                n=request.num_climbs,
+                angle=angle,
+                grade=request.grade,
+                diff_scale=request.grade_scale.value,
+                timesteps=gen_settings.timesteps,
+                deterministic=gen_settings.deterministic,
+                t_start_projection=gen_settings.t_start_projection,
+                x_offset=gen_settings.x_offset,
+                guidance_value=gen_settings.guidance_value,
+                seed=gen_settings.seed,
+            )
     except Exception as e:
         print(f"Exception: {e}")
         raise e

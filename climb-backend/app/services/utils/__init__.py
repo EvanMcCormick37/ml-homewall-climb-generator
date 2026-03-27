@@ -2,7 +2,7 @@
 Utility modules for model training and generation.
 """
 from app.services.utils.generation_utils import (
-    generator,
+    generator_pool,
     reset_generator,
     GRADE_TO_DIFF,
 )
@@ -16,7 +16,7 @@ from app.services.utils.conversion_utils import (
 )
 
 __all__ = [
-    "generator",
+    "generator_pool",
     "reset_generator",
     "GRADE_TO_DIFF",
     "_get_layout_angle",

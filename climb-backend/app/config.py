@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     SCALER_WEIGHTS_PATH: Path = DATA_DIR / "models" / "scaler-weights.joblib"
     HC_WEIGHTS_PATH: Path = DATA_DIR / "models" / "unet-hold-classifier.pth"
     
+    # Concurrent generation pool size (one model instance per slot)
+    GENERATOR_POOL_SIZE: int = 4
+
     # Pagination defaults
     LIMIT: int = 50
 

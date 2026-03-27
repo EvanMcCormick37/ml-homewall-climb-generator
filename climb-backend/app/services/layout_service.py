@@ -19,7 +19,7 @@ from app.schemas import (
     HoldDetail,
 )
 from app.config import settings
-from app.services.utils import _parse_sizes, _row_to_hold_detail, _hold_detail_to_row, _row_to_layout_metadata, generator
+from app.services.utils import _parse_sizes, _row_to_hold_detail, _hold_detail_to_row, _row_to_layout_metadata, generator_pool
 
 # ---------------------------------------------------------------------------
 # Layout queries
@@ -204,7 +204,7 @@ def create_layout(
             ),
         )
 
-    generator.update_hold_manifolds()
+    generator_pool.update_all_hold_manifolds()
     
     return layout_id
 
@@ -224,7 +224,7 @@ def delete_layout(layout_id: str) -> bool:
     if layout_dir.exists():
         shutil.rmtree(layout_dir)
     
-    generator.update_hold_manifolds()
+    generator_pool.update_all_hold_manifolds()
 
     return True
 
@@ -289,7 +289,7 @@ def put_layout(layout_id: str, layout_data: LayoutEdit) -> str:
     with get_db() as conn: #
         conn.execute(query, tuple(params))
     
-    generator.update_hold_manifolds()
+    generator_pool.update_all_hold_manifolds()
         
     return layout_id
 
@@ -313,7 +313,7 @@ def set_holds(layout_id: str, holds: list[HoldDetail]) -> bool:
             (datetime.now(), layout_id),
         )
     
-    generator.update_hold_manifolds()
+    generator_pool.update_all_hold_manifolds()
 
     return True
 
