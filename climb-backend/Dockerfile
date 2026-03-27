@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements-lock.txt
 COPY app/ /app/app/
 
 # Copy your data files into the STAGING directory
-COPY data/ /app/data-staging/
+# COPY data/ /app/data-staging/
 
 # Copy the startup script and make it executable
 # COPY start.sh /app/start.sh
