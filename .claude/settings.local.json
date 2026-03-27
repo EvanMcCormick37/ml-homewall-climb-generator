@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(grep -E \"\\\\.py$\")"
     ]
   }
 }

@@ -34,7 +34,7 @@ def list_climbs(
     offset: int = Query(0, ge=0),
 ):
     climbs, total, limit, offset = services.get_climbs(
-        wall_id=layout_id,
+        layout_id=layout_id,
         angle=angle,
         grade_scale=grade_scale,
         min_grade=min_grade,

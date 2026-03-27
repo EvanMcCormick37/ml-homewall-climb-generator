@@ -20,6 +20,7 @@ class LayoutMetadata(BaseModel):
     homography_src_corners: list[float] | None = None
     default_angle: int | None = None
     sizes: list[SizeMetadata] = []
+    climb_count: int = 0
     owner_id: str
     visibility: str
     share_token: str | None = None

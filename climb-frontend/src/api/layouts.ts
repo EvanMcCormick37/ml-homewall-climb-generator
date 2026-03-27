@@ -135,3 +135,16 @@ export async function fetchLayoutPhoto(layoutId: string): Promise<string> {
   });
   return URL.createObjectURL(response.data);
 }
+
+/**
+ * Fetch the 1/4 scale thumbnail for a layout. Falls back to full photo on the server
+ * if the thumbnail hasn't been generated yet.
+ * Returns a blob object URL. Caller must revoke it with URL.revokeObjectURL() when done.
+ */
+export async function fetchLayoutPhotoSmall(layoutId: string): Promise<string> {
+  const response = await apiClient.get<Blob>(
+    `/layouts/${layoutId}/photo-small`,
+    { responseType: "blob" },
+  );
+  return URL.createObjectURL(response.data);
+}

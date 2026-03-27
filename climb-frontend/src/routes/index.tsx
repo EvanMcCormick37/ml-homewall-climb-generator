@@ -1,27 +1,122 @@
 import { SignedIn, SignedOut, UserButton } from "@clerk/clerk-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useLayouts } from "@/hooks/useLayouts";
-import { fetchLayoutPhoto } from "@/api/layouts";
+import { fetchLayoutPhotoSmall } from "@/api/layouts";
 import { WakingScreen } from "@/components";
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TITLE_STYLES } from "@/styles";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-function LayoutPhotoImg({
+// ── LayoutPhotoImg ─────────────────────────────────────────────────────────────
+// memo: stable layoutId means no re-renders when HomePage state changes.
+// cancelled flag: revokes blob URL if the component unmounts before fetch resolves.
+
+const LayoutPhotoImg = memo(function LayoutPhotoImg({
   layoutId,
   ...imgProps
 }: { layoutId: string } & React.ImgHTMLAttributes<HTMLImageElement>) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let url: string | null = null;
-    fetchLayoutPhoto(layoutId).then((u) => { url = u; setSrc(u); });
-    return () => { if (url) URL.revokeObjectURL(url); };
+    let cancelled = false;
+    fetchLayoutPhotoSmall(layoutId).then((u) => {
+      if (cancelled) { URL.revokeObjectURL(u); return; }
+      url = u;
+      setSrc(u);
+    });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
   }, [layoutId]);
   return src ? <img src={src} {...imgProps} /> : null;
-}
+});
+
+// ── HoldGridCanvas ─────────────────────────────────────────────────────────────
+// memo: no props → never needs to re-render after mount.
+// Dots are generated once and reused on resize (stable positions, no jitter).
+// Resize handler is debounced to avoid thrashing during drag-resize.
+
+const HoldGridCanvas = memo(function HoldGridCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const SPACING = 48;
+    type Dot = { cx: number; cy: number; r: number; a: number };
+    let dots: Dot[] = [];
+
+    const generateDots = (w: number, h: number) => {
+      const cols = Math.ceil(w / SPACING) + 1;
+      const rows = Math.ceil(h / SPACING) + 1;
+      dots = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const jitter = SPACING * 0.18;
+          dots.push({
+            cx: c * SPACING + (Math.random() - 0.5) * jitter,
+            cy: r * SPACING + (Math.random() - 0.5) * jitter,
+            r: 2 + Math.random() * 3,
+            a: 0.04 + Math.random() * 0.09,
+          });
+        }
+      }
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      dots.forEach(({ cx, cy, r, a }) => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(6,182,212,${a})`;
+        ctx.fill();
+      });
+    };
+
+    // Initial draw — generate dots once
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    generateDots(canvas.width, canvas.height);
+    draw();
+
+    // Debounced resize — redraw same dots, no regeneration
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    const handleResize = () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        draw();
+        resizeTimer = null;
+      }, 150);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (resizeTimer) clearTimeout(resizeTimer);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      aria-hidden="true"
+    />
+  );
+});
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 const LINKS = [
   { label: "About Me", href: "https://www.evmojo.dev" },
@@ -51,66 +146,82 @@ const LINKS = [
   },
 ];
 
-// Generates a subtle hold-grid dot pattern on a canvas
-function HoldGridCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const resize = () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-      draw();
-    };
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const spacing = 48;
-      const cols = Math.ceil(canvas.width / spacing) + 1;
-      const rows = Math.ceil(canvas.height / spacing) + 1;
-
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const jitter = spacing * 0.18;
-          const x = c * spacing + (Math.random() - 0.5) * jitter;
-          const y = r * spacing + (Math.random() - 0.5) * jitter;
-
-          const opacity = 0.04 + Math.random() * 0.09;
-          const radius = 2 + Math.random() * 3;
-
-          ctx.beginPath();
-          ctx.arc(x, y, radius, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(6, 182, 212, ${opacity})`;
-          ctx.fill();
-        }
-      }
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 w-full h-full pointer-events-none"
-      aria-hidden="true"
-    />
-  );
-}
+// ── HomePage ───────────────────────────────────────────────────────────────────
 
 function HomePage() {
   const { layouts, loading, waking, error } = useLayouts();
   const navigate = useNavigate();
 
+  const goToSignIn = useCallback(() => navigate({ to: "/signIn" }), [navigate]);
+  const goToNewLayout = useCallback(() => navigate({ to: "/layouts/new" }), [navigate]);
+
+  // Memoize cards so the map only reruns when layouts actually changes,
+  // not on every loading/waking/error state transition.
+  const layoutCards = useMemo(() => {
+    const sorted = [...layouts].sort((a, b) => {
+      if (b.climb_count !== a.climb_count) return b.climb_count - a.climb_count;
+      return a.name.localeCompare(b.name);
+    });
+    return sorted.map((layout) => {
+      const hasPhoto = layout.sizes.length > 0;
+      const dims =
+        layout.dimensions[0] && layout.dimensions[1]
+          ? `${layout.dimensions[0]} ft × ${layout.dimensions[1]} ft${layout.default_angle != null ? ` · ${layout.default_angle}°` : ""}`
+          : null;
+      const climbStr = `${layout.climb_count} ${layout.climb_count === 1 ? "climb" : "climbs"}`;
+      return (
+        <button
+          key={layout.id}
+          onClick={() => navigate({ to: "/$layoutId/set", params: { layoutId: layout.id } })}
+          className="bz-card"
+          style={{ position: "relative" }}
+        >
+          {/* Photo */}
+          <div style={{ width: "100%", height: "180px", overflow: "hidden", background: "#1c1c1e" }}>
+            {hasPhoto && (
+              <LayoutPhotoImg
+                layoutId={layout.id}
+                alt={layout.name}
+                className="bz-card-img"
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            )}
+          </div>
+
+          {/* Info */}
+          <div style={{ padding: "16px 18px 18px" }}>
+            <div
+              style={{
+                fontFamily: "'Oswald', sans-serif",
+                fontSize: "1.15rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+                color: "var(--text-primary)",
+                marginBottom: "6px",
+              }}
+            >
+              {layout.name}
+            </div>
+            <div
+              className="bz-mono"
+              style={{ fontSize: "0.65rem", color: "var(--text-muted)", letterSpacing: "0.06em" }}
+            >
+              {dims ?? "—"}
+              {layout.sizes.length > 1 && ` · ${layout.sizes.length} sizes`}
+              {` · ${climbStr}`}
+            </div>
+          </div>
+
+          {/* Bottom accent line */}
+          <div style={{ height: "2px", background: "var(--cyan)", opacity: 0.9 }} />
+        </button>
+      );
+    });
+  }, [layouts, navigate]);
+
   return (
     <>
-      {/* ── Google Font: Space Mono (monospace, technical feel) + Oswald (condensed display) ── */}
       <style>{TITLE_STYLES}</style>
 
       <div
@@ -132,14 +243,7 @@ function HomePage() {
             borderBottom: "1px solid var(--border)",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              gap: "28px",
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
+          <div style={{ display: "flex", gap: "28px", flexWrap: "wrap", alignItems: "center" }}>
             {LINKS.map((link) => (
               <a
                 key={link.label}
@@ -152,11 +256,10 @@ function HomePage() {
               </a>
             ))}
           </div>
-          {/* Desktop Sign-In */}
           <div className="hidden lg:flex">
             <SignedOut>
               <button
-                onClick={() => navigate({ to: "/signIn" })}
+                onClick={goToSignIn}
                 className="bz-mono"
                 style={{
                   fontSize: "0.65rem",
@@ -175,17 +278,11 @@ function HomePage() {
             </SignedOut>
           </div>
           <SignedIn>
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: { width: 32, height: 32 },
-                },
-              }}
-            />
+            <UserButton appearance={{ elements: { avatarBox: { width: 32, height: 32 } } }} />
           </SignedIn>
         </nav>
 
-        {/* {Mobile Sign-in} */}
+        {/* Mobile Sign-in */}
         <div
           style={{
             position: "fixed",
@@ -201,7 +298,7 @@ function HomePage() {
         >
           <SignedOut>
             <button
-              onClick={() => navigate({ to: "/signIn" })}
+              onClick={goToSignIn}
               className="bz-mono"
               style={{
                 fontSize: "0.65rem",
@@ -238,28 +335,16 @@ function HomePage() {
               top: "10%",
               width: "2px",
               height: "60%",
-              background:
-                "linear-gradient(to bottom, transparent, var(--cyan), transparent)",
+              background: "linear-gradient(to bottom, transparent, var(--cyan), transparent)",
               opacity: 0.6,
             }}
             aria-hidden="true"
           />
 
-          <div
-            style={{
-              position: "relative",
-              maxWidth: "1100px",
-              margin: "0 auto",
-            }}
-          >
+          <div style={{ position: "relative", maxWidth: "1100px", margin: "0 auto" }}>
             <div
               className="bz-anim bz-anim-1"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                marginBottom: "24px",
-              }}
+              style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}
             >
               <div className="bz-accent-bar" />
               <span className="bz-section-label">Welcome to</span>
@@ -279,18 +364,12 @@ function HomePage() {
                 color: "var(--text-muted)",
               }}
             >
-              A public resource for generating board climbs using machine
-              learning.
+              A public resource for generating board climbs using machine learning.
             </p>
 
             <div
               className="bz-anim bz-anim-4"
-              style={{
-                marginTop: "56px",
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-              }}
+              style={{ marginTop: "56px", display: "flex", alignItems: "center", gap: "10px" }}
             >
               <span className="bz-section-label">Choose your wall</span>
               <svg
@@ -313,7 +392,7 @@ function HomePage() {
           </div>
         </section>
 
-        {/* ── Wall Selection ── */}
+        {/* ── Layout Selection ── */}
         <section
           style={{
             flex: 1,
@@ -324,22 +403,15 @@ function HomePage() {
           }}
         >
           <div className="bz-anim bz-anim-5">
-            {/* Initial loading (first attempt, not yet known if 502) */}
             {loading && (
               <div
                 className="bz-mono"
-                style={{
-                  color: "var(--text-muted)",
-                  fontSize: "0.8rem",
-                  padding: "60px 0",
-                  textAlign: "center",
-                }}
+                style={{ color: "var(--text-muted)", fontSize: "0.8rem", padding: "60px 0", textAlign: "center" }}
               >
                 — loading layouts —
               </div>
             )}
             {waking && <WakingScreen />}
-            {/* Error */}
             {error && (
               <div
                 className="bz-mono"
@@ -356,13 +428,11 @@ function HomePage() {
               </div>
             )}
 
-            {/* Cards */}
             {!loading && !error && (
               <div className="bz-wall-grid">
-                {/* Add your wall card — signed-in users only */}
                 <SignedIn>
                   <button
-                    onClick={() => navigate({ to: "/layouts/new" })}
+                    onClick={goToNewLayout}
                     className="bz-card"
                     style={{
                       position: "relative",
@@ -380,8 +450,7 @@ function HomePage() {
                       e.currentTarget.style.background = "var(--cyan-dim)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor =
-                        "rgba(6,182,212,0.3)";
+                      e.currentTarget.style.borderColor = "rgba(6,182,212,0.3)";
                       e.currentTarget.style.background = "transparent";
                     }}
                   >
@@ -438,86 +507,7 @@ function HomePage() {
                   </button>
                 </SignedIn>
 
-                {layouts.map((layout) => {
-                  const hasPhoto = layout.sizes.length > 0;
-                  const dims = layout.dimensions[0] && layout.dimensions[1]
-                    ? `${layout.dimensions[0]} ft × ${layout.dimensions[1]} ft${layout.default_angle != null ? ` · ${layout.default_angle}°` : ""}`
-                    : null;
-                  return (
-                  <button
-                    key={layout.id}
-                    onClick={() =>
-                      navigate({
-                        to: "/$layoutId/set",
-                        params: { layoutId: layout.id },
-                      })
-                    }
-                    className="bz-card"
-                    style={{ position: "relative" }}
-                  >
-                    {/* Photo */}
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "180px",
-                        overflow: "hidden",
-                        background: "#1c1c1e",
-                      }}
-                    >
-                      {hasPhoto && (
-                        <LayoutPhotoImg
-                          layoutId={layout.id}
-                          alt={layout.name}
-                          className="bz-card-img"
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            display: "block",
-                          }}
-                        />
-                      )}
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ padding: "16px 18px 18px" }}>
-                      <div
-                        style={{
-                          fontFamily: "'Oswald', sans-serif",
-                          fontSize: "1.15rem",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.04em",
-                          color: "var(--text-primary)",
-                          marginBottom: "6px",
-                        }}
-                      >
-                        {layout.name}
-                      </div>
-                      <div
-                        className="bz-mono"
-                        style={{
-                          fontSize: "0.65rem",
-                          color: "var(--text-muted)",
-                          letterSpacing: "0.06em",
-                        }}
-                      >
-                        {dims ?? "—"}
-                        {layout.sizes.length > 1 && ` · ${layout.sizes.length} sizes`}
-                      </div>
-                    </div>
-
-                    {/* Bottom accent line */}
-                    <div
-                      style={{
-                        height: "2px",
-                        background: "var(--cyan)",
-                        opacity: 0.9,
-                      }}
-                    />
-                  </button>
-                  );
-                })}
+                {layoutCards}
               </div>
             )}
           </div>
@@ -535,24 +525,10 @@ function HomePage() {
             gap: "12px",
           }}
         >
-          <span
-            className="bz-mono"
-            style={{
-              fontSize: "0.65rem",
-              color: "var(--text-muted)",
-              letterSpacing: "0.1em",
-            }}
-          >
-            {new Date().getFullYear()} Evan McCormick
+          <span className="bz-mono" style={{ fontSize: "0.65rem", color: "var(--text-muted)", letterSpacing: "0.1em" }}>
+            {CURRENT_YEAR} Evan McCormick
           </span>
-          <span
-            className="bz-mono"
-            style={{
-              fontSize: "0.65rem",
-              color: "var(--text-muted)",
-              letterSpacing: "0.1em",
-            }}
-          >
+          <span className="bz-mono" style={{ fontSize: "0.65rem", color: "var(--text-muted)", letterSpacing: "0.1em" }}>
             MIT License
           </span>
         </footer>

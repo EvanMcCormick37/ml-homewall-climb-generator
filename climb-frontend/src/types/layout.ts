@@ -30,6 +30,7 @@ export interface LayoutMetadata {
   homography_src_corners: number[] | null; // [tlx,tly, trx,try, blx,bly, brx,bry] normalized 0-1 — null for rect/as-is mode
   default_angle: number | null;
   sizes: SizeMetadata[];
+  climb_count: number;
   owner_id: string;
   visibility: Visibility;
   share_token: string | null;

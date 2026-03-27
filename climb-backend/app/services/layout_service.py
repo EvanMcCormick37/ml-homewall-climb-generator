@@ -2,8 +2,6 @@
 Service for managing layouts (and their holds).
 
 A layout is a unique hold arrangement. Multiple sizes can share one layout.
-This module replaces wall_service.py for all new code; wall_service.py is
-kept for the legacy /walls API until Phase 6 cleanup.
 """
 import json
 import uuid
@@ -106,17 +104,23 @@ def get_all_layouts(owner_id: str | None = None) -> list[LayoutMetadata]:
             "SELECT * FROM sizes ORDER BY created_at ASC"
         ).fetchall()
 
+        climb_count_rows = conn.execute(
+            "SELECT layout_id, COUNT(*) AS count FROM climbs GROUP BY layout_id"
+        ).fetchall()
+
     # Group sizes by layout_id
     sizes_by_layout: dict[str, list] = {}
     for sr in all_size_rows:
         lid = sr["layout_id"]
         sizes_by_layout.setdefault(lid, []).append(sr)
 
+    climb_counts: dict[str, int] = {r["layout_id"]: r["count"] for r in climb_count_rows}
+
     layouts = []
     for row in layout_rows:
         lid = row["id"]
         sizes = _parse_sizes(sizes_by_layout.get(lid, []))
-        layouts.append(_row_to_layout_metadata(row, sizes))
+        layouts.append(_row_to_layout_metadata(row, sizes, climb_counts.get(lid, 0)))
 
     return layouts
 
@@ -139,9 +143,12 @@ def get_layout(layout_id: str) -> LayoutDetail | None:
             "SELECT * FROM sizes WHERE layout_id = ? ORDER BY created_at ASC",
             (layout_id,),
         ).fetchall()
+        climb_count_row = conn.execute(
+            "SELECT COUNT(*) AS count FROM climbs WHERE layout_id = ?",(layout_id,)
+        ).fetchone()
 
     sizes = _parse_sizes(size_rows)
-    metadata = _row_to_layout_metadata(row, sizes)
+    metadata = _row_to_layout_metadata(row, sizes, climb_count_row['count'])
     holds = get_holds(layout_id)
     return LayoutDetail(metadata=metadata, holds=holds)
 
@@ -311,14 +318,26 @@ def set_holds(layout_id: str, holds: list[HoldDetail]) -> bool:
     return True
 
 def upload_layout_photo(layout_id: str, photo: UploadFile) -> bool:
-    """Upload or replace the photo for a size."""
+    """Upload or replace the photo for a layout, and generate a 1/4 scale thumbnail."""
+    from PIL import Image
+    import io
+
     assert photo.filename
 
     ext = Path(photo.filename).suffix
     photo_dir = settings.LAYOUTS_DIR / layout_id
     photo_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"photo{ext}"
+
     contents = photo.file.read()
-    with open(photo_dir / filename, "wb") as f:
+
+    # Save full-size photo
+    with open(photo_dir / f"photo{ext}", "wb") as f:
         f.write(contents)
+
+    # Generate and save 1/4 scale thumbnail
+    img = Image.open(io.BytesIO(contents))
+    small_size = (img.width // 4, img.height // 4)
+    img_small = img.resize(small_size, Image.LANCZOS)
+    img_small.save(photo_dir / f"photo-small{ext}")
+
     return True

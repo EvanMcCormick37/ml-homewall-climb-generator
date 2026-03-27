@@ -25,7 +25,7 @@ def _parse_sizes(rows) -> list[SizeMetadata]:
         sizes.append(_row_to_size_metadata(row))
     return sizes
 
-def _row_to_layout_metadata(row, sizes: list[SizeMetadata]) -> LayoutMetadata:
+def _row_to_layout_metadata(row, sizes: list[SizeMetadata], climb_count: int = 0) -> LayoutMetadata:
     raw_corners = row["homography_src_corners"] if "homography_src_corners" in row.keys() else None
     return LayoutMetadata(
         id=row["id"],
@@ -36,6 +36,7 @@ def _row_to_layout_metadata(row, sizes: list[SizeMetadata]) -> LayoutMetadata:
         homography_src_corners=json.loads(raw_corners) if raw_corners else None,
         default_angle=row["default_angle"],
         sizes=sizes,
+        climb_count=climb_count,
         owner_id=row["owner_id"],
         visibility=row["visibility"],
         share_token=row["share_token"],

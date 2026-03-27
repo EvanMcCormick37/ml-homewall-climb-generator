@@ -108,10 +108,10 @@ function ModelSettingsPanel({
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <BzRange
         label="Generation Timesteps"
-        desc="Fewer timesteps = faster generation but reduced quality."
+        desc="Fewer timesteps = faster generation but reduced quality. WARNING: Using this setting to generate high difficulty climbs may result in errors due to lack of holds. I know that sounds like a fake error but if you try it you'll see what I mean."
         value={settings.timesteps}
-        min={5}
-        max={100}
+        min={25}
+        max={200}
         step={5}
         onChange={(v) => update({ timesteps: v })}
         displayValue={String(settings.timesteps)}
@@ -120,15 +120,15 @@ function ModelSettingsPanel({
       />
       <BzRange
         label="Guidance Value"
-        desc="Guidance value for CFG. A higher guidance value will emphasize climb features which correspond to the selected wall angle and grade. Too large a value may degrade the generated climb's quality."
+        desc="Guidance value for CFG. A higher guidance value will exaggerate the climb features corresponding to the wall angle and grade. However, a high Guidance value may create extreme or impossible hold arrangements."
         value={settings.guidance_value}
         min={1.0}
         max={10.0}
         step={0.5}
         onChange={(v) => update({ guidance_value: v })}
         displayValue={settings.guidance_value.toFixed(1)}
-        leftLabel="General"
-        rightLabel="Specific"
+        leftLabel="Understated"
+        rightLabel="Exaggerated"
       />
 
       <BzRange

@@ -4,7 +4,7 @@ Service for managing climbs.
 Handles:
 - Climb CRUD operations (keyed by layout_id for new code)
 - Filtering and sorting queries
-- Legacy wall_id support (backward compat until Phase 6 cleanup)
+- Legacy layout_id support (backward compat until Phase 6 cleanup)
 """
 import json
 import uuid
@@ -23,7 +23,7 @@ def _grade_range(min_grade: str, max_grade: str, grade_scale: str):
 
 
 def get_climbs(
-    wall_id: str,
+    layout_id: str,
     grade_scale: str,
     min_grade: str,
     max_grade: str,
@@ -41,19 +41,19 @@ def get_climbs(
     size_id: str | None = None,
 ) -> tuple[list[Climb], int, int, int]:
     """
-    Get climbs for a layout/wall with filtering.
+    Get climbs for a layout/layout with filtering.
 
-    `wall_id` is accepted as the primary lookup key; it matches both the legacy
-    `wall_id` column and the new `layout_id` column (they are equal for all
+    `layout_id` is accepted as the primary lookup key; it matches both the legacy
+    `layout_id` column and the new `layout_id` column (they are equal for all
     migrated data). `size_id` is accepted for future size-aware filtering but
     is not yet applied as a hard filter (climbs are not yet tagged with size_id
     in the existing dataset).
     """
     grade_range = _grade_range(min_grade, max_grade, grade_scale)
 
-    # Match on layout_id OR wall_id so both old and new data is returned
-    conditions = ["(layout_id = ? OR wall_id = ?)"]
-    params: list = [wall_id, wall_id]
+    # Match on layout_id OR layout_id so both old and new data is returned
+    conditions = ["(layout_id = ? OR layout_id = ?)"]
+    params: list = [layout_id, layout_id]
 
     if angle is not None:
         conditions.append("angle = ?")
@@ -117,15 +117,15 @@ def get_climbs(
     return climbs, total, limit, offset
 
 
-def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
+def create_climb(layout_id: str, climb_data: ClimbCreate) -> str:
     """
     Create a new climb.
 
-    `wall_id` is accepted for backward compat with the legacy router; it is
-    stored in both `wall_id` and `layout_id` columns.
+    `layout_id` is accepted for backward compat with the legacy router; it is
+    stored in both `layout_id` and `layout_id` columns.
     """
     climb_id = f"climb-{uuid.uuid4().hex[:15]}"
-    angle = climb_data.angle if climb_data.angle else _get_wall_angle(wall_id)
+    angle = climb_data.angle if climb_data.angle else _get_layout_angle(layout_id)
     grade = (
         GRADE_TO_DIFF[climb_data.scale][climb_data.grade]
         if (climb_data.scale and climb_data.grade)
@@ -138,9 +138,9 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
         duplicate = conn.execute(
             """
             SELECT id FROM climbs
-            WHERE (layout_id = ? OR wall_id = ?) AND name = ? AND angle = ? AND setter_id = ?
+            WHERE (layout_id = ? OR layout_id = ?) AND name = ? AND angle = ? AND setter_id = ?
             """,
-            (wall_id, wall_id, climb_data.name, angle, climb_data.setter_id),
+            (layout_id, layout_id, climb_data.name, angle, climb_data.setter_id),
         ).fetchone()
         if duplicate:
             raise ValueError(
@@ -149,14 +149,14 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
         conn.execute(
             """
             INSERT INTO climbs
-                (id, wall_id, layout_id, angle, name, holds, tags,
+                (id, layout_id, layout_id, angle, name, holds, tags,
                  grade, quality, ascents, setter_name, setter_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 climb_id,
-                wall_id,    # legacy column
-                wall_id,    # new column (same value for now)
+                layout_id,    # legacy column
+                layout_id,    # new column (same value for now)
                 angle,
                 climb_data.name,
                 holds,
@@ -171,7 +171,7 @@ def create_climb(wall_id: str, climb_data: ClimbCreate) -> str:
     return climb_id
 
 
-def create_climbs_batch(wall_id: str, climbs_data: list[ClimbCreate]) -> list[dict]:
+def create_climbs_batch(layout_id: str, climbs_data: list[ClimbCreate]) -> list[dict]:
     """Create multiple climbs in a single transaction."""
     results = []
 
@@ -185,14 +185,14 @@ def create_climbs_batch(wall_id: str, climbs_data: list[ClimbCreate]) -> list[di
                 conn.execute(
                     """
                     INSERT INTO climbs
-                        (id, wall_id, layout_id, angle, name, holds, tags,
+                        (id, layout_id, layout_id, angle, name, holds, tags,
                          grade, quality, ascents, setter_name)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         climb_id,
-                        wall_id,
-                        wall_id,
+                        layout_id,
+                        layout_id,
                         climb_data.angle,
                         climb_data.name,
                         holds,
@@ -211,33 +211,33 @@ def create_climbs_batch(wall_id: str, climbs_data: list[ClimbCreate]) -> list[di
     return results
 
 
-def get_climb_setter_id(wall_id: str, climb_id: str) -> str | None:
+def get_climb_setter_id(layout_id: str, climb_id: str) -> str | None:
     """Return the setter_id of a climb, or None if not found."""
     with get_db() as conn:
         row = conn.execute(
-            "SELECT setter_id FROM climbs WHERE id = ? AND (layout_id = ? OR wall_id = ?)",
-            (climb_id, wall_id, wall_id),
+            "SELECT setter_id FROM climbs WHERE id = ? AND (layout_id = ? OR layout_id = ?)",
+            (climb_id, layout_id, layout_id),
         ).fetchone()
     return row["setter_id"] if row else None
 
 
-def delete_climb(wall_id: str, climb_id: str) -> bool:
+def delete_climb(layout_id: str, climb_id: str) -> bool:
     """Delete a climb."""
     with get_db() as conn:
         cursor = conn.execute(
-            "DELETE FROM climbs WHERE id = ? AND (layout_id = ? OR wall_id = ?)",
-            (climb_id, wall_id, wall_id),
+            "DELETE FROM climbs WHERE id = ? AND (layout_id = ? OR layout_id = ?)",
+            (climb_id, layout_id, layout_id),
         )
     return cursor.rowcount > 0
 
 
 def get_climbs_for_training(
-    wall_id: str,
+    layout_id: str,
     tags: list[str] | None = None,
 ) -> list[dict]:
-    """Get all climbs for a wall/layout in format suitable for ML training."""
-    conditions = ["(layout_id = ? OR wall_id = ?)"]
-    params: list = [wall_id, wall_id]
+    """Get all climbs for a layout/layout in format suitable for ML training."""
+    conditions = ["(layout_id = ? OR layout_id = ?)"]
+    params: list = [layout_id, layout_id]
 
     if tags:
         for tag in tags:
@@ -264,12 +264,11 @@ def _row_to_climb(row) -> Climb:
     """Convert a database row to a Climb object."""
     holds = json.loads(row["holds"])
     holdset = _holds_to_holdset(holds)
-    # Prefer layout_id; fall back to wall_id for any pre-migration rows
-    layout_id = row["layout_id"] or row["wall_id"]
+    # Prefer layout_id; fall back to layout_id for any pre-migration rows
+    layout_id = row["layout_id"] or row["layout_id"]
     return Climb(
         id=row["id"],
         layout_id=layout_id,
-        wall_id=layout_id,   # kept for backward compat
         angle=row["angle"],
         name=row["name"],
         holdset=holdset,

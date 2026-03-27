@@ -442,11 +442,11 @@ class ClimbDDPMGenerator():
             self.holds_lookup[layout_id] = df['hold_index'].values
     
     def log_hold_means(self, layout_id: str | None = None):
-        """Log the hold means for each wall."""
+        """Log the hold means for each layout."""
         for k, manifold in self.holds_manifolds.items():
             if layout_id == None or layout_id == k:
                 means = torch.mean(manifold, dim=0)
-                print(f"Wall-id--{k}; Means-- x:{means[0].item()}, y:{means[1].item()}")
+                print(f"layout-id--{k}; Means-- x:{means[0].item()}, y:{means[1].item()}")
 
     def _build_cond_tensor(self, n, diff, angle):
         cache_key = (diff, angle)
@@ -709,7 +709,7 @@ class ClimbDDPMGenerator():
             :type layout_id: str
             :param n: The number of climbs to generate.
             :type n: int
-            :param angle: The current wall angle.
+            :param angle: The current layout angle.
             :type angle: int
             :param grade: The desired grade.
             :type grade: str
@@ -738,9 +738,13 @@ class ClimbDDPMGenerator():
         auto = True if x_offset is None else False
         offset_manifold = self._get_offset_manifold(layout_id, x_offset)
 
-        # CORE LOGIC
         diff = GRADE_TO_DIFF[diff_scale][grade]
+        # Lower Guidance values are better for high grades. We're cutting the GV in half behind the scenes for grades above V6.
+        if diff > 22:
+            guidance_value *= 0.5
         cond_t = self._build_cond_tensor(n, diff, angle)
+
+        # CORE LOGIC
         x_t = torch.randn((n, 20, self.NUM_ROLES+self.NUM_FEATURES), device=self.device, generator=self.deterministic_noise_generator) if deterministic else torch.randn((n, 20, self.NUM_ROLES+self.NUM_FEATURES), device=self.device)
         noisy = x_t.clone()
         t_tensor = torch.ones((n,1), device=self.device)

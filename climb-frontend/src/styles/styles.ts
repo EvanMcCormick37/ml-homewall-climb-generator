@@ -16,9 +16,9 @@ export const GLOBAL_STYLES = `
     --surface2: #18181b;
     --border: rgba(255,255,255,0.08);
     --border-active: #06b6d4;
-    --text-primary: #f4f4f5;
-    --text-muted: #d2d2d2;
-    --text-dim: #a7a7a7;
+    --text-primary: #ffffff;
+    --text-muted: #e4e4e7;
+    --text-dim: #c4c4c7;
     --radius: 4px;
   }
   
@@ -124,8 +124,8 @@ export const TITLE_STYLES = `
           --bg: #09090b;
           --surface: #111113;
           --border: rgba(255,255,255,0.08);
-          --text-primary: #f4f4f5;
-          --text-muted: #c7c7c7;
+          --text-primary: #ffffff;
+          --text-muted: #e4e4e7;
         }
 
         * { box-sizing: border-box; }

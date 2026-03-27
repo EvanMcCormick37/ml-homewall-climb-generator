@@ -188,6 +188,44 @@ def upload_layout_photo(
 
 
 @router.get(
+    "/{layout_id}/photo-small",
+    response_class=FileResponse,
+    summary="Get 1/4 scale thumbnail for a layout photo",
+)
+def get_layout_photo_small(
+    layout_id: str,
+    _=Depends(get_accessible_layout),
+):
+    """Get the 1/4 scale thumbnail for a layout, falling back to full photo if not available."""
+    base_small = settings.LAYOUTS_DIR / layout_id / "photo-small"
+    base_full = settings.LAYOUTS_DIR / layout_id / "photo"
+    extensions = [".png", ".jpg", ".jpeg"]
+
+    photo_path = None
+    for base in (base_small, base_full):
+        for ext in extensions:
+            test_path = base.with_suffix(ext)
+            if test_path.exists():
+                photo_path = test_path
+                break
+        if photo_path:
+            break
+    assert photo_path is not None
+
+    ext = photo_path.suffix
+    media_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
+    return FileResponse(
+        photo_path,
+        media_type=media_type,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
+
+@router.get(
     "/{layout_id}/photo",
     response_class=FileResponse,
     summary="Get size photo",
