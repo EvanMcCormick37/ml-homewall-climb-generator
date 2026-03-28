@@ -49,7 +49,7 @@ def generate_climbs(
                 timesteps=gen_settings.timesteps,
                 deterministic=gen_settings.deterministic,
                 t_start_projection=gen_settings.t_start_projection,
-                x_offset=gen_settings.x_offset,
+                x_offset=request.x_offset,
                 guidance_value=gen_settings.guidance_value,
                 seed=gen_settings.seed,
             )

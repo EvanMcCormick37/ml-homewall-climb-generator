@@ -98,7 +98,6 @@ function ModelSettingsPanel({
   const isDefault =
     settings.timesteps === DEFAULT_GENERATE_SETTINGS.timesteps &&
     settings.guidance_value === DEFAULT_GENERATE_SETTINGS.guidance_value &&
-    settings.x_offset === DEFAULT_GENERATE_SETTINGS.x_offset &&
     settings.t_start_projection ===
       DEFAULT_GENERATE_SETTINGS.t_start_projection &&
     settings.deterministic === DEFAULT_GENERATE_SETTINGS.deterministic &&
@@ -143,38 +142,6 @@ function ModelSettingsPanel({
         leftLabel="Later"
         rightLabel="Earlier"
       />
-
-      <div>
-        <div style={{ marginBottom: "8px" }}>
-          <SectionLabel desc="Pin the generated climb to a specific horizontal position on the wall. 'Auto' chooses the optimal X-offset automatically.">
-            X Offset
-          </SectionLabel>
-        </div>
-        <TogglePair
-          options={[
-            { value: "auto", label: "Auto" },
-            { value: "manual", label: "Manual" },
-          ]}
-          value={settings.x_offset == null ? "auto" : "manual"}
-          onChange={(v) => update({ x_offset: v === "auto" ? null : 0.0 })}
-        />
-        {settings.x_offset != null && (
-          <div style={{ marginTop: "12px" }}>
-            <BzRange
-              label=""
-              desc=""
-              value={settings.x_offset}
-              min={-1.5}
-              max={1.5}
-              step={0.1}
-              onChange={(v) => update({ x_offset: v })}
-              displayValue={settings.x_offset.toFixed(1)}
-              leftLabel="Left"
-              rightLabel="Right"
-            />
-          </div>
-        )}
-      </div>
 
       <div>
         <div style={{ marginBottom: "8px" }}>
@@ -261,6 +228,8 @@ interface GenerationPanelProps {
   angle: number | null;
   angleFixed: boolean;
   onAngleChange: (a: number | null) => void;
+  xOffset: number | null;
+  onXOffsetChange: (v: number | null) => void;
   generateSettings: GenerateSettings;
   onGenerateSettingsChange: (s: GenerateSettings) => void;
   showModelSettings: boolean;
@@ -288,6 +257,8 @@ function GenerationPanel({
   angle,
   angleFixed,
   onAngleChange,
+  xOffset,
+  onXOffsetChange,
   generateSettings,
   onGenerateSettingsChange,
   showModelSettings,
@@ -334,7 +305,6 @@ function GenerationPanel({
   const isPresetActive = (preset: GenerateSettings) =>
     generateSettings.timesteps === preset.timesteps &&
     generateSettings.guidance_value === preset.guidance_value &&
-    generateSettings.x_offset === preset.x_offset &&
     generateSettings.t_start_projection === preset.t_start_projection &&
     generateSettings.deterministic === preset.deterministic &&
     generateSettings.seed === preset.seed;
@@ -500,6 +470,39 @@ function GenerationPanel({
                   if (!isNaN(p)) onAngleChange(Math.max(0, Math.min(90, p)));
                 }}
               />
+            </div>
+
+            {/* X Offset */}
+            <div>
+              <div style={{ marginBottom: "8px" }}>
+                <SectionLabel desc="Center the climb on one section of the wall. 'Auto' chooses a random initial offset and then updates it during generation to improve the projection fit.">
+                  X-Offset
+                </SectionLabel>
+              </div>
+              <TogglePair
+                options={[
+                  { value: "auto", label: "Auto" },
+                  { value: "manual", label: "Manual" },
+                ]}
+                value={xOffset == null ? "auto" : "manual"}
+                onChange={(v) => onXOffsetChange(v === "auto" ? null : 0.0)}
+              />
+              {xOffset != null && (
+                <div style={{ marginTop: "12px" }}>
+                  <BzRange
+                    label=""
+                    desc=""
+                    value={xOffset}
+                    min={-1.5}
+                    max={1.5}
+                    step={0.1}
+                    onChange={onXOffsetChange}
+                    displayValue={xOffset.toFixed(1)}
+                    leftLabel="Left"
+                    rightLabel="Right"
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1300,7 +1303,10 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
   const [gradeOptions, setGradeOptions] = useState(VGRADE_OPTIONS);
   const [numClimbs, setNumClimbs] = useState<number | null>(3);
   const [grade, setGrade] = useState<string>("V4");
-  const [angle, setAngle] = useState<number | null>(null);
+  const [angle, setAngle] = useState<number | null>(
+    layout.metadata.default_angle ?? null,
+  );
+  const [xOffset, setXOffset] = useState<number | null>(null);
   const [generateSettings, setGenerateSettings] = useState<GenerateSettings>(
     DEFAULT_GENERATE_SETTINGS,
   );
@@ -1383,6 +1389,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
         grade: generate_grade,
         grade_scale: gradingScale,
         angle: angle ?? null,
+        x_offset: xOffset,
       };
       const response = await generateClimbs(
         layoutId,
@@ -1747,6 +1754,8 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
     angle,
     angleFixed: false,
     onAngleChange: setAngle,
+    xOffset,
+    onXOffsetChange: setXOffset,
     generateSettings,
     onGenerateSettingsChange: setGenerateSettings,
     showModelSettings,

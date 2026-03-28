@@ -465,17 +465,17 @@ class ClimbDDPMGenerator():
         means = torch.mean(offset_manifold, dim=0)
 
         if x_offset is None:
-            x_offset = torch.clamp(torch.randn(size=(1,), generator=self.deterministic_noise_generator),-1.0,1.0).item()/2
+            x_offset = torch.clamp(torch.randn(size=(1,)),-1.0,1.0).item()/2
         
         _range = (torch.max(offset_manifold[:,0])-torch.min(offset_manifold[0])).item()
         x_offset *= _range/2
-        print(x_offset, _range/2)
 
         x_offset +=means[0].item()
         y_offset = means[1].item()
         
         offset_manifold[:,0] -= x_offset
         offset_manifold[:,1] -= y_offset
+
 
         return offset_manifold
     
