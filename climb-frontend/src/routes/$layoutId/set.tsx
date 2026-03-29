@@ -4,7 +4,7 @@ import {
   type UseNavigateResult,
 } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useLayout } from "@/hooks";
+import { useLayout, fetchWithWakeRetry } from "@/hooks";
 import { generateClimbs } from "@/api/generate";
 import { createClimb } from "@/api/climbs";
 import { deleteLayout } from "@/api/layouts";
@@ -238,6 +238,7 @@ interface GenerationPanelProps {
   showModelSettings: boolean;
   onToggleModelSettings: () => void;
   isGenerating: boolean;
+  isWaking: boolean;
   error: string | null;
   onGenerate: () => void;
   onCreateBlank: () => void;
@@ -267,6 +268,7 @@ function GenerationPanel({
   showModelSettings,
   onToggleModelSettings,
   isGenerating,
+  isWaking,
   error,
   onGenerate,
   onCreateBlank,
@@ -648,7 +650,7 @@ function GenerationPanel({
                 size={14}
                 style={{ animation: "spin 1s linear infinite" }}
               />{" "}
-              Generating…
+              {isWaking ? "Waking server…" : "Generating…"}
             </>
           ) : (
             <>
@@ -1317,6 +1319,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
   const [generatedClimbs, setGeneratedClimbs] = useState<NamedHoldset[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGenerateWaking, setIsGenerateWaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [displaySettings, setDisplaySettings] = useState<DisplaySettings>(
     DEFAULT_DISPLAY_SETTINGS,
@@ -1389,6 +1392,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
   const handleGenerate = useCallback(async () => {
     try {
       setIsGenerating(true);
+      setIsGenerateWaking(false);
       setError(null);
       const generate_grade = grade ?? gradeOptions[0];
       const request: GenerateRequest = {
@@ -1398,10 +1402,9 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
         angle: angle ?? null,
         x_offset: xOffset,
       };
-      const response = await generateClimbs(
-        layoutId,
-        request,
-        generateSettings,
+      const response = await fetchWithWakeRetry(
+        () => generateClimbs(layoutId, request, generateSettings),
+        { onWaking: () => setIsGenerateWaking(true) },
       );
       const named: NamedHoldset[] = response.climbs.map((holdset) => ({
         name: generateClimbName(),
@@ -1427,9 +1430,11 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
         replace: true,
       });
       setIsGenerating(false);
+      setIsGenerateWaking(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed");
       setIsGenerating(false);
+      setIsGenerateWaking(false);
     }
   }, [
     layoutId,
@@ -1768,6 +1773,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
     showModelSettings,
     onToggleModelSettings: () => setShowModelSettings((v) => !v),
     isGenerating,
+    isWaking: isGenerateWaking,
     error,
     onGenerate: handleGenerate,
     onCreateBlank: handleCreateBlank,
@@ -2101,7 +2107,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
             }}
           >
             {/* Size picker dropdown */}
-            <div style={{ position: "relative" }}>
+            {layout.metadata.sizes.length > 1 && <div style={{ position: "relative" }}>
               <button
                 onClick={() => setShowSizeDropdown((v) => !v)}
                 title="Select Size"
@@ -2271,7 +2277,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                   </div>
                 </>
               )}
-            </div>
+            </div>}
             <span
               className="hidden lg:flex bz-mono"
               style={{

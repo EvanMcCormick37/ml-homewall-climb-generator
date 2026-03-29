@@ -379,20 +379,23 @@ function HomePage() {
           }}
         >
           <div className="bz-anim bz-anim-5">
-            {loading && (
-              <div
-                className="bz-mono"
-                style={{
-                  color: "var(--text-muted)",
-                  fontSize: "0.8rem",
-                  padding: "60px 0",
-                  textAlign: "center",
-                }}
-              >
-                — loading layouts —
-              </div>
+            {waking ? (
+              <WakingScreen />
+            ) : (
+              loading && (
+                <div
+                  className="bz-mono"
+                  style={{
+                    color: "var(--text-muted)",
+                    fontSize: "0.8rem",
+                    padding: "60px 0",
+                    textAlign: "center",
+                  }}
+                >
+                  — loading layouts —
+                </div>
+              )
             )}
-            {waking && <WakingScreen />}
             {error && (
               <div
                 className="bz-mono"
