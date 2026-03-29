@@ -118,13 +118,6 @@ export default function TrapezoidCropper({
         preserveAspectRatio="none"
         style={{ pointerEvents: "none" }}
       >
-        {/* Dark mask outside the quad, using even-odd fill rule */}
-        <polygon
-          points={`0,0 100,0 100,100 0,100 ${polygonPoints}`}
-          fill="rgba(0,0,0,0.55)"
-          fillRule="evenodd"
-        />
-
         {/* Quad outline */}
         <polygon
           points={polygonPoints}

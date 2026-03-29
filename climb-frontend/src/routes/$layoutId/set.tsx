@@ -7,6 +7,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useLayout } from "@/hooks";
 import { generateClimbs } from "@/api/generate";
 import { createClimb } from "@/api/climbs";
+import { deleteLayout } from "@/api/layouts";
 import { WakingScreen } from "@/components";
 import { useUser } from "@clerk/clerk-react";
 import {
@@ -27,6 +28,8 @@ import {
   ChevronRight,
   Plus,
   Layers,
+  Trash2,
+  Settings,
 } from "lucide-react";
 import type {
   Holdset,
@@ -133,14 +136,14 @@ function ModelSettingsPanel({
       <BzRange
         label="Projection Start Time"
         desc="Fraction of the diffusion process at which layout-projection begins. Higher values begin projecting onto the wall's holds earlier in the generative process."
-        value={settings.t_start_projection}
+        value={0.8 - settings.t_start_projection}
         min={0.0}
         max={0.8}
         step={0.05}
-        onChange={(v) => update({ t_start_projection: v })}
+        onChange={(v) => update({ t_start_projection: 0.8 - v })}
         displayValue={settings.t_start_projection.toFixed(2)}
-        leftLabel="Later"
-        rightLabel="Earlier"
+        leftLabel="Earlier"
+        rightLabel="Later"
       />
 
       <div>
@@ -1350,6 +1353,10 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
   const { isSignedIn, user } = useUser();
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [showOwnerMenu, setShowOwnerMenu] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Reset save success when switching climbs
@@ -1872,47 +1879,182 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
                 {layout.metadata.name}
               </span>
             </div>
+            {/* Owner layout settings */}
             {isSignedIn && user?.id === layout.metadata.owner_id && (
-              <>
-                <div
-                  style={{
-                    width: "1px",
-                    height: "16px",
-                    background: "var(--border)",
-                  }}
-                />
+              <div style={{ position: "relative" }}>
                 <button
-                  onClick={() =>
-                    navigate({
-                      to: "/$layoutId/holds",
-                      params: { layoutId: layoutId },
-                    })
-                  }
+                  onClick={() => setShowOwnerMenu((v) => !v)}
+                  title="Layout Settings"
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "5px",
-                    background: "transparent",
-                    border: "none",
-                    fontFamily: "'Space Mono', monospace",
-                    fontSize: "0.65rem",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color: "var(--text-muted)",
+                    justifyContent: "center",
+                    gap: "0.5rem" /* Added gap for spacing between Icon and Text */,
+                    border: "none" /* Removed the dynamic border */,
+                    background: showOwnerMenu
+                      ? "var(--cyan-dim)"
+                      : "transparent",
+                    color: showOwnerMenu ? "var(--cyan)" : "var(--text-muted)",
                     cursor: "pointer",
-                    transition: "color 0.15s",
+                    borderRadius: "var(--radius)",
+                    transition: "all 0.15s",
                   }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.color = "var(--cyan)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.color = "var(--text-muted)")
-                  }
                 >
-                  <Pencil size={12} />
-                  <span className="hidden sm:inline">Edit Holds</span>
+                  <Settings size={13} />
                 </button>
-              </>
+
+                {showOwnerMenu && (
+                  <>
+                    <div
+                      style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                      onClick={() => setShowOwnerMenu(false)}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        right: 0,
+                        top: "calc(100% + 8px)",
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--radius)",
+                        boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+                        zIndex: 50,
+                        minWidth: "180px",
+                        animation: "bzFadeUp 0.15s ease-out",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "7px 12px",
+                          borderBottom: "1px solid var(--border)",
+                        }}
+                      >
+                        <span
+                          className="bz-mono"
+                          style={{
+                            fontSize: "0.55rem",
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase",
+                            color: "var(--text-dim)",
+                          }}
+                        >
+                          Layout Settings
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowOwnerMenu(false);
+                          navigate({
+                            to: "/$layoutId/holds",
+                            params: { layoutId },
+                          });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          width: "100%",
+                          padding: "9px 12px",
+                          background: "transparent",
+                          border: "none",
+                          borderBottom: "1px solid var(--border)",
+                          color: "var(--text-primary)",
+                          cursor: "pointer",
+                          fontFamily: "'Space Mono', monospace",
+                          fontSize: "0.65rem",
+                          letterSpacing: "0.06em",
+                          textAlign: "left",
+                          transition: "background 0.1s",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "var(--surface2)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
+                      >
+                        <Pencil
+                          size={12}
+                          style={{ color: "var(--text-muted)", flexShrink: 0 }}
+                        />
+                        Edit Holds
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowOwnerMenu(false);
+                          navigate({
+                            to: "/$layoutId/sizes",
+                            params: { layoutId },
+                          });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          width: "100%",
+                          padding: "9px 12px",
+                          background: "transparent",
+                          border: "none",
+                          borderBottom: "1px solid var(--border)",
+                          color: "var(--text-primary)",
+                          cursor: "pointer",
+                          fontFamily: "'Space Mono', monospace",
+                          fontSize: "0.65rem",
+                          letterSpacing: "0.06em",
+                          textAlign: "left",
+                          transition: "background 0.1s",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background = "var(--surface2)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
+                      >
+                        <Layers
+                          size={12}
+                          style={{ color: "var(--text-muted)", flexShrink: 0 }}
+                        />
+                        Manage Sizes
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowOwnerMenu(false);
+                          setDeleteConfirmText("");
+                          setShowDeleteConfirm(true);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          width: "100%",
+                          padding: "9px 12px",
+                          background: "transparent",
+                          border: "none",
+                          color: "#ef4444",
+                          cursor: "pointer",
+                          fontFamily: "'Space Mono', monospace",
+                          fontSize: "0.65rem",
+                          letterSpacing: "0.06em",
+                          textAlign: "left",
+                          transition: "background 0.1s",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background =
+                            "rgba(239,68,68,0.08)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
+                      >
+                        <Trash2 size={12} style={{ flexShrink: 0 }} />
+                        Delete Layout
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
 
@@ -2211,6 +2353,187 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
             )}
           </div>
         </header>
+
+        {/* Delete confirmation dialog */}
+        {showDeleteConfirm && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              zIndex: 100,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={() => {
+              if (!isDeleting) {
+                setShowDeleteConfirm(false);
+                setDeleteConfirmText("");
+              }
+            }}
+          >
+            <div
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+                padding: "24px",
+                maxWidth: "380px",
+                width: "calc(100% - 32px)",
+                boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  marginBottom: "12px",
+                }}
+              >
+                <Trash2 size={16} color="#ef4444" />
+                <span
+                  className="bz-oswald"
+                  style={{ fontSize: "0.9rem", color: "var(--text-primary)" }}
+                >
+                  Delete Layout
+                </span>
+              </div>
+              <p
+                className="bz-mono"
+                style={{
+                  fontSize: "0.65rem",
+                  color: "var(--text-muted)",
+                  lineHeight: 1.6,
+                  marginBottom: "16px",
+                }}
+              >
+                This will permanently remove{" "}
+                <span style={{ color: "var(--text-primary)" }}>
+                  {layout.metadata.name}
+                </span>
+                , all its holds, sizes, and climbs. This action cannot be
+                undone.
+              </p>
+              <p
+                className="bz-mono"
+                style={{
+                  fontSize: "0.6rem",
+                  color: "var(--text-dim)",
+                  marginBottom: "8px",
+                }}
+              >
+                Type{" "}
+                <span style={{ color: "#ef4444", userSelect: "all" }}>
+                  DELETE {layout.metadata.name}
+                </span>{" "}
+                to confirm.
+              </p>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={`DELETE ${layout.metadata.name}`}
+                autoFocus
+                style={{
+                  width: "100%",
+                  background: "var(--bg)",
+                  color: "var(--text-primary)",
+                  border: `1px solid ${deleteConfirmText === `DELETE ${layout.metadata.name}` ? "#ef4444" : "var(--border)"}`,
+                  borderRadius: "var(--radius)",
+                  padding: "7px 10px",
+                  fontFamily: "'Space Mono', monospace",
+                  fontSize: "0.65rem",
+                  outline: "none",
+                  marginBottom: "16px",
+                  boxSizing: "border-box",
+                  transition: "border-color 0.15s",
+                }}
+              />
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  disabled={isDeleting}
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeleteConfirmText("");
+                  }}
+                  style={{
+                    padding: "7px 16px",
+                    background: "transparent",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius)",
+                    color: "var(--text-muted)",
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "0.6rem",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={
+                    isDeleting ||
+                    deleteConfirmText !== `DELETE ${layout.metadata.name}`
+                  }
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      await deleteLayout(layoutId);
+                      navigate({ to: "/" });
+                    } catch {
+                      setIsDeleting(false);
+                      setShowDeleteConfirm(false);
+                      setDeleteConfirmText("");
+                    }
+                  }}
+                  style={{
+                    padding: "7px 16px",
+                    background: "#ef4444",
+                    border: "1px solid #ef4444",
+                    borderRadius: "var(--radius)",
+                    color: "#fff",
+                    fontFamily: "'Space Mono', monospace",
+                    fontSize: "0.6rem",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    cursor:
+                      isDeleting ||
+                      deleteConfirmText !== `DELETE ${layout.metadata.name}`
+                        ? "not-allowed"
+                        : "pointer",
+                    opacity:
+                      isDeleting ||
+                      deleteConfirmText !== `DELETE ${layout.metadata.name}`
+                        ? 0.4
+                        : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    transition: "opacity 0.15s",
+                  }}
+                >
+                  {isDeleting && (
+                    <Loader2
+                      size={11}
+                      style={{ animation: "spin 1s linear infinite" }}
+                    />
+                  )}
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Mobile climb chip */}
         {selectedClimb && (
