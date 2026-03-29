@@ -705,8 +705,13 @@ function HoldsEditorPage() {
         });
       }
     };
-    fetchLayoutPhoto(layoutId).then((url) => { objectUrl = url; img.src = url; });
-    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+    fetchLayoutPhoto(layoutId).then((url) => {
+      objectUrl = url;
+      img.src = url;
+    });
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [layoutId, setViewTransform]);
 
   // Load holds
@@ -753,8 +758,7 @@ function HoldsEditorPage() {
   );
 
   const getHoldColor = useCallback((u: number, isFoot: boolean) => {
-    if (isFoot)
-      return `rgb(${Math.round(60 - 60 * u)}, ${Math.round(200 * u)}, ${Math.round(40 + 140 * u)})`;
+    if (isFoot) return `hsl(${Math.round(300 - 120 * u)}, 100%, 50%)`;
     const r = u < 0.5 ? 255 : Math.round(60 + 195 * (1 - u) * 2);
     const g = u < 0.5 ? Math.round(60 + 160 * u * 2) : 220;
     return `rgb(${r}, ${g}, 60)`;

@@ -8,31 +8,11 @@ import { createLayout, uploadLayoutPhoto } from "@/api/layouts";
 import { createSize } from "@/api/sizes";
 import { ArrowLeft, Globe, Lock, Link } from "lucide-react";
 import type { Visibility } from "@/types";
+import { GLOBAL_STYLES } from "@/styles";
 
 export const Route = createFileRoute("/layouts/new")({
   component: NewLayoutPage,
 });
-
-const GLOBAL_STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Space+Mono:wght@400;700&display=swap');
-
-  :root {
-    --cyan: #06b6d4;
-    --cyan-dim: rgba(6,182,212,0.15);
-    --bg: #09090b;
-    --surface: #111113;
-    --surface2: #1c1c1e;
-    --border: rgba(255,255,255,0.08);
-    --border-active: rgba(6,182,212,0.4);
-    --text-primary: #f4f4f5;
-    --text-muted: #71717a;
-    --text-dim: #52525b;
-    --radius: 4px;
-  }
-
-  .bz-oswald { font-family: 'Oswald', sans-serif; }
-  .bz-mono { font-family: 'Space Mono', monospace; }
-`;
 
 type Step = "visibility" | "upload" | "crop" | "details";
 
@@ -94,13 +74,19 @@ function NewLayoutPage() {
   const [kickboard, setKickboard] = useState(false);
 
   // Crop mode selection + raw file for as-is / trapezoid upload
-  const [cropMode, setCropMode] = useState<"none" | "rect" | "trapezoid">("rect");
+  const [cropMode, setCropMode] = useState<"none" | "rect" | "trapezoid">(
+    "rect",
+  );
   const [rawImageFile, setRawImageFile] = useState<File | null>(null);
   const [trapCorners, setTrapCorners] = useState<TrapCorners>([
-    0.05, 0.05,  // TL
-    0.95, 0.05,  // TR
-    0.05, 0.95,  // BL
-    0.95, 0.95,  // BR
+    0.05,
+    0.05, // TL
+    0.95,
+    0.05, // TR
+    0.05,
+    0.95, // BL
+    0.95,
+    0.95, // BR
   ]);
 
   const {
@@ -233,7 +219,18 @@ function NewLayoutPage() {
         setIsSubmitting(false);
       }
     },
-    [croppedBlob, name, width, height, angle, kickboard, visibility, navigate, cropMode, trapCorners],
+    [
+      croppedBlob,
+      name,
+      width,
+      height,
+      angle,
+      kickboard,
+      visibility,
+      navigate,
+      cropMode,
+      trapCorners,
+    ],
   );
 
   const inputStyle: React.CSSProperties = {
@@ -435,9 +432,15 @@ function NewLayoutPage() {
             >
               {step === "visibility" && "Choose who can access this layout"}
               {step === "upload" && "Upload a photo of your climbing wall"}
-              {step === "crop" && cropMode === "rect" && "Crop the image to align with the wall edges"}
-              {step === "crop" && cropMode === "none" && "Image will be used as uploaded"}
-              {step === "crop" && cropMode === "trapezoid" && "Drag the corner handles to the wall corners"}
+              {step === "crop" &&
+                cropMode === "rect" &&
+                "Crop the image to align with the wall edges"}
+              {step === "crop" &&
+                cropMode === "none" &&
+                "Image will be used as uploaded"}
+              {step === "crop" &&
+                cropMode === "trapezoid" &&
+                "Drag the corner handles to the wall corners. Trapezoid size must match layout dimensions. Holds can be outside of trapezoid."}
               {step === "details" && "Add wall details and submit"}
             </p>
 
@@ -784,7 +787,10 @@ function NewLayoutPage() {
                       { value: "rect", label: "Rect Crop" },
                       { value: "trapezoid", label: "Trapezoid" },
                       { value: "none", label: "Use As-Is" },
-                    ] as { value: "rect" | "trapezoid" | "none"; label: string }[]
+                    ] as {
+                      value: "rect" | "trapezoid" | "none";
+                      label: string;
+                    }[]
                   ).map(({ value, label }) => (
                     <button
                       key={value}
@@ -804,9 +810,7 @@ function NewLayoutPage() {
                         background:
                           cropMode === value ? "var(--cyan)" : "transparent",
                         color:
-                          cropMode === value
-                            ? "#09090b"
-                            : "var(--text-muted)",
+                          cropMode === value ? "#09090b" : "var(--text-muted)",
                         fontWeight: cropMode === value ? 700 : 400,
                       }}
                     >
@@ -847,7 +851,11 @@ function NewLayoutPage() {
                     <img
                       src={imageUrl}
                       alt="Wall photo preview"
-                      style={{ width: "100%", height: "auto", display: "block" }}
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        display: "block",
+                      }}
                       draggable={false}
                     />
                     <div
@@ -889,7 +897,8 @@ function NewLayoutPage() {
                       cursor: "pointer",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border-active)";
+                      e.currentTarget.style.borderColor =
+                        "var(--border-active)";
                       e.currentTarget.style.color = "var(--text-primary)";
                     }}
                     onMouseLeave={(e) => {
@@ -915,7 +924,9 @@ function NewLayoutPage() {
                       textTransform: "uppercase",
                       cursor: "pointer",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.opacity = "0.85")
+                    }
                     onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
                   >
                     {cropMode === "rect"
@@ -1068,7 +1079,8 @@ function NewLayoutPage() {
                       marginBottom: "8px",
                     }}
                   >
-                    Wall Dimensions (total width and height of the wall, in feet)
+                    Wall Dimensions (total width and height of the wall, in
+                    feet)
                   </label>
                   <div
                     style={{

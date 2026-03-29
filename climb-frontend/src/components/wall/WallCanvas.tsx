@@ -210,7 +210,7 @@ export function WallCanvas({
         else if (isHand) strokeColor = displaySettings.categoryColors.hand;
         else if (isFoot) strokeColor = displaySettings.categoryColors.foot;
       }
-      const footScale = isFoot ? 0.5 : 1;
+      const footScale = isFoot ? 0.5 : !selectedHoldset && hold.is_foot ? 0.5 : 1;
       ctx.beginPath();
       ctx.arc(x, y, radius * footScale, 0, 2 * Math.PI);
       ctx.strokeStyle = strokeColor;

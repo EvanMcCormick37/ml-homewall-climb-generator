@@ -50,11 +50,6 @@ export default function TrapezoidCropper({
     [corners[6], corners[7]], // BR
   ];
 
-  // SVG polygon points string (as percentages inside a viewBox="0 0 100 100")
-  const polygonPoints = pts
-    .map(([x, y]) => `${x * 100},${y * 100}`)
-    .join(" ");
-
   const getNormCoords = useCallback(
     (clientX: number, clientY: number): [number, number] => {
       const rect = containerRef.current?.getBoundingClientRect();
@@ -118,14 +113,40 @@ export default function TrapezoidCropper({
         preserveAspectRatio="none"
         style={{ pointerEvents: "none" }}
       >
-        {/* Quad outline */}
-        <polygon
-          points={polygonPoints}
-          fill="none"
-          stroke="#06b6d4"
-          strokeWidth="0.5"
-          strokeDasharray="2 1.5"
+        {/* Shadow outside the trapezoid — even-odd fill cuts out the interior */}
+        <path
+          d={[
+            "M 0,0 L 100,0 L 100,100 L 0,100 Z",
+            `M ${pts[0][0] * 100},${pts[0][1] * 100}`,
+            `L ${pts[1][0] * 100},${pts[1][1] * 100}`,
+            `L ${pts[3][0] * 100},${pts[3][1] * 100}`,
+            `L ${pts[2][0] * 100},${pts[2][1] * 100}`,
+            "Z",
+          ].join(" ")}
+          fill="rgba(0,0,0,0.55)"
+          fillRule="evenodd"
         />
+
+        {/* Thin dashed edge lines along each side of the trapezoid */}
+        {(
+          [
+            [pts[0], pts[1]], // top:   TL → TR
+            [pts[1], pts[3]], // right: TR → BR
+            [pts[3], pts[2]], // bottom: BR → BL
+            [pts[2], pts[0]], // left:  BL → TL
+          ] as [[number, number], [number, number]][]
+        ).map(([[x1, y1], [x2, y2]], i) => (
+          <line
+            key={i}
+            x1={x1 * 100}
+            y1={y1 * 100}
+            x2={x2 * 100}
+            y2={y2 * 100}
+            stroke="#06b6d4"
+            strokeWidth="0.3"
+            strokeDasharray="2 1.5"
+          />
+        ))}
 
         {/* Grid lines inside the quad (rule-of-thirds approximation) */}
         {([1 / 3, 2 / 3] as const).map((t) => {
