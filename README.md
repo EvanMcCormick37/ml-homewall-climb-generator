@@ -2,7 +2,7 @@
 
 ### Using machine-learning to set climbs on spray walls and system boards.
 
-BetaZero is live and free to use at https:\\betazero.live!
+BetaZero is live and free to use at https://betazero.live!
 
 This is an open-source application which leverages a projected diffusion model to set custom climbs on homewalls and system boards.
 #### How it works
