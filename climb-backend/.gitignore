@@ -1,5 +1,5 @@
 venv/
-data/models/*
+data/*
 .pytest_cache
 .env
 .env.*
