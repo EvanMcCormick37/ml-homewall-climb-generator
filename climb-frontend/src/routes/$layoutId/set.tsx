@@ -110,7 +110,7 @@ function ModelSettingsPanel({
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <BzRange
         label="Generation Timesteps"
-        desc="Fewer timesteps = faster generation but reduced quality. WARNING: Using this setting to generate high difficulty climbs may result in errors due to lack of holds. I know that sounds like a fake error but if you try it you'll see what I mean."
+        desc="Fewer timesteps = faster generation but reduced quality."
         value={settings.timesteps}
         min={25}
         max={200}
@@ -2107,177 +2107,179 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
             }}
           >
             {/* Size picker dropdown */}
-            {layout.metadata.sizes.length > 1 && <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowSizeDropdown((v) => !v)}
-                title="Select Size"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "0 8px",
-                  height: "28px",
-                  border: `1px solid ${showSizeDropdown || activeSize?.name !== "default" ? "var(--border-active)" : "var(--border)"}`,
-                  borderRadius: "var(--radius)",
-                  background:
-                    showSizeDropdown || activeSize?.name !== "default"
-                      ? "var(--cyan-dim)"
-                      : "transparent",
-                  color:
-                    showSizeDropdown || activeSize?.name !== "default"
-                      ? "var(--cyan)"
-                      : "var(--text-muted)",
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
-              >
-                <Layers size={13} />
-                <span
-                  className="bz-mono"
-                  style={{ fontSize: "0.55rem", letterSpacing: "0.08em" }}
-                >
-                  {activeSize?.name ?? "—"}
-                </span>
-                <ChevronDown
-                  size={10}
+            {layout.metadata.sizes.length > 1 && (
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={() => setShowSizeDropdown((v) => !v)}
+                  title="Select Size"
                   style={{
-                    transform: showSizeDropdown ? "rotate(180deg)" : "none",
-                    transition: "transform 0.15s",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "0 8px",
+                    height: "28px",
+                    border: `1px solid ${showSizeDropdown || activeSize?.name !== "default" ? "var(--border-active)" : "var(--border)"}`,
+                    borderRadius: "var(--radius)",
+                    background:
+                      showSizeDropdown || activeSize?.name !== "default"
+                        ? "var(--cyan-dim)"
+                        : "transparent",
+                    color:
+                      showSizeDropdown || activeSize?.name !== "default"
+                        ? "var(--cyan)"
+                        : "var(--text-muted)",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
                   }}
-                />
-              </button>
-
-              {showSizeDropdown && (
-                <>
-                  <div
-                    style={{ position: "fixed", inset: 0, zIndex: 40 }}
-                    onClick={() => setShowSizeDropdown(false)}
-                  />
-                  <div
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "calc(100% + 8px)",
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius)",
-                      boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
-                      zIndex: 50,
-                      minWidth: "180px",
-                      animation: "bzFadeUp 0.15s ease-out",
-                      overflow: "hidden",
-                    }}
+                >
+                  <Layers size={13} />
+                  <span
+                    className="bz-mono"
+                    style={{ fontSize: "0.55rem", letterSpacing: "0.08em" }}
                   >
+                    {activeSize?.name ?? "—"}
+                  </span>
+                  <ChevronDown
+                    size={10}
+                    style={{
+                      transform: showSizeDropdown ? "rotate(180deg)" : "none",
+                      transition: "transform 0.15s",
+                    }}
+                  />
+                </button>
+
+                {showSizeDropdown && (
+                  <>
+                    <div
+                      style={{ position: "fixed", inset: 0, zIndex: 40 }}
+                      onClick={() => setShowSizeDropdown(false)}
+                    />
                     <div
                       style={{
-                        padding: "7px 12px",
-                        borderBottom: "1px solid var(--border)",
+                        position: "absolute",
+                        right: 0,
+                        top: "calc(100% + 8px)",
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--radius)",
+                        boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+                        zIndex: 50,
+                        minWidth: "180px",
+                        animation: "bzFadeUp 0.15s ease-out",
+                        overflow: "hidden",
                       }}
                     >
-                      <span
-                        className="bz-mono"
+                      <div
                         style={{
-                          fontSize: "0.55rem",
-                          letterSpacing: "0.12em",
-                          textTransform: "uppercase",
-                          color: "var(--text-dim)",
+                          padding: "7px 12px",
+                          borderBottom: "1px solid var(--border)",
                         }}
                       >
-                        Active Size
-                      </span>
-                    </div>
-                    {layout.metadata.sizes.map((size) => {
-                      const isActive = activeSize?.id === size.id;
-                      return (
-                        <button
-                          key={size.id}
-                          onClick={() => handleSelectSize(size)}
+                        <span
+                          className="bz-mono"
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            width: "100%",
-                            padding: "9px 12px",
-                            background: isActive
-                              ? "var(--cyan-dim)"
-                              : "transparent",
-                            border: "none",
-                            borderBottom: "1px solid var(--border)",
-                            color: isActive
-                              ? "var(--cyan)"
-                              : "var(--text-primary)",
-                            cursor: "pointer",
-                            textAlign: "left",
-                            transition: "background 0.1s",
+                            fontSize: "0.55rem",
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase",
+                            color: "var(--text-dim)",
                           }}
                         >
-                          <div
+                          Active Size
+                        </span>
+                      </div>
+                      {layout.metadata.sizes.map((size) => {
+                        const isActive = activeSize?.id === size.id;
+                        return (
+                          <button
+                            key={size.id}
+                            onClick={() => handleSelectSize(size)}
                             style={{
-                              width: "6px",
-                              height: "6px",
-                              borderRadius: "50%",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              width: "100%",
+                              padding: "9px 12px",
                               background: isActive
+                                ? "var(--cyan-dim)"
+                                : "transparent",
+                              border: "none",
+                              borderBottom: "1px solid var(--border)",
+                              color: isActive
                                 ? "var(--cyan)"
-                                : "var(--border)",
-                              flexShrink: 0,
+                                : "var(--text-primary)",
+                              cursor: "pointer",
+                              textAlign: "left",
+                              transition: "background 0.1s",
                             }}
-                          />
-                          <span
-                            className="bz-mono"
-                            style={{ fontSize: "0.65rem", flex: 1 }}
                           >
-                            {size.name}
-                          </span>
-                          {size.kickboard && (
+                            <div
+                              style={{
+                                width: "6px",
+                                height: "6px",
+                                borderRadius: "50%",
+                                background: isActive
+                                  ? "var(--cyan)"
+                                  : "var(--border)",
+                                flexShrink: 0,
+                              }}
+                            />
                             <span
                               className="bz-mono"
-                              style={{
-                                fontSize: "0.55rem",
-                                color: "var(--text-dim)",
-                              }}
+                              style={{ fontSize: "0.65rem", flex: 1 }}
                             >
-                              KB
+                              {size.name}
                             </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                    <button
-                      onClick={() => {
-                        setShowSizeDropdown(false);
-                        navigate({
-                          to: "/$layoutId/sizes",
-                          params: { layoutId },
-                        });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        width: "100%",
-                        padding: "8px 12px",
-                        background: "transparent",
-                        border: "none",
-                        color: "var(--text-dim)",
-                        cursor: "pointer",
-                        fontFamily: "'Space Mono', monospace",
-                        fontSize: "0.55rem",
-                        letterSpacing: "0.08em",
-                        textTransform: "uppercase",
-                        transition: "color 0.1s",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.color = "var(--text-muted)")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.color = "var(--text-dim)")
-                      }
-                    >
-                      Manage Sizes →
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>}
+                            {size.kickboard && (
+                              <span
+                                className="bz-mono"
+                                style={{
+                                  fontSize: "0.55rem",
+                                  color: "var(--text-dim)",
+                                }}
+                              >
+                                KB
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      <button
+                        onClick={() => {
+                          setShowSizeDropdown(false);
+                          navigate({
+                            to: "/$layoutId/sizes",
+                            params: { layoutId },
+                          });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          width: "100%",
+                          padding: "8px 12px",
+                          background: "transparent",
+                          border: "none",
+                          color: "var(--text-dim)",
+                          cursor: "pointer",
+                          fontFamily: "'Space Mono', monospace",
+                          fontSize: "0.55rem",
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          transition: "color 0.1s",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.color = "var(--text-muted)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.color = "var(--text-dim)")
+                        }
+                      >
+                        Manage Sizes →
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <span
               className="hidden lg:flex bz-mono"
               style={{
