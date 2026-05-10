@@ -32,9 +32,7 @@ export async function fetchWithWakeRetry<T>(
   const deadline = Date.now() + maxRetryDurationMs;
 
   while (true) {
-    // Bail out immediately if the caller has cancelled
     signal?.throwIfAborted();
-
     try {
       return await fetcher();
     } catch (err) {
@@ -42,7 +40,6 @@ export async function fetchWithWakeRetry<T>(
         onWaking?.();
         await new Promise<void>((resolve, reject) => {
           const timer = setTimeout(resolve, retryIntervalMs);
-          // If the signal fires while we're sleeping, clean up and reject
           signal?.addEventListener(
             "abort",
             () => {
@@ -52,7 +49,6 @@ export async function fetchWithWakeRetry<T>(
             { once: true },
           );
         });
-        // loop back to retry
       } else {
         throw err;
       }
@@ -60,48 +56,65 @@ export async function fetchWithWakeRetry<T>(
   }
 }
 
-export function useLayouts() {
-  const [layouts, setLayouts] = useState<LayoutMetadata[]>([]);
+/**
+ * Generic hook that fetches data with 502-wake retry, abort on unmount,
+ * and loading/waking/error state. Callers pass a fetcher and its deps.
+ */
+function useWakeRetry<T>(
+  fetcher: () => Promise<T>,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  deps: React.DependencyList,
+): { data: T | null; loading: boolean; waking: boolean; error: string | null; refetch: () => Promise<void> } {
+  const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [waking, setWaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchLayouts = useCallback(async () => {
+  // Keep a ref to the latest fetcher so the stable callback always calls it fresh
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const refetch = useCallback(async () => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
     setLoading(true);
     setWaking(false);
     setError(null);
-
     try {
-      const response = await fetchWithWakeRetry(() => getLayouts(), {
+      const result = await fetchWithWakeRetry(() => fetcherRef.current(), {
         onWaking: () => setWaking(true),
         signal: controller.signal,
       });
-      setLayouts(response.layouts);
+      if (!controller.signal.aborted) setData(result);
     } catch (err) {
       if (controller.signal.aborted) return;
-      const message =
-        err instanceof Error ? err.message : "Failed to fetch layouts";
-      setError(message);
-      console.error("Error fetching layouts:", err);
+      setError(err instanceof Error ? err.message : "Fetch failed");
+      console.error("Fetch error:", err);
     } finally {
       if (!controller.signal.aborted) {
         setWaking(false);
         setLoading(false);
       }
     }
-  }, []);
+  }, deps); // deps controls when a re-fetch is triggered
 
   useEffect(() => {
-    fetchLayouts();
+    refetch();
     return () => abortRef.current?.abort();
-  }, [fetchLayouts]);
+  }, [refetch]);
 
-  return { layouts, loading, waking, error, refetch: fetchLayouts };
+  return { data, loading, waking, error, refetch };
+}
+
+export function useLayouts() {
+  const { data, loading, waking, error, refetch } = useWakeRetry(
+    () => getLayouts().then((r) => r.layouts),
+    [],
+  );
+  return { layouts: data ?? [], loading, waking, error, refetch };
 }
 
 interface UseLayoutReturn {
@@ -113,45 +126,9 @@ interface UseLayoutReturn {
 }
 
 export function useLayout(layoutId: string, sizeId?: string): UseLayoutReturn {
-  const [layout, setLayout] = useState<LayoutDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [waking, setWaking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchLayout = useCallback(async () => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setLoading(true);
-    setWaking(false);
-    setError(null);
-
-    try {
-      const response = await fetchWithWakeRetry(
-        () => getLayout(layoutId, sizeId),
-        { onWaking: () => setWaking(true), signal: controller.signal },
-      );
-      setLayout(response);
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      const message =
-        err instanceof Error ? err.message : "Failed to fetch layout";
-      setError(message);
-      console.error("Error fetching layout:", err);
-    } finally {
-      if (!controller.signal.aborted) {
-        setWaking(false);
-        setLoading(false);
-      }
-    }
-  }, [layoutId, sizeId]);
-
-  useEffect(() => {
-    fetchLayout();
-    return () => abortRef.current?.abort();
-  }, [fetchLayout]);
-
-  return { layout, loading, waking, error, refetch: fetchLayout };
+  const { data, loading, waking, error, refetch } = useWakeRetry(
+    () => getLayout(layoutId, sizeId),
+    [layoutId, sizeId],
+  );
+  return { layout: data ?? null, loading, waking, error, refetch };
 }

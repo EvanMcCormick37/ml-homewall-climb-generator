@@ -1,13 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { fetchLayoutPhoto } from "@/api/layouts";
 import type { HoldDetail, Holdset, SizeMetadata } from "@/types";
-import {
-  computeHomography,
-  invertMat3,
-  applyHomography,
-  type Point2D,
-  type Mat3,
-} from "@/utils/homography";
+import { buildWallHomography, holdToPixel } from "@/utils/coordinateSpace";
 import {
   HOLD_STROKE_COLOR,
   DEFAULT_DISPLAY_SETTINGS,
@@ -60,44 +54,13 @@ export function WallCanvas({
   imageEdges,
   homographySrcCorners,
 }: WallCanvasProps) {
-  // Resolve image_edges, falling back to full wall dimensions (used when no homography)
-  const [imgL, imgR, imgB, imgT] = imageEdges ?? [
-    0,
-    wallDimensions.width,
-    0,
-    wallDimensions.height,
-  ];
+  const { Hinv } = useMemo(
+    () => buildWallHomography(homographySrcCorners, imageDimensions, wallDimensions),
+    [homographySrcCorners, imageDimensions, wallDimensions],
+  );
 
-  // Compute inverse homography matrix (feet → pixel) when corners are available
-  const Hinv = useMemo<Mat3 | null>(() => {
-    const hasCorners =
-      homographySrcCorners &&
-      homographySrcCorners.length === 8 &&
-      imageDimensions.width > 0 &&
-      imageDimensions.height > 0;
-    if (!hasCorners) return null;
-
-    const W = wallDimensions.width;
-    const Hft = wallDimensions.height;
-    const iW = imageDimensions.width;
-    const iH = imageDimensions.height;
-
-    const srcPts: Point2D[] = [
-      [homographySrcCorners[0] * iW, homographySrcCorners[1] * iH],
-      [homographySrcCorners[2] * iW, homographySrcCorners[3] * iH],
-      [homographySrcCorners[4] * iW, homographySrcCorners[5] * iH],
-      [homographySrcCorners[6] * iW, homographySrcCorners[7] * iH],
-    ];
-    const dstPts: Point2D[] = [
-      [0, Hft], [W, Hft], [0, 0], [W, 0],
-    ];
-
-    try {
-      return invertMat3(computeHomography(srcPts, dstPts));
-    } catch {
-      return null;
-    }
-  }, [homographySrcCorners, imageDimensions, wallDimensions]);
+  // Resolved edge bounds used by the activeSize overlay
+  const [imgL, imgR, imgB, imgT] = imageEdges ?? [0, wallDimensions.width, 0, wallDimensions.height];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -146,17 +109,8 @@ export function WallCanvas({
   }, [layoutId, onImageLoad]);
 
   const toPixelCoords = useCallback(
-    (hold: HoldDetail) => {
-      if (Hinv) {
-        const [px, py] = applyHomography(Hinv, [hold.x, hold.y]);
-        return { x: px, y: py };
-      }
-      return {
-        x: ((hold.x - imgL) / (imgR - imgL)) * imageDimensions.width,
-        y: ((imgT - hold.y) / (imgT - imgB)) * imageDimensions.height,
-      };
-    },
-    [Hinv, imageDimensions, imgL, imgR, imgB, imgT],
+    (hold: HoldDetail) => holdToPixel(hold, Hinv, imageEdges, imageDimensions, wallDimensions),
+    [Hinv, imageEdges, imageDimensions, wallDimensions],
   );
 
   // Draw canvas

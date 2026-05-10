@@ -15,6 +15,11 @@ from app.services.climb_service import _holds_to_holdset, _get_layout_angle
 logger = logging.getLogger(__name__)
 
 
+def notify_holds_changed() -> None:
+    """Invalidate all generator pool manifolds after a hold mutation."""
+    generator_pool.update_all_hold_manifolds()
+
+
 def generate_climbs(
     layout_id: str,
     request: GenerateRequest,
