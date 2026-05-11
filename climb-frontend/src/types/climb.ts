@@ -1,10 +1,8 @@
 /**
- * Types for climb-related data structures
- *
- * These types mirror the Pydantic schemas in climb-api/app/schemas/climbs.py
+ * Types for climb-related data structures.
  */
 
-export type ClimbSortBy = "date" | "name" | "grade" | "ascents";
+export type ClimbSortBy = "date" | "name" | "difficulty" | "ascents";
 
 export interface Holdset {
   start: number[];
@@ -19,7 +17,7 @@ export interface Climb {
   angle: number;
   name: string;
   holdset: Holdset;
-  grade: number | null;
+  difficulty: number | null;
   quality: number | null;
   ascents: number;
   setter_name: string | null;
@@ -32,8 +30,7 @@ export interface ClimbCreate {
   name: string;
   holdset: Holdset;
   angle: number;
-  scale: string | null;
-  grade: string | null;
+  difficulty: number | null;
   setter_name: string;
   setter_id: string;
   tags: string[] | null;

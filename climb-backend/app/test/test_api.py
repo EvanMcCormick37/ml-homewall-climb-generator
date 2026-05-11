@@ -288,10 +288,9 @@ class TestGenerateEndpoints:
         """Test successful climb generation."""
         payload = {
             "num_climbs": 1,
-            "grade": "V4",
-            "grade_scale": "v_grade",
+            "difficulty": 18.0,
             "angle": 40,
-            "deterministic": False
+            "deterministic": False,
         }
         
         # Note: The router path prefix ends in .../generate, so we post to that base

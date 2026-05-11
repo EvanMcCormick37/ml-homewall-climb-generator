@@ -18,7 +18,6 @@ from app.config import settings
 from app.services.utils.ddpm_model import (
     ClimbDDPM,
     ClimbsFeatureScaler,
-    GRADE_TO_DIFF,
     Noiser,
 )
 
@@ -234,8 +233,7 @@ class ClimbDDPMGenerator:
         layout_id: str,
         n: int,
         angle: int,
-        grade: str,
-        diff_scale: str,
+        difficulty: float,
         timesteps: int,
         deterministic: bool,
         t_start_projection: float,
@@ -249,7 +247,7 @@ class ClimbDDPMGenerator:
         auto = x_offset is None
         offset_manifold = self._get_offset_manifold(layout_id, x_offset)
 
-        diff = GRADE_TO_DIFF[diff_scale][grade]
+        diff = difficulty
         if diff > 22:
             guidance_value *= 0.5
         cond_t = self._build_cond_tensor(n, diff, angle)

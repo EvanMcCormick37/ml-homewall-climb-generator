@@ -5,7 +5,7 @@ Contains the pure ML components with no database or pool dependencies:
 - Noiser (U-Net style denoiser)
 - ClimbDDPM (diffusion wrapper)
 - ClimbsFeatureScaler (data normalization)
-- GRADE_TO_DIFF (grade → difficulty lookup table)
+
 - Tensor utilities (clear_compile_keys, zero_com)
 """
 import math
@@ -270,30 +270,3 @@ def zero_com(climbs: Tensor, dim: int) -> Tensor:
     return new
 
 
-# ---------------------------------------------------------------------------
-# Grade lookup table
-# ---------------------------------------------------------------------------
-
-GRADE_TO_DIFF = {
-    "font": {
-        "4a": 10, "4b": 11, "4c": 12,
-        "5a": 13, "5b": 14, "5c": 15,
-        "6a": 16, "6a+": 17, "6b": 18, "6b+": 19,
-        "6c": 20, "6c+": 21,
-        "7a": 22, "7a+": 23, "7b": 24, "7b+": 25,
-        "7c": 26, "7c+": 27,
-        "8a": 28, "8a+": 29, "8b": 30, "8b+": 31,
-        "8c": 32, "8c+": 33,
-    },
-    "v_grade": {
-        "V0-": 10, "V0": 11, "V0+": 12,
-        "V1": 13, "V1+": 14, "V2": 15, "V2+": 15.5,
-        "V3": 16, "V3+": 17, "V4": 18, "V4+": 19,
-        "V5": 20, "V5+": 21, "V6": 22, "V6+": 22.5,
-        "V7": 23, "V7+": 23.5, "V8": 24, "V8+": 25,
-        "V9": 26, "V9+": 26.5, "V10": 27, "V10+": 27.5,
-        "V11": 28, "V11+": 28.5, "V12": 29, "V12+": 29.5,
-        "V13": 30, "V13+": 30.5, "V14": 31, "V14+": 31.5,
-        "V15": 32, "V15+": 32.5, "V16": 33,
-    },
-}

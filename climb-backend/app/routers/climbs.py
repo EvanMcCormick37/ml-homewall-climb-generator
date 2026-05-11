@@ -9,6 +9,7 @@ from app.schemas import (
     ClimbCreateResponse, ClimbBatchCreate,
     ClimbBatchCreateResult, ClimbBatchCreateResponse, ClimbDeleteResponse,
 )
+
 from app.services import services
 from app.auth import require_auth
 
@@ -19,9 +20,8 @@ router = APIRouter()
 def list_climbs(
     layout_id: str,
     angle: int | None = Query(None),
-    grade_scale: str = Query("v_grade"),
-    min_grade: str = Query("V0-"),
-    max_grade: str = Query("V15"),
+    min_difficulty: float = Query(10.0),
+    max_difficulty: float = Query(33.0),
     include_projects: bool = Query(True),
     setter_name: str | None = Query(None),
     name_includes: str | None = Query(None),
@@ -36,9 +36,8 @@ def list_climbs(
     climbs, total, limit, offset = services.get_climbs(
         layout_id=layout_id,
         angle=angle,
-        grade_scale=grade_scale,
-        min_grade=min_grade,
-        max_grade=max_grade,
+        min_difficulty=min_difficulty,
+        max_difficulty=max_difficulty,
         include_projects=include_projects,
         setter_name=setter_name,
         name_includes=name_includes,

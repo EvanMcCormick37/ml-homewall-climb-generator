@@ -45,13 +45,12 @@ import {
   SLOW_GENERATE_SETTINGS,
 } from "@/types";
 import { GLOBAL_STYLES } from "@/styles";
+import { gradeOptions as getGradeOptions, gradeToDifficulty } from "@/utils/climbs";
 import {
   // Types & constants
   CATEGORY_ORDER,
   CATEGORY_LABELS,
   DEFAULT_DISPLAY_SETTINGS,
-  VGRADE_OPTIONS,
-  FONT_OPTIONS,
   generateClimbName,
   type HoldCategory,
   type DisplaySettings,
@@ -1305,7 +1304,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
     height: 0,
   });
   const [gradingScale, setGradingScale] = useState<GradeScale>("v_grade");
-  const [gradeOptions, setGradeOptions] = useState(VGRADE_OPTIONS);
+  const gradeOptions = useMemo(() => getGradeOptions(gradingScale), [gradingScale]);
   const [numClimbs, setNumClimbs] = useState<number | null>(3);
   const [grade, setGrade] = useState<string>("V4");
   const [angle, setAngle] = useState<number | null>(
@@ -1397,8 +1396,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
       const generate_grade = grade ?? gradeOptions[0];
       const request: GenerateRequest = {
         num_climbs: numClimbs ?? 3,
-        grade: generate_grade,
-        grade_scale: gradingScale,
+        difficulty: gradeToDifficulty(generate_grade, gradingScale),
         angle: angle ?? null,
         x_offset: xOffset,
       };
@@ -1448,15 +1446,8 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
   ]);
 
   const handleGradingScaleChange = useCallback((scale: GradeScale) => {
-    if (scale === "v_grade") {
-      setGradingScale("v_grade");
-      setGradeOptions(VGRADE_OPTIONS);
-      setGrade("V0");
-    } else {
-      setGradingScale("font");
-      setGradeOptions(FONT_OPTIONS);
-      setGrade("4a");
-    }
+    setGradingScale(scale);
+    setGrade(scale === "v_grade" ? "V0" : "4a");
   }, []);
 
   const handleUpdateClimb = useCallback(
@@ -1618,8 +1609,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
       await createClimb(layoutId, {
         name: selectedClimb.name,
         holdset: selectedClimb.holdset,
-        scale: gradingScale,
-        grade: selectedClimb.grade,
+        difficulty: gradeToDifficulty(selectedClimb.grade, gradingScale),
         angle: parseInt(selectedClimb.angle),
         setter_name: user.fullName!,
         setter_id: user.id,

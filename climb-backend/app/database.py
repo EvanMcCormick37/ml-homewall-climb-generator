@@ -130,7 +130,7 @@ def init_db():
                 name TEXT NOT NULL,
                 holds TEXT NOT NULL,
                 tags TEXT,
-                grade REAL,
+                difficulty REAL,
                 quality REAL DEFAULT 2.5,
                 ascents INTEGER DEFAULT 0,
                 setter_name TEXT,
@@ -147,3 +147,7 @@ def init_db():
             "homography_src_corners",
             "TEXT DEFAULT NULL",  # JSON array of 8 floats [tlx,tly, trx,try, blx,bly, brx,bry]
         )
+
+        # Rename climbs.grade → climbs.difficulty (idempotent)
+        if _column_exists(conn, "climbs", "grade") and not _column_exists(conn, "climbs", "difficulty"):
+            conn.execute("ALTER TABLE climbs RENAME COLUMN grade TO difficulty")

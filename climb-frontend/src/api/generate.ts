@@ -1,9 +1,5 @@
 import { apiClient } from "./client";
-import type {
-  GenerateRequest,
-  GenerateSettings,
-  GenerateResponse,
-} from "@/types";
+import type { GenerateRequest, GenerateSettings, GenerateResponse } from "@/types";
 
 export async function generateClimbs(
   layoutId: string,
@@ -12,15 +8,10 @@ export async function generateClimbs(
 ): Promise<GenerateResponse> {
   const params: Record<string, string> = {
     num_climbs: request.num_climbs.toString(),
-    grade: request.grade,
-    grade_scale: request.grade_scale,
+    difficulty: request.difficulty.toString(),
   };
-  if (request.angle != null) {
-    params.angle = request.angle.toString();
-  }
-  if (request.x_offset != null) {
-    params.x_offset = request.x_offset.toString();
-  }
+  if (request.angle != null) params.angle = request.angle.toString();
+  if (request.x_offset != null) params.x_offset = request.x_offset.toString();
   if (settings) {
     params.timesteps = settings.timesteps.toString();
     params.guidance_value = settings.guidance_value.toString();

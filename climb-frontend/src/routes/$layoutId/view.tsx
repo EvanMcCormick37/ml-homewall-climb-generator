@@ -27,10 +27,8 @@ import {
   DEFAULT_CLIMB_FILTERS,
   type ClimbSortBy,
 } from "@/types";
-import { gradeToString, gradeToColor } from "@/utils/climbs";
+import { gradeToString, gradeToColor, gradeOptions as getGradeOptions } from "@/utils/climbs";
 import {
-  VGRADE_OPTIONS,
-  FONT_OPTIONS,
   DEFAULT_DISPLAY_SETTINGS,
   type DisplaySettings,
   TogglePair,
@@ -52,7 +50,7 @@ export const Route = createFileRoute("/$layoutId/view")({
 const SORT_OPTIONS = [
   { label: "Date Added", value: "date" },
   { label: "Ascents", value: "ascents" },
-  { label: "Grade", value: "grade" },
+  { label: "Grade", value: "difficulty" },
   { label: "Quality", value: "quality" },
 ];
 
@@ -94,16 +92,14 @@ function FilterPanel({
 }) {
   const set = <K extends keyof ClimbFilters>(key: K, val: ClimbFilters[K]) =>
     onChange({ ...filters, [key]: val });
-  const [gradeOptions, setGradeOptions] = useState(VGRADE_OPTIONS);
+  const gradeOptions = getGradeOptions(filters.gradeScale as GradeScale);
   const changeGradeScale = useCallback((scale: GradeScale) => {
     if (scale === "v_grade") {
       set("gradeScale", "v_grade");
-      setGradeOptions(VGRADE_OPTIONS);
       set("minGrade", "V0-");
       set("maxGrade", "V16");
     } else {
       set("gradeScale", "font");
-      setGradeOptions(FONT_OPTIONS);
       set("minGrade", "4a");
       set("maxGrade", "8c+");
     }
@@ -718,7 +714,7 @@ function ClimbList({
         ) : (
           climbs.map((climb) => {
             const isSelected = selectedClimb?.id === climb.id;
-            const color = gradeToColor(climb.grade);
+            const color = gradeToColor(climb.difficulty);
             const canDelete =
               currentUserId !== null &&
               (climb.setter_id === currentUserId ||
@@ -768,7 +764,7 @@ function ClimbList({
                       className="bz-mono"
                       style={{ fontSize: "0.6rem", fontWeight: 700, color }}
                     >
-                      {gradeToString(climb.grade)}
+                      {gradeToString(climb.difficulty)}
                     </span>
                   </div>
 
@@ -868,7 +864,7 @@ function ClimbDetails({
     day: "numeric",
   });
 
-  const color = gradeToColor(climb.grade);
+  const color = gradeToColor(climb.difficulty);
 
   const detailRow: React.CSSProperties = {
     display: "flex",
@@ -906,7 +902,7 @@ function ClimbDetails({
           }}
         >
           <span className="bz-oswald" style={{ fontSize: "1rem", color }}>
-            {gradeToString(climb.grade)}
+            {gradeToString(climb.difficulty)}
           </span>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1409,7 +1405,7 @@ function MainViewPage({
                 className="bz-oswald"
                 style={{
                   fontSize: "1.6rem",
-                  color: gradeToColor(selectedClimb.grade),
+                  color: gradeToColor(selectedClimb.difficulty),
                 }}
               >
                 {selectedClimb.name || "Unnamed"}
@@ -1418,7 +1414,7 @@ function MainViewPage({
                 className="bz-mono"
                 style={{ fontSize: "0.6rem", color: "var(--cyan)" }}
               >
-                {gradeToString(selectedClimb.grade)} @ {selectedClimb.angle} ·{" "}
+                {gradeToString(selectedClimb.difficulty)} @ {selectedClimb.angle} ·{" "}
                 {selectedClimb.setter_name}
               </span>
             </div>

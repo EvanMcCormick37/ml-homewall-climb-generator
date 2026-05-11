@@ -11,7 +11,7 @@ export {
   type NamedHoldset,
 } from "./types";
 
-export { VGRADE_OPTIONS, FONT_OPTIONS, generateClimbName } from "./constants";
+export { generateClimbName } from "./constants";
 
 // UI primitives
 export { SectionLabel, TogglePair, BzRange } from "./ui";
