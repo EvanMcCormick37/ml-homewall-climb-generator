@@ -5,6 +5,8 @@ import type { Holdset } from "./climb";
 
 export type GradeScale = "v_grade" | "font";
 
+export type GenerateMode = "standard" | "evolutionary";
+
 export interface GenerateRequest {
   num_climbs: number;
   difficulty: number;
@@ -18,6 +20,7 @@ export interface GenerateSettings {
   t_start_projection: number;
   deterministic: boolean;
   seed: number;
+  population: number;
 }
 
 export const DEFAULT_GENERATE_SETTINGS: GenerateSettings = {
@@ -26,6 +29,7 @@ export const DEFAULT_GENERATE_SETTINGS: GenerateSettings = {
   t_start_projection: 0.5,
   deterministic: false,
   seed: 37,
+  population: 10,
 };
 
 export const FAST_GENERATE_SETTINGS: GenerateSettings = {
@@ -34,6 +38,7 @@ export const FAST_GENERATE_SETTINGS: GenerateSettings = {
   t_start_projection: 0.5,
   deterministic: false,
   seed: 37,
+  population: 10,
 };
 
 export const SLOW_GENERATE_SETTINGS: GenerateSettings = {
@@ -42,6 +47,7 @@ export const SLOW_GENERATE_SETTINGS: GenerateSettings = {
   t_start_projection: 0.5,
   deterministic: false,
   seed: 37,
+  population: 10,
 };
 
 export interface GenerateResponse {

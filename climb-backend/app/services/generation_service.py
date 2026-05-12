@@ -21,6 +21,44 @@ def notify_holds_changed() -> None:
     generator_pool.update_all_hold_manifolds()
 
 
+def generate_climbs_evolutionary(
+    layout_id: str,
+    request: GenerateRequest,
+    gen_settings: GenerateSettings,
+    population: int,
+) -> list[Holdset]:
+    """
+    Generate climbs using the evolutionary diffusion strategy.
+
+    `request.num_climbs` sets n_successors (survivors per step) and the return count.
+    `population` is the total parallel candidates evaluated each step.
+    """
+    n_successors = request.num_climbs
+    effective_population = max(population, n_successors)
+
+    try:
+        angle = request.angle if request.angle else _get_layout_angle(layout_id)
+
+        with generator_pool.acquire() as gen:
+            raw_climbs = gen.generate_evolutionary(
+                layout_id=layout_id,
+                population=effective_population,
+                n_successors=n_successors,
+                angle=angle,
+                difficulty=request.difficulty,
+                timesteps=gen_settings.timesteps,
+                deterministic=gen_settings.deterministic,
+                x_offset=request.x_offset,
+                guidance_value=gen_settings.guidance_value,
+                seed=gen_settings.seed,
+            )
+    except Exception as e:
+        print(f"Exception: {e}")
+        raise e
+
+    return [_holds_to_holdset(c) for c in raw_climbs[:n_successors]]
+
+
 def generate_climbs(
     layout_id: str,
     request: GenerateRequest,

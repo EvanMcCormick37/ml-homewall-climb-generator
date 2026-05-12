@@ -9,6 +9,7 @@ Model classes and feature engineering live in ddpm_model.py.
 import sqlite3
 from contextlib import contextmanager
 
+import math
 import numpy as np
 import pandas as pd
 import torch
@@ -43,11 +44,11 @@ class ClimbDDPMGenerator:
         self._cond_cache: dict = {}
         self.holds_manifolds: dict = {}
         self.holds_lookup: dict = {}
+        self.holds_com: dict = {}
         self.deterministic_noise_generator = torch.Generator(device=self.device)
         self.update_hold_manifolds()
 
     def update_hold_manifolds(self):
-        """Fetch latest holds from DB, scale features, rebuild manifold dicts."""
         with sqlite3.connect(settings.DB_PATH) as conn:
             holds = pd.read_sql_query(
                 "SELECT hold_index, x, y, pull_x, pull_y, useability, is_foot, tags, layout_id FROM holds",
@@ -58,15 +59,17 @@ class ClimbDDPMGenerator:
         scaled_holds = self.scaler.transform_hold_features(holds, to_df=True)
         self.holds_manifolds.clear()
         self.holds_lookup.clear()
+        self.holds_com.clear()  # ← new
 
         for layout_id in layout_ids:
             df = scaled_holds[scaled_holds["layout_id"] == layout_id]
-            self.holds_manifolds[layout_id] = torch.tensor(
+            manifold = torch.tensor(
                 df[["x", "y", "pull_x", "pull_y", "is_foot", "pinch", "flat"]].values,
                 dtype=torch.float32,
             )
+            self.holds_manifolds[layout_id] = manifold
+            self.holds_com[layout_id] = manifold.mean(dim=0)  # ← new
             self.holds_lookup[layout_id] = df["hold_index"].values
-
     def log_hold_means(self, layout_id: str | None = None):
         for k, manifold in self.holds_manifolds.items():
             if layout_id is None or layout_id == k:
@@ -83,21 +86,26 @@ class ClimbDDPMGenerator:
             self._cond_cache[cache_key] = scaled
         return torch.tensor(np.tile(self._cond_cache[cache_key], (n, 1)), device=self.device, dtype=torch.float32)
 
-    def _get_offset_manifold(self, layout_id: str, x_offset: float | None) -> Tensor:
-        offset_manifold = self.holds_manifolds[layout_id].clone()
-        means = torch.mean(offset_manifold, dim=0)
-
+    def _get_climb_translation(self, layout_id: str, x_offset: float | None) -> Tensor:
+        """
+        Compute the (x, y) translation to apply to generated climbs so they
+        align with the unshifted hold manifold before projection.
+        Returns a (1, 1, H) tensor with the translation in dims 0 and 1 only.
+        """
+        manifold = self.holds_manifolds[layout_id]
+        com = self.holds_com[layout_id]
         if x_offset is None:
             x_offset = torch.clamp(torch.randn(size=(1,)), -1.0, 1.0).item() / 2
-
-        _range = (torch.max(offset_manifold[:, 0]) - torch.min(offset_manifold[0])).item()
-        x_offset = x_offset * _range / 2 + means[0].item()
-        y_offset = means[1].item()
-
-        offset_manifold[:, 0] -= x_offset
-        offset_manifold[:, 1] -= y_offset
-        return offset_manifold
-
+        x_range = (manifold[:, 0].max() - manifold[:, 0].min()).item()
+        x_translate = x_offset * x_range / 2 + com[0].item()
+        y_translate = com[1].item()
+        H = self.NUM_FEATURES + self.NUM_ROLES
+        t = torch.zeros(1, 1, H, device=self.device)
+        t[0, 0, 0] = x_translate
+        t[0, 0, 1] = y_translate
+        
+        return t
+        
     def _projection_strength(self, t: Tensor, t_start_projection: float = 0.8):
         assert t_start_projection <= 0.8
         a = (t_start_projection - t) / t_start_projection
@@ -111,11 +119,9 @@ class ClimbDDPMGenerator:
         is_hand_mask = flat_climbs[:, -2] < 0.85
         is_foot_mask = ~is_hand_mask
         features = flat_climbs[:, : self.NUM_FEATURES]
-
         N = flat_climbs.shape[0]
         idx = torch.empty(N, dtype=torch.long, device=flat_climbs.device)
         min_dists = torch.empty(N, dtype=torch.float32, device=flat_climbs.device)
-
         if is_hand_mask.any():
             hand_dists = torch.cdist(
                 features[is_hand_mask] * self.HAND_FEATURE_WEIGHTS.unsqueeze(0),
@@ -124,7 +130,6 @@ class ClimbDDPMGenerator:
             vals, indices = hand_dists.min(dim=1)
             idx[is_hand_mask] = indices
             min_dists[is_hand_mask] = vals
-
         if is_foot_mask.any():
             foot_dists = torch.cdist(
                 features[is_foot_mask] * self.FOOT_FEATURE_WEIGHTS.unsqueeze(0),
@@ -133,7 +138,6 @@ class ClimbDDPMGenerator:
             vals, indices = foot_dists.min(dim=1)
             idx[is_foot_mask] = indices
             min_dists[is_foot_mask] = vals
-
         return min_dists, idx
 
     def _project_onto_manifold(self, gen_climbs: Tensor, offset_manifold: Tensor) -> Tensor:
@@ -149,17 +153,13 @@ class ClimbDDPMGenerator:
         roles = torch.argmax(gen_climbs[:, :, self.NUM_FEATURES:], dim=2).detach().cpu().numpy()
         flat_climbs = gen_climbs.reshape(-1, H)
         _, idx = self._get_nearest_manifold_neighbors(flat_climbs, offset_manifold)
-
         y_vals = offset_manifold[idx, 1].detach().cpu().numpy().reshape(B, S)
-
         if not isinstance(self.holds_lookup[layout_id], torch.Tensor):
             idx = idx.cpu().numpy()
         holds = self.holds_lookup[layout_id][idx].reshape(B, S)
         if isinstance(holds, torch.Tensor):
             holds = holds.detach().cpu().numpy()
-
         climbs = np.stack([holds, roles, y_vals], axis=2)
-
         deduped_climbs = []
         for c in climbs:
             valid_mask = c[:, 1] != 4
@@ -167,85 +167,48 @@ class ClimbDDPMGenerator:
             c_sorted = c_valid[c_valid[:, 1].argsort()]
             _, unique_indices = np.unique(c_sorted[:, 0], return_index=True)
             c_deduped = c_sorted[unique_indices]
-
             if not np.any(c_deduped[:, 1] == self.FINISH_ROLE):
                 c_deduped[np.argmax(c_deduped[:, 2]), 1] = self.FINISH_ROLE
-
             if not np.any(c_deduped[:, 1] == self.START_ROLE):
                 min_y_idx = np.argmin(c_deduped[:, 2] + (c_deduped[:, 1] == self.FOOT_ROLE).astype(np.float32))
                 if min_y_idx != np.argmax(c_deduped[:, 2]) or len(c_deduped) == 1:
                     c_deduped[min_y_idx, 1] = self.START_ROLE
-
             deduped_climbs.append(c_deduped[:, :2].astype(int).tolist())
-
         return deduped_climbs
+    
+    def _measure_fitness(self, gen_climbs: Tensor, manifold: Tensor) -> Tensor:
+        """
+        Fitness score for each climb: mean nearest-manifold Euclidean distance
+        across non-null holds. Lower score = better fit.
 
-    def _find_optimal_translation(
-        self,
-        gen_climbs: Tensor,
-        offset_manifold: Tensor,
-        x_offsets: Tensor,
-        y_offsets: Tensor,
-    ) -> tuple[Tensor, Tensor]:
+        Args:
+            gen_climbs: (B, S, H) in manifold space (translation already applied).
+            manifold:   unshifted hold manifold for this layout.
+
+        Returns:
+            (B,) float tensor of per-climb fitness scores.
+        """
         B, S, H = gen_climbs.shape
-        null_mask = (gen_climbs[:, :, -1] < 0.95).float()
-        Nx = x_offsets.shape[0]
-        Ny = y_offsets.shape[0]
+        flat = gen_climbs.reshape(-1, H)
 
-        shifts = torch.zeros(Nx, Ny, H, device=gen_climbs.device)
-        shifts[:, :, 0] = x_offsets.unsqueeze(1)
-        shifts[:, :, 1] = y_offsets.unsqueeze(0)
-        G = Nx * Ny
-        shifts = shifts.reshape(G, H)
+        # Non-null holds: is_null feature (last dim) below threshold
+        real_hold_mask = (flat[:, -1] < 0.95).float()  # (B*S,)
 
-        translated = gen_climbs.unsqueeze(0) + shifts.view(G, 1, 1, H)
-        flat_translated = translated.reshape(-1, H)
-        min_dists, _ = self._get_nearest_manifold_neighbors(flat_translated, offset_manifold)
-        batch_dist = min_dists.reshape(G, B, S) * null_mask.unsqueeze(0)
-        total_dist = batch_dist.sum(dim=2)
-        best_g = total_dist.argmin(dim=0)
-        return x_offsets[best_g // Ny], y_offsets[best_g % Ny]
+        min_dists, _ = self._get_nearest_manifold_neighbors(flat, manifold)
 
-    def _project_onto_indices_with_translation(
-        self,
-        gen_climbs: Tensor,
-        offset_manifold: Tensor,
-        layout_id: str,
-        x_offsets: Tensor | None = None,
-        y_offsets: Tensor | None = None,
-    ) -> list[list[list[int]]]:
-        if x_offsets is None:
-            x_offsets = torch.linspace(-0.5, 0.5, 51, device=gen_climbs.device)
-        if y_offsets is None:
-            y_offsets = torch.linspace(-0.5, 0.5, 51, device=gen_climbs.device)
-
-        best_dx, best_dy = self._find_optimal_translation(gen_climbs, offset_manifold, x_offsets, y_offsets)
-
-        B, S, H = gen_climbs.shape
-        translation = torch.zeros(B, 1, H, device=gen_climbs.device)
-        translation[:, 0, 0] = best_dx
-        translation[:, 0, 1] = best_dy
-        return self._project_onto_indices(gen_climbs + translation, offset_manifold, layout_id)
-
+        # Mean distance over real holds only; clamp denominator to avoid div-by-zero
+        weighted_dists = (min_dists * real_hold_mask).reshape(B, S).sum(dim=1)
+        real_hold_counts = real_hold_mask.reshape(B, S).sum(dim=1).clamp(min=1)
+        return weighted_dists / real_hold_counts  # (B,)
+    
     @torch.no_grad()
-    def generate(
-        self,
-        layout_id: str,
-        n: int,
-        angle: int,
-        difficulty: float,
-        timesteps: int,
-        deterministic: bool,
-        t_start_projection: float,
-        x_offset: float | None,
-        guidance_value: float,
-        seed: int,
-    ) -> list[list[list[int]]]:
+    def generate(self, layout_id, n, angle, difficulty, timesteps, deterministic,
+                t_start_projection, x_offset, guidance_value, seed):
         if deterministic:
             self.deterministic_noise_generator.manual_seed(seed)
 
-        auto = x_offset is None
-        offset_manifold = self._get_offset_manifold(layout_id, x_offset)
+        manifold = self.holds_manifolds[layout_id]          # unshifted
+        translation = self._get_climb_translation(layout_id, x_offset)  # (1,1,H)
 
         diff = difficulty
         if diff > 22:
@@ -255,8 +218,7 @@ class ClimbDDPMGenerator:
         shape = (n, 20, self.NUM_ROLES + self.NUM_FEATURES)
         x_t = (
             torch.randn(shape, device=self.device, generator=self.deterministic_noise_generator)
-            if deterministic
-            else torch.randn(shape, device=self.device)
+            if deterministic else torch.randn(shape, device=self.device)
         )
         noisy = x_t.clone()
         t_tensor = torch.ones((n, 1), device=self.device)
@@ -266,19 +228,97 @@ class ClimbDDPMGenerator:
 
             if t_tensor[0].item() < t_start_projection:
                 alpha_p = self._projection_strength(t_tensor, t_start_projection)
-                projected = self._project_onto_manifold(gen_climbs, offset_manifold)
-                gen_climbs = alpha_p * projected + (1 - alpha_p) * gen_climbs
+                # Translate into manifold space, project, translate back
+                projected = self._project_onto_manifold(gen_climbs + translation, manifold)
+                gen_climbs = alpha_p * (projected - translation) + (1 - alpha_p) * gen_climbs
 
             t_tensor -= 1.0 / timesteps
             noisy = self.ddpm.forward_diffusion(
-                gen_climbs,
-                t_tensor,
+                gen_climbs, t_tensor,
                 noisy if deterministic else torch.randn_like(noisy),
             )
 
-        if auto:
-            return self._project_onto_indices_with_translation(gen_climbs, offset_manifold, layout_id)
-        return self._project_onto_indices(gen_climbs, offset_manifold, layout_id)
+        # Translate into manifold space for the final discrete projection
+        gen_climbs_manifold = gen_climbs + translation
+        return self._project_onto_indices(gen_climbs_manifold, manifold, layout_id)
+
+    @torch.no_grad()
+    def generate_evolutionary(
+        self,
+        layout_id: str,
+        population: int,
+        n_successors: int,
+        angle: int,
+        difficulty: float,
+        timesteps: int,
+        deterministic: bool,
+        x_offset: float | None,
+        guidance_value: float,
+        seed: int,
+    ) -> list[list[list[int]]]:
+        """
+        Evolutionary reverse-diffusion generation.
+
+        At each diffusion step, all `population` samples are denoised and scored
+        by their mean nearest-manifold distance. The top `n_successors` are kept,
+        tiled back up to `population`, and re-noised at the current noise level
+        before the next step. Manifold projection only happens on the final step.
+
+        Args:
+            population:    Total number of parallel samples (p). Must be >= n_successors.
+            n_successors:  Number of survivors selected per step (k). Must be >= 1.
+        """
+        assert n_successors >= 1, "n_successors must be at least 1"
+        assert population >= n_successors, "population must be >= n_successors"
+
+        if deterministic:
+            self.deterministic_noise_generator.manual_seed(seed)
+
+        manifold = self.holds_manifolds[layout_id]
+        translation = self._get_climb_translation(layout_id, x_offset)
+
+        if difficulty > 22:
+            guidance_value *= 0.5
+        cond_t = self._build_cond_tensor(population, difficulty, angle)
+
+        shape = (population, 20, self.NUM_FEATURES + self.NUM_ROLES)
+        noisy = (
+            torch.randn(shape, device=self.device, generator=self.deterministic_noise_generator)
+            if deterministic
+            else torch.randn(shape, device=self.device)
+        )
+        t_tensor = torch.ones((population, 1), device=self.device)
+
+        for step in range(timesteps):
+            gen_climbs = self.ddpm.predict_cfg(noisy, cond_t, t_tensor, guidance_value)
+            t_tensor -= 1.0 / timesteps
+            is_final = (step == timesteps - 1)
+
+            if is_final:
+                break
+
+            # --- Evolutionary selection ---
+            # Score each sample by mean nearest-manifold distance (lower = better)
+            fitness = self._measure_fitness(gen_climbs + translation, manifold)  # (population,)
+
+            # Rank and select top-k survivors
+            _, survivor_idx = torch.topk(fitness, n_successors, largest=False)
+            survivors = gen_climbs[survivor_idx]  # (n_successors, S, H)
+
+            # Tile survivors to refill the full population
+            repeats = math.ceil(population / n_successors)
+            gen_climbs = survivors.repeat(repeats, 1, 1)[:population]  # (population, S, H)
+
+            # Re-noise the tiled climbs to the current noise level for the next step
+            noisy = self.ddpm.forward_diffusion(
+                gen_climbs,
+                t_tensor,
+                torch.randn_like(gen_climbs),
+            )
+        
+        # Final step: discrete projection onto hold indices and return
+        gen_climbs_manifold = gen_climbs + translation
+        return self._project_onto_indices(gen_climbs_manifold, manifold, layout_id)
 
 
 # ---------------------------------------------------------------------------

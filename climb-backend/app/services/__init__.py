@@ -40,6 +40,7 @@ services = ServiceContainer(
 
     # Generation
     generate_climbs=generation_service.generate_climbs,
+    generate_climbs_evolutionary=generation_service.generate_climbs_evolutionary,
 
     # User Management
     ensure_user_exists=user_service.ensure_user_exists,

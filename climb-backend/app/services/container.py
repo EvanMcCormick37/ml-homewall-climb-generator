@@ -38,6 +38,7 @@ class ServiceContainer:
 
     # Generation
     generate_climbs: Callable
+    generate_climbs_evolutionary: Callable
 
     # User Management
     ensure_user_exists: Callable

@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useLayout, fetchWithWakeRetry } from "@/hooks";
-import { generateClimbs } from "@/api/generate";
+import { generateClimbs, generateClimbsEvolutionary } from "@/api/generate";
 import { createClimb } from "@/api/climbs";
 import { deleteLayout } from "@/api/layouts";
 import { WakingScreen } from "@/components";
@@ -35,6 +35,7 @@ import type {
   Holdset,
   GenerateRequest,
   GenerateSettings,
+  GenerateMode,
   GradeScale,
   LayoutDetail,
   SizeMetadata,
@@ -91,19 +92,21 @@ export const Route = createFileRoute("/$layoutId/set")({
 function ModelSettingsPanel({
   settings,
   onChange,
+  isEvolutionary,
 }: {
   settings: GenerateSettings;
   onChange: (s: GenerateSettings) => void;
+  isEvolutionary: boolean;
 }) {
   const update = (patch: Partial<GenerateSettings>) =>
     onChange({ ...settings, ...patch });
   const isDefault =
     settings.timesteps === DEFAULT_GENERATE_SETTINGS.timesteps &&
     settings.guidance_value === DEFAULT_GENERATE_SETTINGS.guidance_value &&
-    settings.t_start_projection ===
-      DEFAULT_GENERATE_SETTINGS.t_start_projection &&
+    (isEvolutionary || settings.t_start_projection === DEFAULT_GENERATE_SETTINGS.t_start_projection) &&
     settings.deterministic === DEFAULT_GENERATE_SETTINGS.deterministic &&
-    settings.seed === DEFAULT_GENERATE_SETTINGS.seed;
+    settings.seed === DEFAULT_GENERATE_SETTINGS.seed &&
+    settings.population === DEFAULT_GENERATE_SETTINGS.population;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -132,18 +135,20 @@ function ModelSettingsPanel({
         rightLabel="Exaggerated"
       />
 
-      <BzRange
-        label="Projection Start Time"
-        desc="Fraction of the diffusion process at which layout-projection begins. Higher values begin projecting onto the wall's holds earlier in the generative process."
-        value={0.8 - settings.t_start_projection}
-        min={0.0}
-        max={0.8}
-        step={0.05}
-        onChange={(v) => update({ t_start_projection: 0.8 - v })}
-        displayValue={settings.t_start_projection.toFixed(2)}
-        leftLabel="Earlier"
-        rightLabel="Later"
-      />
+      {!isEvolutionary && (
+        <BzRange
+          label="Projection Start Time"
+          desc="Fraction of the diffusion process at which layout-projection begins. Higher values begin projecting onto the wall's holds earlier in the generative process."
+          value={0.8 - settings.t_start_projection}
+          min={0.0}
+          max={0.8}
+          step={0.05}
+          onChange={(v) => update({ t_start_projection: 0.8 - v })}
+          displayValue={settings.t_start_projection.toFixed(2)}
+          leftLabel="Earlier"
+          rightLabel="Later"
+        />
+      )}
 
       <div>
         <div style={{ marginBottom: "8px" }}>
@@ -234,6 +239,8 @@ interface GenerationPanelProps {
   onXOffsetChange: (v: number | null) => void;
   generateSettings: GenerateSettings;
   onGenerateSettingsChange: (s: GenerateSettings) => void;
+  generateMode: GenerateMode;
+  onGenerateModeChange: (m: GenerateMode) => void;
   showModelSettings: boolean;
   onToggleModelSettings: () => void;
   isGenerating: boolean;
@@ -264,6 +271,8 @@ function GenerationPanel({
   onXOffsetChange,
   generateSettings,
   onGenerateSettingsChange,
+  generateMode,
+  onGenerateModeChange,
   showModelSettings,
   onToggleModelSettings,
   isGenerating,
@@ -277,6 +286,7 @@ function GenerationPanel({
   onDeleteHoldset,
   onClearHoldsets,
 }: GenerationPanelProps) {
+  const isEvolutionary = generateMode === "evolutionary";
   const [showClimbParams, setShowClimbParams] = useState(true);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ isDragging: false, startY: 0, startScrollTop: 0 });
@@ -309,9 +319,10 @@ function GenerationPanel({
   const isPresetActive = (preset: GenerateSettings) =>
     generateSettings.timesteps === preset.timesteps &&
     generateSettings.guidance_value === preset.guidance_value &&
-    generateSettings.t_start_projection === preset.t_start_projection &&
+    (isEvolutionary || generateSettings.t_start_projection === preset.t_start_projection) &&
     generateSettings.deterministic === preset.deterministic &&
-    generateSettings.seed === preset.seed;
+    generateSettings.seed === preset.seed &&
+    generateSettings.population === preset.population;
   const isCustom =
     !isPresetActive(FAST_GENERATE_SETTINGS) &&
     !isPresetActive(DEFAULT_GENERATE_SETTINGS) &&
@@ -508,6 +519,31 @@ function GenerationPanel({
                 </div>
               )}
             </div>
+
+            {/* Population — evolutionary only */}
+            {isEvolutionary && (
+              <div>
+                <div style={{ marginBottom: "8px" }}>
+                  <SectionLabel desc="Total parallel candidates evaluated at each diffusion step. A larger population increases selection pressure at the cost of generation time.">
+                    Population
+                  </SectionLabel>
+                </div>
+                <BzRange
+                  label=""
+                  desc=""
+                  value={generateSettings.population}
+                  min={2}
+                  max={20}
+                  step={1}
+                  onChange={(v) =>
+                    onGenerateSettingsChange({ ...generateSettings, population: v })
+                  }
+                  displayValue={String(generateSettings.population)}
+                  leftLabel="Smaller"
+                  rightLabel="Larger"
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -528,6 +564,16 @@ function GenerationPanel({
         >
           Generation Mode
         </span>
+
+        {/* Standard / Evolutionary toggle */}
+        <TogglePair
+          options={[
+            { value: "standard", label: "Standard" },
+            { value: "evolutionary", label: "Evolutionary" },
+          ]}
+          value={generateMode}
+          onChange={(v) => onGenerateModeChange(v as GenerateMode)}
+        />
 
         {/* Presets */}
         <div
@@ -615,6 +661,7 @@ function GenerationPanel({
             <ModelSettingsPanel
               settings={generateSettings}
               onChange={onGenerateSettingsChange}
+              isEvolutionary={isEvolutionary}
             />
           </div>
         )}
@@ -1314,6 +1361,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
   const [generateSettings, setGenerateSettings] = useState<GenerateSettings>(
     DEFAULT_GENERATE_SETTINGS,
   );
+  const [generateMode, setGenerateMode] = useState<GenerateMode>("standard");
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [generatedClimbs, setGeneratedClimbs] = useState<NamedHoldset[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -1400,8 +1448,12 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
         angle: angle ?? null,
         x_offset: xOffset,
       };
+      const apiFn =
+        generateMode === "evolutionary"
+          ? generateClimbsEvolutionary
+          : generateClimbs;
       const response = await fetchWithWakeRetry(
-        () => generateClimbs(layoutId, request, generateSettings),
+        () => apiFn(layoutId, request, generateSettings),
         { onWaking: () => setIsGenerateWaking(true) },
       );
       const named: NamedHoldset[] = response.climbs.map((holdset) => ({
@@ -1441,6 +1493,7 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
     gradingScale,
     gradeOptions,
     generateSettings,
+    generateMode,
     angle,
     navigate,
   ]);
@@ -1760,6 +1813,11 @@ function MainSetPage({ layout, climbParam, navigate }: MainSetPageProps) {
     onXOffsetChange: setXOffset,
     generateSettings,
     onGenerateSettingsChange: setGenerateSettings,
+    generateMode,
+    onGenerateModeChange: (m: GenerateMode) => {
+      setGenerateMode(m);
+      if (m === "evolutionary") setNumClimbs(1);
+    },
     showModelSettings,
     onToggleModelSettings: () => setShowModelSettings((v) => !v),
     isGenerating,
