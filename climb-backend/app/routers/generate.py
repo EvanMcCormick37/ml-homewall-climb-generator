@@ -73,7 +73,7 @@ def generate_climbs_evolutionary(
     difficulty: float = Query(..., description="Difficulty score (converted from grade on the client)"),
     angle: int | None = Query(None, ge=0, le=90),
     x_offset: float | None = Query(None),
-    population: int = Query(10, ge=2, le=20, description="Total parallel candidates per diffusion step"),
+    population: int = Query(10, ge=2, le=10, description="Candidates per climb pool per diffusion step"),
     timesteps: int = Query(100, ge=1, le=200),
     guidance_value: float = Query(3.0, ge=1.0, le=10.0),
     deterministic: bool = Query(False),

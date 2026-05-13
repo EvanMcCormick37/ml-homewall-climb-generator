@@ -524,8 +524,8 @@ function GenerationPanel({
             {isEvolutionary && (
               <div>
                 <div style={{ marginBottom: "8px" }}>
-                  <SectionLabel desc="Total parallel candidates evaluated at each diffusion step. A larger population increases selection pressure at the cost of generation time.">
-                    Population
+                  <SectionLabel desc="Candidates per climb evaluated at each diffusion step. Each climb evolves its own independent pool; the best candidate from each pool is returned.">
+                    Population Size
                   </SectionLabel>
                 </div>
                 <BzRange
@@ -533,7 +533,7 @@ function GenerationPanel({
                   desc=""
                   value={generateSettings.population}
                   min={2}
-                  max={20}
+                  max={10}
                   step={1}
                   onChange={(v) =>
                     onGenerateSettingsChange({ ...generateSettings, population: v })

@@ -25,25 +25,22 @@ def generate_climbs_evolutionary(
     layout_id: str,
     request: GenerateRequest,
     gen_settings: GenerateSettings,
-    population: int,
+    p: int,
 ) -> list[Holdset]:
     """
     Generate climbs using the evolutionary diffusion strategy.
 
-    `request.num_climbs` sets n_successors (survivors per step) and the return count.
-    `population` is the total parallel candidates evaluated each step.
+    `request.num_climbs` (n) independent pools of `p` candidates are maintained.
+    Each pool evolves separately; the best candidate per pool is returned.
     """
-    n_successors = request.num_climbs
-    effective_population = max(population, n_successors)
-
     try:
         angle = request.angle if request.angle else _get_layout_angle(layout_id)
 
         with generator_pool.acquire() as gen:
             raw_climbs = gen.generate_evolutionary(
                 layout_id=layout_id,
-                population=effective_population,
-                n_successors=n_successors,
+                n=request.num_climbs,
+                p=p,
                 angle=angle,
                 difficulty=request.difficulty,
                 timesteps=gen_settings.timesteps,
@@ -56,7 +53,7 @@ def generate_climbs_evolutionary(
         print(f"Exception: {e}")
         raise e
 
-    return [_holds_to_holdset(c) for c in raw_climbs[:n_successors]]
+    return [_holds_to_holdset(c) for c in raw_climbs]
 
 
 def generate_climbs(

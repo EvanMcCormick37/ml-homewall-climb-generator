@@ -9,7 +9,6 @@ Model classes and feature engineering live in ddpm_model.py.
 import sqlite3
 from contextlib import contextmanager
 
-import math
 import numpy as np
 import pandas as pd
 import torch
@@ -246,8 +245,8 @@ class ClimbDDPMGenerator:
     def generate_evolutionary(
         self,
         layout_id: str,
-        population: int,
-        n_successors: int,
+        n: int,
+        p: int,
         angle: int,
         difficulty: float,
         timesteps: int,
@@ -259,65 +258,77 @@ class ClimbDDPMGenerator:
         """
         Evolutionary reverse-diffusion generation.
 
-        At each diffusion step, all `population` samples are denoised and scored
-        by their mean nearest-manifold distance. The top `n_successors` are kept,
-        tiled back up to `population`, and re-noised at the current noise level
-        before the next step. Manifold projection only happens on the final step.
+        Maintains n independent pools of p candidates each — shape (n, p, S, H).
+        At every step (including the last), fitness is evaluated over each pool of p
+        and the single best candidate per pool is selected as the survivor.
+        On non-final steps the survivor is tiled back to p and re-noised.
+        On the final step the n survivors are projected onto hold indices and returned.
 
         Args:
-            population:    Total number of parallel samples (p). Must be >= n_successors.
-            n_successors:  Number of survivors selected per step (k). Must be >= 1.
+            n: Number of climbs to return (one independent pool each).
+            p: Candidates per pool evaluated at each diffusion step.
         """
-        assert n_successors >= 1, "n_successors must be at least 1"
-        assert population >= n_successors, "population must be >= n_successors"
-
         if deterministic:
             self.deterministic_noise_generator.manual_seed(seed)
 
         manifold = self.holds_manifolds[layout_id]
-        translation = self._get_climb_translation(layout_id, x_offset)
+        translation = self._get_climb_translation(layout_id, x_offset)  # (1, 1, H)
 
         if difficulty > 22:
             guidance_value *= 0.5
-        cond_t = self._build_cond_tensor(population, difficulty, angle)
 
-        shape = (population, 20, self.NUM_FEATURES + self.NUM_ROLES)
+        # cond_t: (n, cond_dim) -> (n*p, cond_dim) with each row repeated p times
+        cond_t = self._build_cond_tensor(n, difficulty, angle)           # (n, cond_dim)
+        cond_t_flat = cond_t.repeat_interleave(p, dim=0)                 # (n*p, cond_dim)
+
+        S = 20
+        H = self.NUM_FEATURES + self.NUM_ROLES
         noisy = (
-            torch.randn(shape, device=self.device, generator=self.deterministic_noise_generator)
+            torch.randn((n, p, S, H), device=self.device,
+                        generator=self.deterministic_noise_generator)
             if deterministic
-            else torch.randn(shape, device=self.device)
+            else torch.randn((n, p, S, H), device=self.device)
         )
-        t_tensor = torch.ones((population, 1), device=self.device)
+
+        t_val = 1.0
+        survivors: Tensor | None = None
 
         for step in range(timesteps):
-            gen_climbs = self.ddpm.predict_cfg(noisy, cond_t, t_tensor, guidance_value)
-            t_tensor -= 1.0 / timesteps
-            is_final = (step == timesteps - 1)
+            t_flat = torch.full((n * p, 1), t_val, device=self.device)
 
-            if is_final:
+            # Denoise — DDPM requires (B, S, H)
+            gen_climbs_flat = self.ddpm.predict_cfg(
+                noisy.reshape(n * p, S, H), cond_t_flat, t_flat, guidance_value
+            )                                                            # (n*p, S, H)
+            gen_climbs = gen_climbs_flat.reshape(n, p, S, H)
+
+            t_val -= 1.0 / timesteps
+
+            # Fitness over each pool — lower is better
+            # translation (1,1,H) broadcasts to (n,p,S,H) then flattened to (n*p,S,H)
+            fitness = self._measure_fitness(
+                (gen_climbs + translation).reshape(n * p, S, H), manifold
+            ).reshape(n, p)                                              # (n, p)
+
+            best_idx = fitness.argmin(dim=1)                            # (n,)
+            survivors = gen_climbs[
+                torch.arange(n, device=self.device), best_idx
+            ]                                                            # (n, S, H)
+
+            if step == timesteps - 1:
                 break
 
-            # --- Evolutionary selection ---
-            # Score each sample by mean nearest-manifold distance (lower = better)
-            fitness = self._measure_fitness(gen_climbs + translation, manifold)  # (population,)
-
-            # Rank and select top-k survivors
-            _, survivor_idx = torch.topk(fitness, n_successors, largest=False)
-            survivors = gen_climbs[survivor_idx]  # (n_successors, S, H)
-
-            # Tile survivors to refill the full population
-            repeats = math.ceil(population / n_successors)
-            gen_climbs = survivors.repeat(repeats, 1, 1)[:population]  # (population, S, H)
-
-            # Re-noise the tiled climbs to the current noise level for the next step
+            # Tile survivors → (n, p, S, H) and re-noise for the next step
+            t_next_flat = torch.full((n * p, 1), t_val, device=self.device)
             noisy = self.ddpm.forward_diffusion(
-                gen_climbs,
-                t_tensor,
-                torch.randn_like(gen_climbs),
-            )
-        
-        # Final step: discrete projection onto hold indices and return
-        gen_climbs_manifold = gen_climbs + translation
+                survivors.unsqueeze(1).repeat(1, p, 1, 1).reshape(n * p, S, H),
+                t_next_flat,
+                torch.randn(n * p, S, H, device=self.device),
+            ).reshape(n, p, S, H)
+
+        # survivors: (n, S, H) — best from each pool after final fitness selection
+        # translation (1,1,H) broadcasts to (n,S,H)
+        gen_climbs_manifold = survivors + translation
         return self._project_onto_indices(gen_climbs_manifold, manifold, layout_id)
 
 
