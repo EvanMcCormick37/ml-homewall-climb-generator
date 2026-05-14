@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getLayouts, getLayout, is502 } from "@/api";
-import type { LayoutMetadata, LayoutDetail } from "@/types";
+import type { LayoutDetail } from "@/types";
 
 const DEFAULT_RETRY_INTERVAL_MS = 3000;
 const DEFAULT_MAX_RETRY_DURATION_MS = 20000;
